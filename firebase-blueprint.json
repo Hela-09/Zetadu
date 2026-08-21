@@ -1,0 +1,109 @@
+{
+  "entities": {
+    "LearningData": {
+      "title": "LearningData",
+      "description": "Stores user learning sessions",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "subject": { "type": "string" },
+        "topic": { "type": "string" },
+        "score": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["uid", "score", "totalQuestions", "timestamp"]
+    },
+    "AiHistory": {
+      "title": "AiHistory",
+      "description": "Stores AI generated history",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "subject": { "type": "string" },
+        "topic": { "type": "string" },
+        "type": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["uid", "type", "timestamp"]
+    },
+    "UserProgress": {
+      "title": "UserProgress",
+      "description": "Stores user progress for subjects",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "masteryPercentage": { "type": "number" }
+      },
+      "required": ["uid", "subjectId"]
+    },
+    "TutorConversation": {
+      "title": "TutorConversation",
+      "description": "Stores AI Tutor chat sessions",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "title": { "type": "string" },
+        "subject": { "type": "string" },
+        "messages": { "type": "array" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "lastOpened": { "type": "number" }
+      },
+      "required": ["uid", "title", "subject", "messages", "createdAt"]
+    },
+    "PracticeSession": {
+      "title": "PracticeSession",
+      "description": "Stores unfinished practice sessions",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "subject": { "type": "string" },
+        "questions": { "type": "array" },
+        "currentQIndex": { "type": "number" }
+      },
+      "required": []
+    },
+    "SubjectHistory": {
+      "title": "SubjectHistory",
+      "description": "Stores user interaction history with subjects",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "lastOpened": { "type": "number" }
+      },
+      "required": ["uid", "subjectId"]
+    }
+  },
+  "firestore": {
+    "learning_data/{docId}": {
+      "schema": { "$ref": "#/entities/LearningData" },
+      "description": "Learning sessions."
+    },
+    "ai_history/{docId}": {
+      "schema": { "$ref": "#/entities/AiHistory" },
+      "description": "AI History."
+    },
+    "user_progress/{docId}": {
+      "schema": { "$ref": "#/entities/UserProgress" },
+      "description": "User progress per subject."
+    },
+    "tutor_conversations/{docId}": {
+      "schema": { "$ref": "#/entities/TutorConversation" },
+      "description": "AI Tutor Conversations."
+    },
+    "practice_sessions/{docId}": {
+      "schema": { "$ref": "#/entities/PracticeSession" },
+      "description": "Active Practice Sessions."
+    },
+    "subject_history/{docId}": {
+      "schema": { "$ref": "#/entities/SubjectHistory" },
+      "description": "Subject History."
+    }
+  }
+}

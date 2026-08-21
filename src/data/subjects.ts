@@ -1,0 +1,118 @@
+export const SUBJECT_DATA = {
+  Primary: {
+    classes: ['Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Primary 5', 'Primary 6'],
+    subjects: [
+      'Mathematics',
+      'English Studies',
+      'Basic Science',
+      'Basic Technology',
+      'Social Studies',
+      'Civic Education',
+      'Computer Studies',
+      'Physical and Health Education',
+      'Christian Religious Studies',
+      'Islamic Religious Studies',
+      'Cultural and Creative Arts',
+      'Agricultural Science',
+      'Home Economics'
+    ]
+  },
+  Secondary: {
+    classes: ['JSS 1', 'JSS 2', 'JSS 3', 'SSS 1', 'SSS 2', 'SSS 3', 'WAEC', 'NECO', 'JAMB/UTME'],
+    subjects: {
+      JSS: [
+        'Mathematics',
+        'English Language',
+        'Basic Science',
+        'Basic Technology',
+        'Social Studies',
+        'Civic Education',
+        'Computer Studies',
+        'Physical and Health Education',
+        'Christian Religious Studies',
+        'Islamic Religious Studies',
+        'Cultural and Creative Arts',
+        'Agricultural Science',
+        'Home Economics',
+        'Business Studies',
+        'French',
+        'Yoruba',
+        'Igbo',
+        'Hausa'
+      ],
+      SSS: [
+        'Mathematics',
+        'English Language',
+        'Biology',
+        'Chemistry',
+        'Physics',
+        'Agricultural Science',
+        'Economics',
+        'Government',
+        'Geography',
+        'Literature in English',
+        'Civic Education',
+        'Commerce',
+        'Financial Accounting',
+        'Further Mathematics',
+        'Computer Studies',
+        'Data Processing',
+        'Technical Drawing',
+        'Food and Nutrition',
+        'Home Economics',
+        'Christian Religious Studies',
+        'Islamic Religious Studies',
+        'History',
+        'Physical Education',
+        'Visual Arts',
+        'Music',
+        'French',
+        'Yoruba',
+        'Igbo',
+        'Hausa'
+      ]
+    }
+  },
+  University: {
+    classes: ['100 Level', '200 Level', '300 Level', '400 Level', '500 Level', 'Postgraduate'],
+    // University subjects are vast; allow custom search/input
+  }
+};
+
+// Rebuild ALL_SUBJECTS for the Subject Explorer
+export const ALL_SUBJECTS = [
+  { id: 'english', name: 'English Language', category: 'Languages', color: 'bg-emerald-600' },
+  { id: 'mathematics', name: 'Mathematics', category: 'Science & Math', color: 'bg-blue-600' },
+  { id: 'further-maths', name: 'Further Mathematics', category: 'Science & Math', color: 'bg-blue-700' },
+  { id: 'physics', name: 'Physics', category: 'Science & Math', color: 'bg-purple-600' },
+  { id: 'chemistry', name: 'Chemistry', category: 'Science & Math', color: 'bg-cyan-600' },
+  { id: 'biology', name: 'Biology', category: 'Science & Math', color: 'bg-amber-600' },
+  { id: 'agric', name: 'Agricultural Science', category: 'Vocational', color: 'bg-green-600' },
+  { id: 'civic', name: 'Civic Education', category: 'Humanities', color: 'bg-orange-600' },
+  { id: 'economics', name: 'Economics', category: 'Commercial', color: 'bg-teal-600' },
+  { id: 'accounting', name: 'Financial Accounting', category: 'Commercial', color: 'bg-green-700' },
+  { id: 'commerce', name: 'Commerce', category: 'Commercial', color: 'bg-blue-500' },
+  { id: 'government', name: 'Government', category: 'Humanities', color: 'bg-red-600' },
+  { id: 'literature', name: 'Literature in English', category: 'Humanities', color: 'bg-pink-600' },
+  { id: 'geography', name: 'Geography', category: 'Science & Math', color: 'bg-stone-600' },
+  { id: 'history', name: 'History', category: 'Humanities', color: 'bg-amber-700' },
+  { id: 'crs', name: 'Christian Religious Studies', category: 'Humanities', color: 'bg-purple-500' },
+  { id: 'irs', name: 'Islamic Religious Studies', category: 'Humanities', color: 'bg-emerald-700' },
+  { id: 'yoruba', name: 'Yoruba', category: 'Languages', color: 'bg-orange-500' },
+  { id: 'hausa', name: 'Hausa', category: 'Languages', color: 'bg-green-500' },
+  { id: 'igbo', name: 'Igbo', category: 'Languages', color: 'bg-red-500' },
+  { id: 'french', name: 'French', category: 'Languages', color: 'bg-blue-400' },
+  { id: 'computer', name: 'Computer Studies', category: 'Technology', color: 'bg-slate-600' },
+  { id: 'data-processing', name: 'Data Processing', category: 'Technology', color: 'bg-slate-700' },
+  { id: 'business-studies', name: 'Business Studies', category: 'Commercial', color: 'bg-indigo-500' },
+  { id: 'food-nutrition', name: 'Food and Nutrition', category: 'Vocational', color: 'bg-rose-500' },
+  { id: 'home-economics', name: 'Home Economics', category: 'Vocational', color: 'bg-pink-400' },
+  { id: 'technical-drawing', name: 'Technical Drawing', category: 'Technology', color: 'bg-gray-600' },
+  { id: 'visual-arts', name: 'Visual Arts', category: 'Arts', color: 'bg-fuchsia-600' },
+  { id: 'music', name: 'Music', category: 'Arts', color: 'bg-violet-600' },
+  { id: 'basic-science', name: 'Basic Science', category: 'Science & Math', color: 'bg-blue-500' },
+  { id: 'basic-technology', name: 'Basic Technology', category: 'Technology', color: 'bg-slate-500' },
+  { id: 'social-studies', name: 'Social Studies', category: 'Humanities', color: 'bg-orange-400' },
+  { id: 'phe', name: 'Physical and Health Education', category: 'Vocational', color: 'bg-teal-500' },
+  { id: 'cca', name: 'Cultural and Creative Arts', category: 'Arts', color: 'bg-fuchsia-500'}
+];

@@ -1,0 +1,12 @@
+const fs = require('fs');
+let content = fs.readFileSync('firebase-applet-config.json', 'utf8');
+const config = JSON.parse(content);
+config.projectId = "educore-66491";
+config.appId = "1:1042086916215:web:a8fc2c8277c012d1b8d672";
+config.apiKey = "AIzaSyBzS_kYtaSYSAx39DBhNAP6l6IGsIUHTqs";
+config.authDomain = "educore-66491.firebaseapp.com";
+config.storageBucket = "educore-66491.firebasestorage.app";
+config.messagingSenderId = "1042086916215";
+config.measurementId = "G-15CB56MC58";
+fs.writeFileSync('firebase-applet-config.json', JSON.stringify(config, null, 2));
+console.log('patched firebase-applet-config.json');

@@ -1,0 +1,79 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+    
+    match /settings/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+    
+    match /bookmarks/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+    
+    match /notes/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+
+    match /system/super_admin {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isOwner(resource.data.uid);
+    }
+
+    match /learning_data/{docId} {
+      allow read: if isOwner(resource.data.uid);
+      allow create: if isOwner(request.resource.data.uid);
+      allow update: if isOwner(resource.data.uid) && isOwner(request.resource.data.uid);
+      allow delete: if isOwner(resource.data.uid);
+    }
+
+    match /ai_history/{docId} {
+      allow read: if isOwner(resource.data.uid);
+      allow create: if isOwner(request.resource.data.uid);
+      allow update: if isOwner(resource.data.uid) && isOwner(request.resource.data.uid);
+      allow delete: if isOwner(resource.data.uid);
+    }
+
+    match /user_progress/{docId} {
+      // Sometimes we use docId as uid, sometimes we use resource.data.uid
+      allow read, write: if isOwner(docId) || isOwner(resource.data.uid) || isOwner(request.resource.data.uid);
+    }
+
+    match /tutor_conversations/{docId} {
+      allow read: if isOwner(resource.data.uid);
+      allow create: if isOwner(request.resource.data.uid);
+      allow update: if isOwner(resource.data.uid) && isOwner(request.resource.data.uid);
+      allow delete: if isOwner(resource.data.uid);
+    }
+
+    match /tutor_sessions/{docId} {
+      allow read, write: if isOwner(docId) || isOwner(resource.data.uid) || isOwner(request.resource.data.uid);
+    }
+
+    match /practice_sessions/{docId} {
+      // For practice_sessions, docId is the user's uid
+      allow read, write: if isOwner(docId) || isOwner(resource.data.uid) || isOwner(request.resource.data.uid);
+    }
+
+    match /subject_history/{docId} {
+      allow read: if isOwner(resource.data.uid);
+      allow create: if isOwner(request.resource.data.uid);
+      allow update: if isOwner(resource.data.uid) && isOwner(request.resource.data.uid);
+      allow delete: if isOwner(resource.data.uid);
+    }
+  }
+}

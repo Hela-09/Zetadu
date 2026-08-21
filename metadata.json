@@ -1,0 +1,6 @@
+{
+  "name": "Zetadu",
+  "description": "AI-powered adaptive learning and exam preparation platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
