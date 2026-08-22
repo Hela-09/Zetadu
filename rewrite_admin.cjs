@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+const fs = require('fs');
+
+const code = `import React, { useState, useEffect } from 'react';
 import { db } from '../firebase/config';
 import { collection, query, orderBy, limit, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { 
@@ -53,7 +55,7 @@ function TabButton({ active, onClick, icon: Icon, label }: any) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${active ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-700/50'}`}
+      className={\`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap \${active ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-700/50'}\`}
     >
       <Icon size={16} />
       {label}
@@ -219,7 +221,7 @@ function UsersTab({ activeTab }: { activeTab: string }) {
                         <p className="font-medium text-slate-800 dark:text-white text-sm">{u.name || 'Anonymous'}</p>
                         <p className="text-xs text-slate-500">
                           {u.subscriptionStatus === 'active' 
-                            ? `Expires: ${new Date(u.subscriptionExpires).toLocaleDateString()}`
+                            ? \`Expires: \${new Date(u.subscriptionExpires).toLocaleDateString()}\`
                             : u.paymentStatus}
                         </p>
                       </div>
@@ -288,7 +290,7 @@ function UsersTab({ activeTab }: { activeTab: string }) {
               </button>
             </div>
             <div className="p-4 flex-1 overflow-auto bg-slate-100 dark:bg-slate-950 flex justify-center items-center">
-              {selectedReceipt.startsWith('data:image') || selectedReceipt.match(/\.(jpeg|jpg|gif|png)/i) || selectedReceipt.includes('firebasestorage') ? (
+              {selectedReceipt.startsWith('data:image') || selectedReceipt.match(/\\.(jpeg|jpg|gif|png)/i) || selectedReceipt.includes('firebasestorage') ? (
                  <img src={selectedReceipt} alt="Receipt" className="max-w-full max-h-full object-contain rounded" />
               ) : (
                  <a href={selectedReceipt} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline flex items-center gap-2">
@@ -303,3 +305,7 @@ function UsersTab({ activeTab }: { activeTab: string }) {
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/components/Admin.tsx', code);
+console.log("Admin.tsx rewritten");

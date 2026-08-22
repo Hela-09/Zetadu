@@ -1,17 +1,7 @@
 const fs = require('fs');
 let html = fs.readFileSync('index.html', 'utf8');
 
-const oldScript = `<script>
-      try {
-        const localTheme = localStorage.getItem('educore_theme');
-        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (localTheme === 'dark' || (!localTheme && systemDark) || (localTheme === 'system' && systemDark)) {
-          document.documentElement.classList.add('dark');
-        }
-      } catch (e) {}
-    </script>`;
-
-const newScript = `<script>
+const scriptToRemove = `<script>
       (function() {
         try {
           const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -28,10 +18,10 @@ const newScript = `<script>
       })();
     </script>`;
 
-if (html.includes(oldScript)) {
-    html = html.replace(oldScript, newScript);
+if(html.includes(scriptToRemove)) {
+    html = html.replace(scriptToRemove, '');
     fs.writeFileSync('index.html', html);
-    console.log('patched index.html');
+    console.log('Removed script');
 } else {
-    console.log('could not find script block in index.html');
+    console.log('Script not found');
 }

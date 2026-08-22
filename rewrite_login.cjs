@@ -1,4 +1,6 @@
-import Logo from './Logo';
+const fs = require('fs');
+
+const code = `import Logo from './Logo';
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { motion } from 'motion/react';
@@ -33,7 +35,7 @@ export default function Login() {
       >
         <div className="flex flex-col items-center mb-10">
           <div className="mb-6">
-            <Logo />
+            <Logo size="lg" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white text-center mb-3">
             Welcome to EduCore
@@ -78,3 +80,7 @@ export default function Login() {
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/components/Login.tsx', code);
+console.log("Login.tsx rewritten to use only Google Sign In");

@@ -4,7 +4,6 @@ import { auth, googleProvider, db } from '../firebase/config';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export interface UserSettings {
-  theme: "light" | "dark" | "system";
   fontSize: "small" | "medium" | "large";
   defaultPracticeDifficulty: "Easy" | "Medium" | "Hard" | "Mixed";
   aiTutorTone: "Friendly" | "Direct" | "Socratic";
@@ -32,16 +31,12 @@ const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 export const useAuth = () => useContext(AuthContext);
 
 const defaultSettings: UserSettings = {
-  theme: 'system',
   fontSize: 'medium',
   defaultPracticeDifficulty: 'Medium',
   aiTutorTone: 'Friendly'
 };
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [settings, setSettings] = useState<UserSettings>(() => {
-    const localTheme = localStorage.getItem('educore_theme') as UserSettings['theme'];
-    return { ...defaultSettings, theme: localTheme || defaultSettings.theme };
-  });
+  const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
@@ -63,13 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error("Redirect sign-in error", err);
       });
     }
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'educore_theme' && e.newValue) {
-        setSettings(prev => ({ ...prev, theme: e.newValue as UserSettings['theme'] }));
-      }
-    };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+
   }, []);
 
   useEffect(() => {
@@ -130,9 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (settingsSnap.exists()) {
               const loadedSettings = { ...defaultSettings, ...settingsSnap.data() } as UserSettings;
               setSettings(loadedSettings);
-              if (loadedSettings.theme) {
-                localStorage.setItem('educore_theme', loadedSettings.theme);
-              }
+
             } else {
               await setDoc(doc(db, 'settings', currentUser.uid), { ...defaultSettings, uid: currentUser.uid });
             }
@@ -164,11 +151,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                data.role = 'super_admin';
                data.isSuperAdmin = true;
             }
-            setUserProfile(data);
+            // Check if subscription expired
+            let updatedData = { ...data };
+            if (data.subscriptionStatus === 'active' && data.subscriptionExpires) {
+              if (Date.now() > data.subscriptionExpires) {
+                updatedData.subscriptionStatus = 'expired';
+                await setDoc(userRef, { subscriptionStatus: 'expired' }, { merge: true });
+              }
+            }
+            setUserProfile(updatedData);
           }
 
           // Ensure other documents exist with merge to prevent overwriting
-          await setDoc(doc(db, 'settings', currentUser.uid), { uid: currentUser.uid, theme: 'system' }, { merge: true });
+          await setDoc(doc(db, 'settings', currentUser.uid), { uid: currentUser.uid }, { merge: true });
           await setDoc(doc(db, 'user_progress', currentUser.uid), { uid: currentUser.uid }, { merge: true });
           await setDoc(doc(db, 'bookmarks', currentUser.uid), { uid: currentUser.uid }, { merge: true });
           await setDoc(doc(db, 'notes', currentUser.uid), { uid: currentUser.uid }, { merge: true });
@@ -188,7 +183,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user && db) {
       const docSnap = await getDoc(doc(db, 'users', user.uid));
       if (docSnap.exists()) {
-        setUserProfile(docSnap.data());
+        let data = docSnap.data();
+        if (data.subscriptionStatus === 'active' && data.subscriptionExpires) {
+          if (Date.now() > data.subscriptionExpires) {
+            data.subscriptionStatus = 'expired';
+            await setDoc(doc(db, 'users', user.uid), { subscriptionStatus: 'expired' }, { merge: true });
+          }
+        }
+        setUserProfile(data);
       }
     }
   };
@@ -196,9 +198,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateSettings = async (newSettings: Partial<UserSettings>) => {
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
-    if (newSettings.theme) {
-      localStorage.setItem('educore_theme', newSettings.theme);
-    }
+
     if (user && db) {
       try {
         await setDoc(doc(db, 'settings', user.uid), updated, { merge: true });

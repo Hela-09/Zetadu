@@ -1,6 +1,7 @@
 import React from 'react';
 import { ViewType } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import Logo from './Logo';
 import { Home, BookOpen, MessageSquare, User, Download } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -20,9 +21,7 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
   return (
     <aside className="w-64 bg-slate-900 text-white flex flex-col shrink-0">
       <div className="p-6 flex items-center space-x-3">
-        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg">
-          E
-        </div>
+        <Logo />
         <div>
           <h2 className="text-lg font-bold text-white leading-tight">Zetadu AI</h2>
           <p className="text-sm text-slate-400 leading-tight">Smart Prep System</p>

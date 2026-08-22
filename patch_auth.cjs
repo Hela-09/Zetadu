@@ -1,64 +1,44 @@
 const fs = require('fs');
-let content = fs.readFileSync('src/contexts/AuthContext.tsx', 'utf8');
+let code = fs.readFileSync('src/contexts/AuthContext.tsx', 'utf8');
 
-// Add oauthToken to interface
-content = content.replace(
-  '  getToken: () => Promise<string | null>;',
-  '  getToken: () => Promise<string | null>;\n  oauthToken: string | null;'
-);
+// 1. Remove theme from interface
+code = code.replace(`  theme: "light" | "dark" | "system";\n`, ``);
 
-// Add oauthToken to state
-content = content.replace(
-  'const [error, setError] = useState<string | null>(null);',
-  'const [error, setError] = useState<string | null>(null);\n  const [oauthToken, setOauthToken] = useState<string | null>(null);'
-);
+// 2. Remove theme from default settings
+code = code.replace(`  theme: 'system',\n`, ``);
 
-// Add getRedirectResult
-content = content.replace(
-  'import { User, signInWithPopup, signInWithRedirect, signOut as firebaseSignOut, onAuthStateChanged, getIdToken } from \'firebase/auth\';',
-  'import { User, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut as firebaseSignOut, onAuthStateChanged, getIdToken } from \'firebase/auth\';'
-);
+// 3. Remove localStorage init
+const initTheme = `  const [settings, setSettings] = useState<UserSettings>(() => {
+    const localTheme = localStorage.getItem('educore_theme') as UserSettings['theme'];
+    return { ...defaultSettings, theme: localTheme || defaultSettings.theme };
+  });`;
+const newInit = `  const [settings, setSettings] = useState<UserSettings>(defaultSettings);`;
+code = code.replace(initTheme, newInit);
 
-// Handle redirect result and capture token
-content = content.replace(
-  '  useEffect(() => {\n    const handleStorage',
-  `  useEffect(() => {
-    if (auth) {
-      getRedirectResult(auth).then(result => {
-        if (result) {
-          const credential = GoogleAuthProvider.credentialFromResult(result);
-          if (credential?.accessToken) {
-            setOauthToken(credential.accessToken);
-          }
-        }
-      }).catch(err => {
-        console.error("Redirect sign-in error", err);
-      });
-    }
-    const handleStorage`
-);
+// 4. Remove handleStorage theme sync
+const storageEvent = `    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'educore_theme' && e.newValue) {
+        setSettings(prev => ({ ...prev, theme: e.newValue as UserSettings['theme'] }));
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);`;
+code = code.replace(storageEvent, ``);
 
-// Clear token on logout
-content = content.replace(
-  'localStorage.removeItem(\'educore_current_view\');\n      await firebaseSignOut(auth);',
-  'localStorage.removeItem(\'educore_current_view\');\n      setOauthToken(null);\n      await firebaseSignOut(auth);'
-);
+// 5. Remove loadedSettings localStorage set
+const loadedSettingsSet = `              if (loadedSettings.theme) {
+                localStorage.setItem('educore_theme', loadedSettings.theme);
+              }`;
+code = code.replace(loadedSettingsSet, ``);
 
-// Capture token on popup
-content = content.replace(
-  'await signInWithPopup(auth, googleProvider);',
-  `const result = await signInWithPopup(auth, googleProvider);
-          const credential = GoogleAuthProvider.credentialFromResult(result);
-          if (credential?.accessToken) {
-            setOauthToken(credential.accessToken);
-          }`
-);
+// 6. Remove initial setDoc with theme
+code = code.replace(`{ uid: currentUser.uid, theme: 'system' }`, `{ uid: currentUser.uid }`);
 
-// Export oauthToken in provider
-content = content.replace(
-  '<AuthContext.Provider value={{ user, userProfile, refreshProfile, settings, updateSettings, isSuperAdmin, loading, error, signInWithGoogle, signOut, getToken, clearError, setError }}>',
-  '<AuthContext.Provider value={{ user, userProfile, refreshProfile, settings, updateSettings, isSuperAdmin, loading, error, signInWithGoogle, signOut, getToken, clearError, setError, oauthToken }}>'
-);
+// 7. Remove updateSettings localStorage logic
+const updateSettingsLogic = `    if (newSettings.theme) {
+      localStorage.setItem('educore_theme', newSettings.theme);
+    }`;
+code = code.replace(updateSettingsLogic, ``);
 
-fs.writeFileSync('src/contexts/AuthContext.tsx', content);
-console.log('patched AuthContext');
+fs.writeFileSync('src/contexts/AuthContext.tsx', code);
+console.log('patched AuthContext.tsx');

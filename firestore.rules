@@ -11,9 +11,15 @@ service cloud.firestore {
     function isOwner(uid) {
       return isAuthenticated() && request.auth.uid == uid;
     }
+    
+    function isSuperAdmin() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/system/super_admin) &&
+             get(/databases/$(database)/documents/system/super_admin).data.uid == request.auth.uid;
+    }
 
     match /users/{uid} {
-      allow read, write: if isOwner(uid);
+      allow read: if isOwner(uid) || isSuperAdmin();
+      allow write: if isOwner(uid) || isSuperAdmin();
     }
     
     match /settings/{uid} {

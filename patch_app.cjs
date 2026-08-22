@@ -1,8 +1,37 @@
 const fs = require('fs');
-let content = fs.readFileSync('src/App.tsx', 'utf8');
+let code = fs.readFileSync('src/App.tsx', 'utf8');
 
-content = content.replace("import ReloadPrompt from './components/ReloadPrompt';", "");
-content = content.replace("<ReloadPrompt />", "");
+const importStatement = "import CompleteProfile from './components/CompleteProfile';\nimport PaymentGate from './components/PaymentGate';";
+if (!code.includes('PaymentGate')) {
+    code = code.replace("import CompleteProfile from './components/CompleteProfile';", importStatement);
+}
 
-fs.writeFileSync('src/App.tsx', content);
-console.log('patched App.tsx');
+const loginCheck = `  if (!user) {
+    return <Login />;
+  }
+
+  if (user && userProfile && !userProfile.username) {
+    return <CompleteProfile />;
+  }`;
+
+const newLoginCheck = `  if (!user) {
+    return <Login />;
+  }
+
+  if (user && userProfile && !userProfile.username) {
+    return <CompleteProfile />;
+  }
+
+  // Check subscription status
+  const isSubscriptionActive = userProfile?.subscriptionStatus === 'active';
+  if (user && userProfile && !isSuperAdmin && !isSubscriptionActive) {
+    return <PaymentGate />;
+  }`;
+
+if (code.includes(loginCheck) && !code.includes('<PaymentGate />')) {
+    code = code.replace(loginCheck, newLoginCheck);
+    fs.writeFileSync('src/App.tsx', code);
+    console.log("App.tsx patched");
+} else {
+    console.log("Could not patch App.tsx");
+}

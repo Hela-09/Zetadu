@@ -1,16 +1,17 @@
 const fs = require('fs');
-let content = fs.readFileSync('src/firebase/config.ts', 'utf8');
+let code = fs.readFileSync('src/firebase/config.ts', 'utf8');
 
-const newConfig = `const firebaseConfig = {
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "educore-66491",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1042086916215:web:a8fc2c8277c012d1b8d672",
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBzS_kYtaSYSAx39DBhNAP6l6IGsIUHTqs",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "educore-66491.firebaseapp.com",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "educore-66491.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1042086916215",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-15CB56MC58"
-};`;
-
-content = content.replace(/const firebaseConfig = \{[\s\S]*?\};/, newConfig);
-fs.writeFileSync('src/firebase/config.ts', content);
-console.log('patched config.ts with new credentials');
+if (!code.includes('getStorage')) {
+  code = code.replace('from "firebase/firestore";', 'from "firebase/firestore";\nimport { getStorage } from "firebase/storage";');
+}
+if (!code.includes('let storage:')) {
+  code = code.replace('let db: Firestore | any = null;', 'let db: Firestore | any = null;\nlet storage: any = null;');
+}
+if (code.includes('db = getFirestore(app, databaseId);') && !code.includes('storage = getStorage(app);')) {
+  code = code.replace('db = getFirestore(app, databaseId);', 'db = getFirestore(app, databaseId);\n    storage = getStorage(app);');
+}
+if (code.includes('export { app, auth, db, googleProvider };')) {
+  code = code.replace('export { app, auth, db, googleProvider };', 'export { app, auth, db, storage, googleProvider };');
+}
+fs.writeFileSync('src/firebase/config.ts', code);
+console.log('Firebase config patched');

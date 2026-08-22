@@ -3,9 +3,10 @@ import Sidebar from './components/Sidebar';
 import BottomNav from './components/BottomNav';
 import Login from './components/Login';
 import { ViewType } from './types';
-import { Moon, Sun, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import CompleteProfile from './components/CompleteProfile';
+import PaymentGate from './components/PaymentGate';
 
 
 const Home = React.lazy(() => import('./components/Home'));
@@ -35,30 +36,6 @@ export default function App() {
   }, []);
 
 
-  const theme = settings?.theme || 'system';
-  const [systemDarkMode, setSystemDarkMode] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
-
-  React.useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e: MediaQueryListEvent) => setSystemDarkMode(e.matches);
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
-
-  const darkMode = theme === 'dark' || (theme === 'system' && systemDarkMode);
-
-  React.useEffect(() => {
-    document.documentElement.classList.add('theme-transition');
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    const timeout = setTimeout(() => {
-      document.documentElement.classList.remove('theme-transition');
-    }, 300);
-    return () => clearTimeout(timeout);
-  }, [darkMode]);
 
   React.useEffect(() => {
     if (user && isSuperAdmin && !adminChecked) {
@@ -74,6 +51,10 @@ export default function App() {
 
 
   React.useEffect(() => {
+    const prev = localStorage.getItem('educore_current_view');
+    if (prev && prev !== currentView && prev !== 'tutor') {
+      localStorage.setItem('educore_previous_view', prev);
+    }
     localStorage.setItem('educore_current_view', currentView);
   }, [currentView]);
 
@@ -84,7 +65,7 @@ export default function App() {
     document.documentElement.style.fontSize = size;
   }, [settings?.fontSize]);
 
-  const toggleDarkMode = () => updateSettings({ theme: darkMode ? 'light' : 'dark' });
+
 
   if (loading) {
     return (
@@ -102,8 +83,14 @@ export default function App() {
     return <CompleteProfile />;
   }
 
+  // Check subscription status
+  const isSubscriptionActive = userProfile?.subscriptionStatus === 'active';
+  if (user && userProfile && !isSuperAdmin && !isSubscriptionActive) {
+    return <PaymentGate />;
+  }
+
   return (
-    <div className={`min-h-[100dvh] font-sans ${darkMode ? 'dark bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+    <div className="min-h-[100dvh] font-sans bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
       <div className="flex h-[100dvh] overflow-hidden w-full relative">
         {/* Sidebar container */}
         <div className={`hidden md:flex relative z-50 ${currentView === 'tutor' ? '!hidden' : ''}`}>
@@ -130,13 +117,7 @@ export default function App() {
               </div>
             </div>
             <div className="flex items-center gap-2 md:gap-4 ml-auto">
-              <button 
-                onClick={toggleDarkMode}
-                className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors text-slate-500 dark:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-              >
-                {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-              </button>
+
               <div className="hidden sm:block text-right">
                 <p className="text-xs text-slate-500 font-medium">Welcome back,</p>
                 <p className="text-sm font-bold text-slate-800 dark:text-white">{user.displayName || 'Student'}</p>

@@ -86,8 +86,12 @@ html, body, #root {
 .markdown-body h3 { font-size: 1.25em; }
 .markdown-body h4 { font-size: 1em; }
 
-.dark .markdown-body h2 { border-bottom-color: var(--color-slate-700); }
-.dark .markdown-body a { color: var(--color-blue-400); }
+@media (prefers-color-scheme: dark) {
+  .markdown-body h2 { border-bottom-color: var(--color-slate-700); }
+}
+@media (prefers-color-scheme: dark) {
+  .markdown-body a { color: var(--color-blue-400); }
+}
 
 .markdown-body p,
 .markdown-body blockquote,
@@ -112,9 +116,11 @@ html, body, #root {
   border-left: 0.25em solid var(--color-slate-200);
 }
 
-.dark .markdown-body blockquote {
-  color: var(--color-slate-400);
-  border-left-color: var(--color-slate-700);
+@media (prefers-color-scheme: dark) {
+  .markdown-body blockquote {
+    color: var(--color-slate-400);
+    border-left-color: var(--color-slate-700);
+  }
 }
 
 .markdown-body code {
@@ -126,8 +132,10 @@ html, body, #root {
   font-family: var(--font-mono);
 }
 
-.dark .markdown-body code {
-  background-color: var(--color-slate-800);
+@media (prefers-color-scheme: dark) {
+  .markdown-body code {
+    background-color: var(--color-slate-800);
+  }
 }
 
 .markdown-body pre {
@@ -140,8 +148,10 @@ html, body, #root {
   max-width: 100%;
 }
 
-.dark .markdown-body pre {
-  background-color: var(--color-slate-800);
+@media (prefers-color-scheme: dark) {
+  .markdown-body pre {
+    background-color: var(--color-slate-800);
+  }
 }
 
 .markdown-body pre code {
@@ -174,9 +184,11 @@ html, body, #root {
   border: 1px solid var(--color-slate-200);
 }
 
-.dark .markdown-body table th,
-.dark .markdown-body table td {
-  border-color: var(--color-slate-700);
+@media (prefers-color-scheme: dark) {
+  .markdown-body table th,
+  .markdown-body table td {
+    border-color: var(--color-slate-700);
+  }
 }
 
 .markdown-body table tr {
@@ -184,17 +196,21 @@ html, body, #root {
   border-top: 1px solid var(--color-slate-200);
 }
 
-.dark .markdown-body table tr {
-  background-color: var(--color-slate-900);
-  border-top-color: var(--color-slate-700);
+@media (prefers-color-scheme: dark) {
+  .markdown-body table tr {
+    background-color: var(--color-slate-900);
+    border-top-color: var(--color-slate-700);
+  }
 }
 
 .markdown-body table tr:nth-child(2n) {
   background-color: var(--color-slate-50);
 }
 
-.dark .markdown-body table tr:nth-child(2n) {
-  background-color: var(--color-slate-800);
+@media (prefers-color-scheme: dark) {
+  .markdown-body table tr:nth-child(2n) {
+    background-color: var(--color-slate-800);
+  }
 }
 
 .markdown-body img {
@@ -215,9 +231,6 @@ html, body, #root {
 }
 
 /* Base custom styles */
-.theme-transition * {
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease !important;
-}
 
 .glass-panel {
   background: rgba(255, 255, 255, 0.7);
@@ -226,9 +239,11 @@ html, body, #root {
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.dark .glass-panel {
-  background: rgba(15, 23, 42, 0.7);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+@media (prefers-color-scheme: dark) {
+  .glass-panel {
+    background: rgba(15, 23, 42, 0.7);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
 }
 
 /* Responsive grid overrides */
