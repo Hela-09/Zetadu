@@ -5,7 +5,7 @@ import { useGooglePicker } from '../hooks/useGooglePicker';
 import { ChatMessage, TutorConversation } from '../types';
 import ReactMarkdown from 'react-markdown';
 import { useAuth } from '../contexts/AuthContext';
-import { db } from '../firebase/config';
+import { db } from '../lib/firebase';
 import { collection, addDoc, doc, setDoc, getDoc, getDocs, deleteDoc, query, where, orderBy, updateDoc } from 'firebase/firestore';
 
 const formatAIResponse = (text: string) => {
@@ -36,11 +36,11 @@ interface TutorProps {
 export default function Tutor({ setCurrentView }: TutorProps = {}) {
   const { user, getToken, userProfile, settings, oauthToken, signInWithGoogle } = useAuth();
   
-  const [targetSubject] = useState(() => localStorage.getItem('educore_target_subject') || '');
+  const [targetSubject] = useState(() => localStorage.getItem('zetadu_target_subject') || '');
   
   useEffect(() => {
-    if (localStorage.getItem('educore_target_subject')) {
-      localStorage.removeItem('educore_target_subject');
+    if (localStorage.getItem('zetadu_target_subject')) {
+      localStorage.removeItem('zetadu_target_subject');
     }
   }, []);
 
@@ -471,7 +471,7 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
 
   return (
     <div className="w-full h-full flex items-center justify-center absolute inset-0 bg-white dark:bg-slate-900 sm:bg-slate-100 dark:sm:bg-slate-950">
-      <div className="w-full sm:w-[calc(100%-32px)] xl:w-[min(1200px,calc(100%-48px))] h-full sm:min-h-[400px] xl:min-h-[700px] sm:my-[8px] xl:my-[12px] sm:mx-auto flex flex-col bg-white dark:bg-slate-900 sm:rounded-[18px] lg:rounded-[20px] shadow-none sm:shadow-xl sm:border border-slate-200 dark:border-slate-800 overflow-hidden relative">
+      <div className="w-full sm:w-[calc(100%-32px)] xl:w-[min(1200px,calc(100%-48px))] h-full sm:h-[calc(100%-16px)] xl:h-[calc(100%-24px)] sm:min-h-[400px] xl:min-h-[700px] sm:my-[8px] xl:my-[12px] sm:mx-auto flex flex-col bg-white dark:bg-slate-900 sm:rounded-[18px] lg:rounded-[20px] shadow-none sm:shadow-xl sm:border border-slate-200 dark:border-slate-800 overflow-hidden relative">
       
       {/* GLOBAL HEADER */}
       <div className="shrink-0 flex items-center justify-between px-3 md:px-5 h-[60px] md:h-[72px] border-b border-slate-200 dark:border-slate-800 w-full bg-white dark:bg-slate-900 z-20">
@@ -479,7 +479,7 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
           {setCurrentView && (
             <button 
               onClick={() => {
-                const prev = localStorage.getItem('educore_previous_view');
+                const prev = localStorage.getItem('zetadu_previous_view');
                 if (prev && prev !== 'tutor') {
                   setCurrentView(prev);
                 } else {
@@ -494,7 +494,7 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
               <span>Back</span>
             </button>
           )}
-          <h2 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white hidden sm:block">EduCore AI Tutor</h2>
+          <h2 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white hidden sm:block">Zetadu AI Tutor</h2>
         </div>
         
         <div className="flex items-center gap-2">
@@ -629,7 +629,7 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
                     {msg.role === 'tutor' ? <Sparkles size={16} /> : <User size={16} />}
                   </div>
                   
-                  <div className={`text-[15px] leading-relaxed w-full max-w-[900px] min-w-0 ${msg.role === 'tutor' ? 'flex-1' : ''} ${
+                  <div className={`text-[15px] leading-relaxed max-w-[calc(100%-48px)] sm:max-w-[85%] md:max-w-[900px] min-w-0 ${msg.role === 'tutor' ? 'flex-1' : ''} ${
                     msg.role === 'user'
                       ? 'bg-blue-50 dark:bg-blue-900/20 text-slate-800 dark:text-slate-200 p-4 rounded-2xl rounded-tr-sm'
                       : 'text-slate-800 dark:text-slate-200 py-2'
@@ -756,7 +756,7 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
                 }}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask your AI tutor..."
-                className="flex-1 min-w-0 w-full bg-transparent border-none py-[12px] px-2 text-[16px] md:text-[17px] leading-[24px] resize-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder:text-slate-500 self-center no-scrollbar"
+                className="flex-1 min-w-0 w-full bg-transparent border-none py-[12px] px-2 text-[16px] md:text-[17px] leading-[24px] resize-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder:text-slate-500 self-center max-h-[160px] overflow-y-auto no-scrollbar"
                 rows={1}
                 style={{ minHeight: '24px' }}
               />

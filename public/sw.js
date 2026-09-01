@@ -1,4 +1,4 @@
-const CACHE_NAME = 'educore-cache-v1';
+const CACHE_NAME = 'zetadu-cache-v1';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

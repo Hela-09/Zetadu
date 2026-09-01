@@ -2,29 +2,22 @@ import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, browserLocalPersistence, setPersistence, Auth } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import config from "../../firebase-applet-config.json";
-
-// The project id to use
-const projectId = config.projectId;
 
 const firebaseConfig = {
-  projectId: projectId,
-  appId: config.appId,
-  apiKey: config.apiKey,
-  authDomain: config.authDomain,
-  storageBucket: config.storageBucket,
-  messagingSenderId: config.messagingSenderId,
-  measurementId: config.measurementId
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBzS_kYtaSYSAx39DBhNAP6l6IGsIUHTqs",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "educore-66491.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "educore-66491",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "educore-66491.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1042086916215",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1042086916215:web:6b6bce4648c9fb88b8d672",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-J6WZQCSEYF"
 };
 
 let app: FirebaseApp | undefined;
 let auth: Auth | any = null;
 let db: Firestore | any = null;
 let storage: any = null;
-
 const googleProvider = new GoogleAuthProvider();
-googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
-googleProvider.addScope('https://www.googleapis.com/auth/drive.metadata.readonly');
 
 try {
   if (firebaseConfig.apiKey) {
@@ -32,9 +25,8 @@ try {
     auth = getAuth(app);
     setPersistence(auth, browserLocalPersistence).catch(console.warn);
     
-    // Check if there is a firestoreDatabaseId in config, else use the known one
-    const databaseId = config.firestoreDatabaseId || "ai-studio-educore-c6308d9c-0c0e-4c1f-8911-aa88c989aa89";
-    db = getFirestore(app, databaseId);
+    // Use the default database for the new project
+    db = getFirestore(app);
     storage = getStorage(app);
   } else {
     console.warn("Firebase configuration is missing.");

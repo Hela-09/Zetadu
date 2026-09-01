@@ -1,12 +1,47 @@
-import React from 'react';
+import React, { useState } from 'react';
 
-export default function Logo({ className = "w-10 h-10 shrink-0" }: { className?: string }) {
+interface LogoProps {
+  className?: string;
+  variant?: 'full' | 'icon';
+}
+
+export default function Logo({ className = "w-10 h-10 shrink-0", variant = 'full' }: LogoProps) {
+  const [error, setError] = useState(false);
+
+  if (variant === 'icon') {
+    return (
+      <div className={`flex items-center justify-center overflow-hidden rounded-lg shrink-0 ${className} ${error ? 'bg-blue-600' : ''}`}>
+         {!error ? (
+           <img 
+             src="/logo.png" 
+             alt="Zetadu Logo" 
+             className="w-full h-full object-cover object-[center_20%]" 
+             onError={() => setError(true)}
+           />
+         ) : (
+           <span className="font-bold text-white text-xl">Z</span>
+         )}
+      </div>
+    );
+  }
+  
   return (
-    <div className={`flex items-center justify-center ${className}`}>
-      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-        <path d="M4 8 H22 L14 20 H4 L12 8 Z" fill="currentColor" className="text-slate-900 dark:text-white" />
-        <path d="M28 24 H10 L18 12 H28 L20 24 Z" fill="#06b6d4" />
-      </svg>
+    <div className={`flex items-center justify-center shrink-0 ${className}`}>
+      {!error ? (
+        <img 
+          src="/logo.png" 
+          alt="Zetadu" 
+          className="w-full h-full object-contain" 
+          onError={() => setError(true)}
+        />
+      ) : (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+            <span className="font-bold text-white">Z</span>
+          </div>
+          <span className="font-bold text-blue-600 text-xl tracking-tight">Zetadu</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { db, storage } from '../firebase/config';
+import { db, storage } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Upload, CheckCircle, AlertCircle, Clock, CreditCard } from 'lucide-react';
@@ -96,7 +96,7 @@ export default function PaymentGate() {
       <div className="max-w-md w-full space-y-8 bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700">
         
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-center text-slate-900 dark:text-white flex-1">EduCore Premium</h2>
+          <h2 className="text-2xl font-bold text-center text-slate-900 dark:text-white flex-1">Zetadu Premium</h2>
           <button onClick={signOut} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors" title="Sign out">
             <LogOut size={20} />
           </button>
@@ -146,7 +146,7 @@ export default function PaymentGate() {
                 </div>
                 <div className="flex justify-between items-center text-sm mb-1">
                   <span className="text-slate-500">Account Number</span>
-                  <span className="font-bold text-blue-600 dark:text-blue-400 text-lg tracking-wide">08200272572</span>
+                  <span className="font-bold text-blue-600 dark:text-blue-400 text-lg tracking-wide">8100272572</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-slate-500">Accepted Banks</span>

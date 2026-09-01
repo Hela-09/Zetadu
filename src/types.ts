@@ -1,4 +1,4 @@
-export type ViewType = 'home' | 'subjects' | 'practice' | 'tutor' | 'profile' | 'admin';
+export type ViewType = 'home' | 'subjects' | 'practice' | 'tutor' | 'profile' | 'admin' | 'opportunities';
 
 export interface Subject {
   id: string;

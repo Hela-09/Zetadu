@@ -1,26 +1,38 @@
 const fs = require('fs');
+
 let code = fs.readFileSync('src/components/Sidebar.tsx', 'utf8');
 
-const importStatement = `import { usePWAInstall } from '../hooks/usePWAInstall';\nimport { Home, BookOpen, MessageSquare, User, Download } from 'lucide-react';`;
-code = code.replace(`import { Home, BookOpen, MessageSquare, User } from 'lucide-react';`, importStatement);
+// Ensure Briefcase icon is imported
+if (!code.includes('Briefcase')) {
+    code = code.replace("import { Home, BookOpen, MessageSquare, User, Download }", "import { Home, BookOpen, MessageSquare, User, Download, Briefcase }");
+}
 
-const componentStart = `export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {\n  const { isInstallable, triggerInstall } = usePWAInstall();`;
-code = code.replace(`export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {`, componentStart);
-
-const targetDiv = `<div className="bg-slate-800 p-4 rounded-2xl border border-slate-700/50">`;
-const installButton = `
-        {isInstallable && (
-          <button
-            onClick={triggerInstall}
-            className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-semibold py-2.5 px-4 rounded-xl transition-all shadow-md mb-4"
-          >
-            <Download size={18} />
-            <span>Install App</span>
-          </button>
-        )}
-        <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700/50">`;
-
-code = code.replace(targetDiv, installButton);
+code = code.replace(
+    /const navItems = \[[\s\S]*?\];/, 
+    `const navItems = [
+    { id: 'home', label: 'Home', icon: Home },
+    { id: 'subjects', label: 'Learn', icon: BookOpen },
+    { id: 'opportunities', label: 'Opportunities', icon: Briefcase },
+    { id: 'profile', label: 'Profile', icon: User },
+  ];`
+);
 
 fs.writeFileSync('src/components/Sidebar.tsx', code);
-console.log('patched sidebar');
+
+let bottomCode = fs.readFileSync('src/components/BottomNav.tsx', 'utf8');
+
+if (!bottomCode.includes('Briefcase')) {
+    bottomCode = bottomCode.replace("import { Home, BookOpen, User }", "import { Home, BookOpen, User, Briefcase }");
+}
+
+bottomCode = bottomCode.replace(
+    /const navItems = \[[\s\S]*?\];/, 
+    `const navItems = [
+    { id: 'home', label: 'Home', icon: Home },
+    { id: 'subjects', label: 'Learn', icon: BookOpen },
+    { id: 'opportunities', label: 'Opp\\s', icon: Briefcase },
+    { id: 'profile', label: 'Profile', icon: User },
+  ];`
+);
+
+fs.writeFileSync('src/components/BottomNav.tsx', bottomCode);

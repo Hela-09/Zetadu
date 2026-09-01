@@ -1,11 +1,9 @@
 {
-  "projectId": "hale-generator-95g21",
-  "appId": "1:225999613942:web:578378a897b656b480a1d7",
-  "apiKey": "AIzaSyAyarvFnSe7-CaxTfwsO24jqBM18Vl0TIo",
-  "authDomain": "hale-generator-95g21.firebaseapp.com",
-  "storageBucket": "hale-generator-95g21.firebasestorage.app",
-  "messagingSenderId": "225999613942",
-  "measurementId": "",
-  "oAuthClientId": "225999613942-edkv2tc7h0a2iuaijgobinrl5nsbt9id.apps.googleusercontent.com",
-  "recaptchaSiteKey": ""
+  "projectId": "educore-66491",
+  "appId": "1:1042086916215:web:6b6bce4648c9fb88b8d672",
+  "apiKey": "AIzaSyBzS_kYtaSYSAx39DBhNAP6l6IGsIUHTqs",
+  "authDomain": "educore-66491.firebaseapp.com",
+  "storageBucket": "educore-66491.firebasestorage.app",
+  "messagingSenderId": "1042086916215",
+  "measurementId": "G-J6WZQCSEYF"
 }

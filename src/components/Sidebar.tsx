@@ -2,7 +2,7 @@ import React from 'react';
 import { ViewType } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import Logo from './Logo';
-import { Home, BookOpen, MessageSquare, User, Download } from 'lucide-react';
+import { Home, BookOpen, MessageSquare, User, Download, Briefcase } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface SidebarProps {
@@ -15,13 +15,14 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'subjects', label: 'Learn', icon: BookOpen },
+    { id: 'opportunities', label: 'Opportunities', icon: Briefcase },
     { id: 'profile', label: 'Profile', icon: User },
   ];
 
   return (
-    <aside className="w-64 bg-slate-900 text-white flex flex-col shrink-0">
-      <div className="p-6 flex items-center space-x-3">
-        <Logo />
+    <aside className="w-64 h-full bg-slate-900 text-white flex flex-col shrink-0">
+      <div className="p-6 flex items-center space-x-3 shrink-0">
+        <Logo variant="icon" className="w-10 h-10 shrink-0" />
         <div>
           <h2 className="text-lg font-bold text-white leading-tight">Zetadu AI</h2>
           <p className="text-sm text-slate-400 leading-tight">Smart Prep System</p>

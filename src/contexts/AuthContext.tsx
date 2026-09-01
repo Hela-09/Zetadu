@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut as firebaseSignOut, onAuthStateChanged, getIdToken } from 'firebase/auth';
-import { auth, googleProvider, db } from '../firebase/config';
+import { auth, googleProvider, db } from '../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export interface UserSettings {
@@ -79,39 +79,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           // Super Admin Logic
           let isFirst = false;
-          let isActualSuperAdmin = false;
-          const superAdminRef = doc(db, 'system', 'super_admin');
-          const adminData = { 
-            uid: currentUser.uid, 
-            email: currentUser.email || '',
-            username: currentUser.displayName?.toLowerCase().replace(/\s+/g, '') || '',
-            displayName: currentUser.displayName || '',
-            role: "super_admin",
-            isSuperAdmin: true,
-            createdAt: new Date().toISOString() 
-          };
-
-          try {
-            const superAdminSnap = await getDoc(superAdminRef);
-            if (superAdminSnap.exists() && superAdminSnap.data().uid === currentUser.uid) {
-              setIsSuperAdmin(true);
-              isActualSuperAdmin = true;
-            }
-          } catch(err) {
-            // Permission denied -> either we are not admin OR it doesn't exist yet!
-            try {
-              await setDoc(superAdminRef, adminData);
-              // If successful, we claimed it!
-              await setDoc(doc(db, 'users', currentUser.uid), adminData, { merge: true });
-              setIsSuperAdmin(true);
-              isFirst = true;
-              isActualSuperAdmin = true;
-            } catch(e) {
-              // Someone else is super admin
-              setIsSuperAdmin(false);
-            }
+          let isActualSuperAdmin = currentUser.email === 'emmanuelomojola07@gmail.com';
+          
+          if (isActualSuperAdmin) {
+            setIsSuperAdmin(true);
+            isFirst = true; // ensure new profile uses super_admin
+            const superAdminRef = doc(db, 'system', 'super_admin');
+            const adminData = { 
+               uid: currentUser.uid, 
+               email: currentUser.email || '',
+               displayName: currentUser.displayName || '',
+               role: "super_admin",
+               isSuperAdmin: true,
+               createdAt: new Date().toISOString() 
+             };
+             
+             try {
+               await setDoc(superAdminRef, adminData, { merge: true });
+               await setDoc(doc(db, 'users', currentUser.uid), { role: 'super_admin', isSuperAdmin: true }, { merge: true });
+             } catch(e) {
+               console.warn("Failed to set super_admin ref", e);
+             }
+          } else {
+             setIsSuperAdmin(false);
           }
-
           
           // Load settings
           try {
@@ -129,11 +120,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (!docSnap.exists()) {
 
+            const generatedUsername = currentUser.email ? currentUser.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '') + Math.floor(Math.random() * 1000) : 'user_' + currentUser.uid.substring(0, 6);
             const newUserProfile = {
               uid: currentUser.uid,
               email: currentUser.email || '',
               displayName: currentUser.displayName || '',
               name: currentUser.displayName || '',
+              username: generatedUsername,
               photoURL: currentUser.photoURL || '',
               educationLevel: 'Secondary', // Default
               country: 'International', // Default
@@ -261,7 +254,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       localStorage.removeItem('practice_session');
       localStorage.removeItem('tutor_session');
-      localStorage.removeItem('educore_current_view');
+      localStorage.removeItem('zetadu_current_view');
       setOauthToken(null);
       await firebaseSignOut(auth);
     } catch (error) {

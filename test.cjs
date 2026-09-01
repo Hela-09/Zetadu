@@ -1,4 +1,3 @@
 const fs = require('fs');
-let content = fs.readFileSync('src/components/Tutor.tsx', 'utf8');
-const search = 'h-[100dvh] sm:h-[calc(100dvh-16px)] xl:h-[calc(100dvh-24px)] min-h-[100dvh] sm:min-h-[400px] xl:min-h-[700px]';
-console.log(content.includes(search));
+const code = fs.readFileSync('src/components/Practice.tsx', 'utf8');
+console.log(code.substring(code.indexOf('if (setupStep === 1) {'), code.indexOf('return (', code.indexOf('if (setupStep === 1) {') + 50) + 1500));

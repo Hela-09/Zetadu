@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase/config';
+import { db } from '../lib/firebase';
 import { collection, query, orderBy, limit, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { 
   Users, BookOpen, BrainCircuit, Settings, ShieldAlert, 

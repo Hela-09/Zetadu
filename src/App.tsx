@@ -4,8 +4,8 @@ import BottomNav from './components/BottomNav';
 import Login from './components/Login';
 import { ViewType } from './types';
 import { LogOut } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from './contexts/AuthContext';
-import CompleteProfile from './components/CompleteProfile';
 import PaymentGate from './components/PaymentGate';
 
 
@@ -15,10 +15,11 @@ const Practice = React.lazy(() => import('./components/Practice'));
 const Tutor = React.lazy(() => import('./components/Tutor'));
 const Profile = React.lazy(() => import('./components/Profile'));
 const Admin = React.lazy(() => import('./components/Admin'));
+const Opportunities = React.lazy(() => import('./components/Opportunities'));
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewType>(() => {
-    return (localStorage.getItem('educore_current_view') as ViewType) || 'home';
+    return (localStorage.getItem('zetadu_current_view') as ViewType) || 'home';
   });
   const { user, userProfile, settings, updateSettings, isSuperAdmin, loading, signOut } = useAuth();
   const [adminChecked, setAdminChecked] = useState(false);
@@ -51,11 +52,11 @@ export default function App() {
 
 
   React.useEffect(() => {
-    const prev = localStorage.getItem('educore_current_view');
+    const prev = localStorage.getItem('zetadu_current_view');
     if (prev && prev !== currentView && prev !== 'tutor') {
-      localStorage.setItem('educore_previous_view', prev);
+      localStorage.setItem('zetadu_previous_view', prev);
     }
-    localStorage.setItem('educore_current_view', currentView);
+    localStorage.setItem('zetadu_current_view', currentView);
   }, [currentView]);
 
   React.useEffect(() => {
@@ -79,13 +80,11 @@ export default function App() {
     return <Login />;
   }
 
-  if (user && userProfile && !userProfile.username) {
-    return <CompleteProfile />;
-  }
+
 
   // Check subscription status
   const isSubscriptionActive = userProfile?.subscriptionStatus === 'active';
-  if (user && userProfile && !isSuperAdmin && !isSubscriptionActive) {
+  if (user && userProfile && !isSuperAdmin && !userProfile.isSuperAdmin && userProfile.role !== 'super_admin' && !isSubscriptionActive) {
     return <PaymentGate />;
   }
 
@@ -104,7 +103,7 @@ export default function App() {
           </div>
         )}
 
-        <main className={`flex-1 flex flex-col min-h-0 relative ${currentView === 'tutor' ? 'p-0 overflow-hidden' : 'p-4 md:p-8 pb-24 md:pb-8 pb-[calc(6rem+env(safe-area-inset-bottom))] overflow-y-auto overflow-x-hidden'}`}>
+        <main className={`flex-1 flex flex-col min-h-0 relative ${currentView === 'tutor' ? 'p-0 overflow-hidden' : 'p-4 md:p-8 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8 overflow-y-auto '}`}>
           <header className={`flex justify-between items-center shrink-0 gap-4 flex-wrap ${currentView === 'tutor' ? 'hidden' : 'mb-6 md:mb-8'}`}>
             <div className="flex items-center gap-3">
               <div className="space-y-1">
@@ -144,12 +143,24 @@ export default function App() {
                 <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" aria-label="Loading section..."></div>
               </div>
             }>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={currentView}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  className="flex-1 flex flex-col min-h-0 relative"
+                >
               {currentView === 'home' && <Home setView={setCurrentView} />}
               {currentView === 'subjects' && <Subjects setView={setCurrentView} />}
               {currentView === 'practice' && <Practice />}
               {currentView === 'tutor' && <Tutor setCurrentView={setCurrentView} />}
               {currentView === 'profile' && <Profile setView={setCurrentView} />}
+              {currentView === 'opportunities' && <Opportunities />}
               {currentView === 'admin' && <Admin />}
+                </motion.div>
+              </AnimatePresence>
             </Suspense>
           </div>
         </main>
