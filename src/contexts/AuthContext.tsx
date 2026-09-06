@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut as firebaseSignOut, onAuthStateChanged, getIdToken } from 'firebase/auth';
 import { auth, googleProvider, db } from '../lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 export interface UserSettings {
   fontSize: "small" | "medium" | "large";
@@ -27,7 +27,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
-
 export const useAuth = () => useContext(AuthContext);
 
 const defaultSettings: UserSettings = {
@@ -35,6 +34,7 @@ const defaultSettings: UserSettings = {
   defaultPracticeDifficulty: 'Medium',
   aiTutorTone: 'Friendly'
 };
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [user, setUser] = useState<User | null>(null);
@@ -43,7 +43,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [oauthToken, setOauthToken] = useState<string | null>(null);
-
+  
+  // Keep track of our unsubscribe functions for cleanup
+  const profileUnsubRef = useRef<(() => void) | null>(null);
+  const settingsUnsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (auth) {
@@ -58,7 +61,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error("Redirect sign-in error", err);
       });
     }
-
   }, []);
 
   useEffect(() => {
@@ -67,59 +69,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
       return;
     }
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
+      // Clear listeners if user signs out or changes
+      if (profileUnsubRef.current) profileUnsubRef.current();
+      if (settingsUnsubRef.current) settingsUnsubRef.current();
       
       if (currentUser) {
-        // Ensure user document exists in Firestore
         try {
           if (!db) throw new Error("Firestore is not initialized.");
           const userRef = doc(db, 'users', currentUser.uid);
-          const docSnap = await getDoc(userRef);
-
-          // Super Admin Logic
-          let isFirst = false;
+          
           let isActualSuperAdmin = currentUser.email === 'emmanuelomojola07@gmail.com';
-          
-          if (isActualSuperAdmin) {
-            setIsSuperAdmin(true);
-            isFirst = true; // ensure new profile uses super_admin
-            const superAdminRef = doc(db, 'system', 'super_admin');
-            const adminData = { 
-               uid: currentUser.uid, 
-               email: currentUser.email || '',
-               displayName: currentUser.displayName || '',
-               role: "super_admin",
-               isSuperAdmin: true,
-               createdAt: new Date().toISOString() 
-             };
-             
-             try {
-               await setDoc(superAdminRef, adminData, { merge: true });
-               await setDoc(doc(db, 'users', currentUser.uid), { role: 'super_admin', isSuperAdmin: true }, { merge: true });
-             } catch(e) {
-               console.warn("Failed to set super_admin ref", e);
-             }
-          } else {
-             setIsSuperAdmin(false);
-          }
-          
-          // Load settings
-          try {
-            const settingsSnap = await getDoc(doc(db, 'settings', currentUser.uid));
-            if (settingsSnap.exists()) {
-              const loadedSettings = { ...defaultSettings, ...settingsSnap.data() } as UserSettings;
-              setSettings(loadedSettings);
+          setIsSuperAdmin(isActualSuperAdmin);
 
-            } else {
-              await setDoc(doc(db, 'settings', currentUser.uid), { ...defaultSettings, uid: currentUser.uid });
-            }
-          } catch (err) {
-            console.warn("Error loading settings:", err);
-          }
-
+          // Bootstrap documents if missing
+          const docSnap = await getDoc(userRef);
           if (!docSnap.exists()) {
-
             const generatedUsername = currentUser.email ? currentUser.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '') + Math.floor(Math.random() * 1000) : 'user_' + currentUser.uid.substring(0, 6);
             const newUserProfile = {
               uid: currentUser.uid,
@@ -128,70 +94,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               name: currentUser.displayName || '',
               username: generatedUsername,
               photoURL: currentUser.photoURL || '',
-              educationLevel: 'Secondary', // Default
-              country: 'International', // Default
+              educationLevel: 'Secondary',
+              country: 'International',
               progress: 0,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
-              ...(isFirst ? { role: 'super_admin', isSuperAdmin: true } : { role: 'student', isSuperAdmin: false })
+              role: isActualSuperAdmin ? 'super_admin' : 'student',
+              isSuperAdmin: isActualSuperAdmin
             };
             await setDoc(userRef, newUserProfile, { merge: true });
             setUserProfile(newUserProfile);
           } else {
-            const data = docSnap.data();
-            if (isActualSuperAdmin && !data.isSuperAdmin) {
+             const data = docSnap.data();
+             if (isActualSuperAdmin && !data.isSuperAdmin) {
                await setDoc(userRef, { role: 'super_admin', isSuperAdmin: true }, { merge: true });
-               data.role = 'super_admin';
-               data.isSuperAdmin = true;
-            }
-            // Check if subscription expired
-            let updatedData = { ...data };
-            if (data.subscriptionStatus === 'active' && data.subscriptionExpires) {
-              if (Date.now() > data.subscriptionExpires) {
-                updatedData.subscriptionStatus = 'expired';
-                await setDoc(userRef, { subscriptionStatus: 'expired' }, { merge: true });
-              }
-            }
-            setUserProfile(updatedData);
+             }
+             setUserProfile(data);
+          }
+          
+          const settingsSnap = await getDoc(doc(db, 'settings', currentUser.uid));
+          if (!settingsSnap.exists()) {
+              await setDoc(doc(db, 'settings', currentUser.uid), { ...defaultSettings, uid: currentUser.uid });
+          } else {
+              setSettings({ ...defaultSettings, ...settingsSnap.data() } as UserSettings);
           }
 
-          // Ensure other documents exist with merge to prevent overwriting
-          await setDoc(doc(db, 'settings', currentUser.uid), { uid: currentUser.uid }, { merge: true });
           await setDoc(doc(db, 'user_progress', currentUser.uid), { uid: currentUser.uid }, { merge: true });
           await setDoc(doc(db, 'bookmarks', currentUser.uid), { uid: currentUser.uid }, { merge: true });
           await setDoc(doc(db, 'notes', currentUser.uid), { uid: currentUser.uid }, { merge: true });
 
-        } catch (err) {
+          // Establish Real-Time Listeners
+          profileUnsubRef.current = onSnapshot(userRef, (snapshot) => {
+             if (snapshot.exists()) {
+                 let data = snapshot.data();
+                 if (data.subscriptionStatus === 'active' && data.subscriptionExpires) {
+                    if (Date.now() > data.subscriptionExpires) {
+                        data.subscriptionStatus = 'expired';
+                        setDoc(userRef, { subscriptionStatus: 'expired' }, { merge: true });
+                    }
+                 }
+                 setUserProfile(data);
+             }
+          });
+          
+          settingsUnsubRef.current = onSnapshot(doc(db, 'settings', currentUser.uid), (snapshot) => {
+              if (snapshot.exists()) {
+                  setSettings({ ...defaultSettings, ...snapshot.data() } as UserSettings);
+              }
+          });
+
+        } catch (err: any) {
           console.warn("Error setting up user profile:", err);
         }
+      } else {
+        setUserProfile(null);
+        setSettings(defaultSettings);
+        setIsSuperAdmin(false);
       }
       
+      setUser(currentUser);
       setLoading(false);
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      if (profileUnsubRef.current) profileUnsubRef.current();
+      if (settingsUnsubRef.current) settingsUnsubRef.current();
+    };
   }, []);
 
   const refreshProfile = async () => {
-    if (user && db) {
-      const docSnap = await getDoc(doc(db, 'users', user.uid));
-      if (docSnap.exists()) {
-        let data = docSnap.data();
-        if (data.subscriptionStatus === 'active' && data.subscriptionExpires) {
-          if (Date.now() > data.subscriptionExpires) {
-            data.subscriptionStatus = 'expired';
-            await setDoc(doc(db, 'users', user.uid), { subscriptionStatus: 'expired' }, { merge: true });
-          }
-        }
-        setUserProfile(data);
-      }
-    }
+      // Intentionally left as a stub or force-fetch, but onSnapshot handles live updates
   };
 
   const updateSettings = async (newSettings: Partial<UserSettings>) => {
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
-
     if (user && db) {
       try {
         await setDoc(doc(db, 'settings', user.uid), updated, { merge: true });
@@ -221,7 +199,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setOauthToken(credential.accessToken);
           }
         } catch (err: any) {
-          if (err.code === 'auth/popup-blocked') {
+          if (err.code === "auth/popup-blocked") {
             await signInWithRedirect(auth, googleProvider);
           } else {
             throw err;
@@ -230,39 +208,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err: any) {
       if (err.code === 'auth/popup-blocked') {
-        setError('Popup blocked by browser. Please allow popups or try opening the app in a new tab.');
+        setError("Popup blocked by browser. Please allow popups or try opening the app in a new tab.");
       } else if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
-        setError('Sign-in was cancelled. Please try again.');
+        setError("Sign-in was cancelled. Please try again.");
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError("This domain is not authorized for Google Sign-In. Please add it in Firebase Console.");
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setError("Google Sign-In is not enabled. Please enable it in Firebase Console.");
+      } else if (err.code === 'auth/invalid-credential') {
+        setError("Invalid credentials provided.");
       } else {
         setError(err.message || 'Failed to sign in with Google.');
       }
     }
   };
-
   
-
   const signOut = async () => {
     if (!auth) return;
     try {
-      if (user) {
-        try {
-          // Attempt to delete sessions from Firestore when logging out
-          const { deleteDoc } = await import('firebase/firestore');
-          await deleteDoc(doc(db, 'practice_sessions', user.uid)).catch(() => {});
-          await deleteDoc(doc(db, 'tutor_sessions', user.uid)).catch(() => {});
-        } catch(e) {}
-      }
-      localStorage.removeItem('practice_session');
-      localStorage.removeItem('tutor_session');
-      localStorage.removeItem('zetadu_current_view');
-      setOauthToken(null);
+      localStorage.removeItem("practice_session");
+      localStorage.removeItem("tutor_session");
+      localStorage.removeItem("zetadu_current_view");
+      
       await firebaseSignOut(auth);
     } catch (error) {
       console.warn("Error signing out", error);
     }
   };
 
-  const getToken = async () => {
+    const getToken = async () => {
     if (!user) return null;
     return await getIdToken(user);
   };

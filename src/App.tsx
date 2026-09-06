@@ -15,7 +15,10 @@ const Practice = React.lazy(() => import('./components/Practice'));
 const Tutor = React.lazy(() => import('./components/Tutor'));
 const Profile = React.lazy(() => import('./components/Profile'));
 const Admin = React.lazy(() => import('./components/Admin'));
+const DailyChallenge = React.lazy(() => import('./components/DailyChallenge'));
 const Opportunities = React.lazy(() => import('./components/Opportunities'));
+const Flashcards = React.lazy(() => import('./components/Flashcards'));
+const StudyJourney = React.lazy(() => import('./components/StudyJourney'));
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewType>(() => {
@@ -154,11 +157,14 @@ export default function App() {
                 >
               {currentView === 'home' && <Home setView={setCurrentView} />}
               {currentView === 'subjects' && <Subjects setView={setCurrentView} />}
-              {currentView === 'practice' && <Practice />}
+              {currentView === 'practice' && <Practice setView={setCurrentView} />}
               {currentView === 'tutor' && <Tutor setCurrentView={setCurrentView} />}
               {currentView === 'profile' && <Profile setView={setCurrentView} />}
               {currentView === 'opportunities' && <Opportunities />}
               {currentView === 'admin' && <Admin />}
+              {currentView === 'daily_challenge' && <DailyChallenge setView={setCurrentView} />}
+              {currentView === 'flashcards' && <Flashcards setView={setCurrentView} />}
+              {currentView === 'journey' && <StudyJourney setView={setCurrentView} />}
                 </motion.div>
               </AnimatePresence>
             </Suspense>

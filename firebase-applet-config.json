@@ -5,5 +5,6 @@
   "authDomain": "educore-66491.firebaseapp.com",
   "storageBucket": "educore-66491.firebasestorage.app",
   "messagingSenderId": "1042086916215",
-  "measurementId": "G-J6WZQCSEYF"
+  "measurementId": "G-J6WZQCSEYF",
+  "firestoreDatabaseId": "ai-studio-zetadu-c6308d9c-0c0e-4c1f-8911-aa88c989aa89"
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { BookOpen, ChevronRight, Search, ChevronLeft, Star, Play, MessageSquare, BookMarked, BarChart3, FileText, Settings } from 'lucide-react';
+import { BookOpen, ChevronRight, Search, ChevronLeft, Star, Play, MessageSquare, BookMarked, BarChart3, FileText, Settings, Compass } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { collection, getDocs, query, where, addDoc, updateDoc } from 'firebase/firestore';
 import { ViewType } from '../types';
@@ -100,6 +100,9 @@ export default function Subjects({ setView }: { setView?: (view: ViewType) => vo
       setView('practice');
     } else if (action === 'tutor') {
       setView('tutor');
+    } else if (action === 'journey') {
+      localStorage.setItem('zetadu_journey_preselect_subject', selectedSubject.name);
+      setView('journey');
     }
   };
 
@@ -171,7 +174,26 @@ export default function Subjects({ setView }: { setView?: (view: ViewType) => vo
            <h3 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Choose Activity</h3>
         </div>
         
-        <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-2">
+        <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-3">
+          <button 
+            onClick={() => handleAction('journey')}
+            className="group p-6 md:p-8 rounded-3xl bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 hover:border-purple-500 dark:hover:border-purple-500 shadow-sm hover:shadow-xl transition-all flex flex-col items-start gap-4 md:gap-6 text-left relative overflow-hidden"
+          >
+            <div className="absolute -right-8 -bottom-8 text-slate-50 dark:text-slate-700/20 group-hover:text-purple-50 dark:group-hover:text-purple-900/10 transition-colors pointer-events-none transform group-hover:scale-110 duration-500">
+              <Compass size={180} />
+            </div>
+            <div className="p-4 rounded-2xl bg-purple-50 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform relative z-10">
+              <Compass size={32} />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-2 md:mb-3">
+                <h3 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white">Study Journey</h3>
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300">Featured</span>
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 text-sm md:text-base leading-relaxed">Full 6-step learning loop: Concept guide, flashcards, practice exam, mistake review, and mastery.</p>
+            </div>
+          </button>
+
           <button 
             onClick={() => handleAction('practice')}
             className="group p-6 md:p-8 rounded-3xl bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 shadow-sm hover:shadow-xl transition-all flex flex-col items-start gap-4 md:gap-6 text-left relative overflow-hidden"

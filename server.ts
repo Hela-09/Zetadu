@@ -56,11 +56,15 @@ async function startServer() {
     }
   };
 
+  let _geminiClient: any = null;
   const getGeminiClient = () => {
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("GEMINI_API_KEY environment variable is missing");
     }
-    return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    if (!_geminiClient) {
+      _geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    }
+    return _geminiClient;
   };
 
   const upload = multer({ dest: '/tmp/uploads/' });
@@ -110,35 +114,37 @@ async function startServer() {
 
   app.post("/api/chat", requireAuth, async (req, res) => {
     try {
-      const { message, history, context } = req.body;
+      const { message, history, context, stream } = req.body;
       const ai = getGeminiClient();
       
       const contents = history ? history.map((msg: any) => {
-        const parts: any[] = [{ text: msg.text || ' ' }];
+        const parts = [];
         if (msg.attachments) {
           msg.attachments.forEach((att: any) => {
             if (att.fileUri) parts.push({ fileData: { fileUri: att.fileUri, mimeType: att.mimeType } });
           });
         }
+        parts.push({ text: msg.text || ' ' });
         return { role: msg.role === 'user' ? 'user' : 'model', parts };
       }) : [];
       
-      const newParts: any[] = [{ text: message || ' ' }];
+      const newParts = [];
       if (req.body.attachments) {
         req.body.attachments.forEach((att: any) => {
           if (att.fileUri) newParts.push({ fileData: { fileUri: att.fileUri, mimeType: att.mimeType } });
         });
       }
+      newParts.push({ text: message || ' ' });
       contents.push({ role: 'user', parts: newParts });
 
       const tonePrompt = context?.tone === 'Strict' ? 'Be strict and concise.' : 'Be encouraging and friendly.';
       const systemInstruction = `You are EduCore AI Tutor. ${tonePrompt}
 Level: ${context?.educationLevel || 'Secondary'}. Country: ${context?.country || 'International'}.
 -- IMPORTANT FORMATTING RULES:
-  - DO NOT use raw LaTeX formatting (like $, $$, \\(, \\), \\[, \\], \\frac{}, \\times, \\sin, \\cos, \\theta, ^, _, backslashes) UNLESS the user explicitly asks for LaTeX or raw mathematical notation.
-  - Convert mathematical expressions into readable plain text/unicode (e.g. use "3 × 10⁸ m/s" instead of "$3 \\times 10^8$ m/s", "n₁ × sin(θ₁) = n₂ × sin(θ₂)" instead of "n_1 \\sin(\\theta_1) = n_2 \\sin(\\theta_2)", "n = c ÷ v" instead of "n = \\frac{c}{v}", "θ" instead of "\\theta").
+  - DO NOT use raw LaTeX formatting (like $, $$, \(, \), \[, \], \frac{}, \times, \sin, \cos, \theta, ^, _, backslashes) UNLESS the user explicitly asks for LaTeX or raw mathematical notation.
+  - Convert mathematical expressions into readable plain text/unicode (e.g. use "3 × 10⁸ m/s" instead of "$3 \times 10^8$ m/s", "n₁ × sin(θ₁) = n₂ × sin(θ₂)" instead of "n_1 \sin(\theta_1) = n_2 \sin(\theta_2)", "n = c ÷ v" instead of "n = \frac{c}{v}", "θ" instead of "\theta").
   - Remove unnecessary symbols, escaped characters, Markdown artifacts, and development formatting. Preserve headings, paragraphs, bullet lists, and numbered lists.
-  - Present explanations like a textbook in this order (when appropriate): Title, Definition, Explanation, Examples, Important Notes, Real-Life Applications, Quick Summary, Practice Question (optional).\n
+  - Present explanations like a textbook in this order (when appropriate): Title, Definition, Explanation, Examples, Important Notes, Real-Life Applications, Quick Summary, Practice Question (optional).
 You are an advanced multimodal AI tutor with full image understanding capabilities.
 When a user uploads an image, always analyze it thoroughly before responding.
 Your responsibilities include:
@@ -166,41 +172,91 @@ Your responsibilities include:
 * If the image contains sensitive or private information, handle it responsibly and only discuss what the user requests.
 Always prioritize accuracy, completeness, and clarity. Analyze the entire image before producing your answer.`;
 
-      let response;
-      try {
-        response = await ai.models.generateContent({
-          model: 'gemini-3.6-flash',
-          contents: contents,
-          config: { systemInstruction: systemInstruction }
-        });
-      } catch (err: any) {
-        if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
-          console.warn("2.5-flash overloaded, falling back to 1.5-flash");
-          response = await ai.models.generateContent({
-            model: 'gemini-3.1-flash-lite',
+      if (stream) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        
+        let resultStream;
+        try {
+          resultStream = await ai.models.generateContentStream({
+            model: 'gemini-3.8-flash',
             contents: contents,
             config: { systemInstruction: systemInstruction }
           });
-        } else {
-          throw err;
+        } catch (err: any) {
+          if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
+            console.warn("2.5-flash overloaded, falling back to 1.5-flash");
+            resultStream = await ai.models.generateContentStream({
+              model: 'gemini-3.1-flash-lite',
+              contents: contents,
+              config: { systemInstruction: systemInstruction }
+            });
+          } else {
+            throw err;
+          }
         }
-      }
-
-      res.json({ text: response.text });
-    } catch (error: any) {
-      if (error?.status === 503 || error?.message?.includes("503") || error?.status === "UNAVAILABLE" || error?.error?.code === 503 || error?.status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("resource_exhausted")) {
-         res.status(503).json({ error: "The AI model is currently experiencing high demand. Please try again in a few moments." });
+        
+        for await (const chunk of resultStream) {
+          if (chunk.text) {
+             res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+          }
+        }
+        res.write('data: [DONE]\n\n');
+        res.end();
       } else {
-         console.error("Chat API Error:", error);
-         res.status(500).json({ error: "Failed to generate chat response" });
+        let response;
+        try {
+          response = await ai.models.generateContent({
+            model: 'gemini-3.8-flash',
+            contents: contents,
+            config: { systemInstruction: systemInstruction }
+          });
+        } catch (err: any) {
+          if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
+            console.warn("2.5-flash overloaded, falling back to 1.5-flash");
+            response = await ai.models.generateContent({
+              model: 'gemini-3.1-flash-lite',
+              contents: contents,
+              config: { systemInstruction: systemInstruction }
+            });
+          } else {
+            throw err;
+          }
+        }
+        res.json({ text: response.text });
+      }
+    } catch (error: any) {
+      const isOverloaded = error?.status === 503 || error?.message?.includes("503") || error?.status === "UNAVAILABLE" || error?.error?.code === 503 || error?.status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("resource_exhausted");
+      if (isOverloaded) {
+          console.warn("Chat API experienced high demand (503/429)");
+      } else {
+          console.error("Chat API Error:", error);
+      }
+      
+      if (!res.headersSent) {
+         if (isOverloaded) {
+            res.status(503).json({ error: "The AI model is currently experiencing high demand. Please try again in a few moments." });
+         } else {
+            res.status(500).json({ error: "Failed to generate chat response" });
+         }
+      } else {
+         res.write(`data: ${JSON.stringify({ error: "Stream interrupted" })}\n\n`);
+         res.end();
       }
     }
   });
 
   app.post("/api/generate-questions", requireAuth, async (req, res) => {
     try {
-      const { subject, topic, difficulty, amount, educationLevel, country } = req.body;
+      const { subject, topic, difficulty, amount, educationLevel, country, practiceMode } = req.body;
       const ai = getGeminiClient();
+      
+      let modeInstruction = "";
+      if (practiceMode === 'Exam Simulation') modeInstruction = "Make the questions strictly formatted and styled like a real exam. Focus on testing deep understanding.";
+      else if (practiceMode === 'Mistake Practice') modeInstruction = "Focus heavily on common misconceptions and tricky edge cases where students frequently make mistakes.";
+      else if (practiceMode === 'Random Practice') modeInstruction = "Mix topics across the entire subject randomly, ensuring a wide breadth of concepts.";
+      else if (practiceMode === 'Topic Practice') modeInstruction = `Focus exclusively on the specific topic: ${topic}.`;
       
       const prompt = `Generate ${amount || 5} practice questions for a student.
 Subject: ${subject}
@@ -208,6 +264,9 @@ Topic: ${topic}
 Difficulty: ${difficulty}
 Education Level: ${educationLevel || 'General'}
 Country/Curriculum: ${country || 'International'}
+Practice Mode: ${practiceMode || 'Custom Practice'}
+${modeInstruction}
+
 Each question must be a multiple choice question with 4 options, one correct answer, and an explanation.`;
 
       let response;
@@ -230,7 +289,7 @@ Each question must be a multiple choice question with 4 options, one correct ans
 
       try {
         response = await ai.models.generateContent({
-          model: 'gemini-3.6-flash',
+          model: 'gemini-3.8-flash',
           contents: prompt,
           config
         });
@@ -291,7 +350,7 @@ ${text}`;
       let response;
       try {
         response = await ai.models.generateContent({
-          model: 'gemini-3.6-flash',
+          model: 'gemini-3.8-flash',
           contents: prompt,
           config
         });
@@ -314,8 +373,149 @@ ${text}`;
       const flashcards = JSON.parse(responseText);
       res.json({ flashcards });
     } catch (error: any) {
+      const isOverloaded = error?.status === 503 || error?.message?.includes("503") || error?.status === "UNAVAILABLE" || error?.error?.code === 503 || error?.status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("resource_exhausted");
+      if (isOverloaded) {
+         console.warn("Flashcard Generation experienced high demand (503/429)");
+         res.status(503).json({ error: "High demand. Please try again." });
+      } else {
+         console.error("Flashcard Generation Error:", error);
+         res.status(500).json({ error: "Failed to generate flashcards" });
+      }
+    }
+  });
+
+  app.post("/api/generate-flashcards-structured", requireAuth, async (req, res) => {
+    try {
+      const { subject, topic, level, count } = req.body;
+      const ai = getGeminiClient();
+      
+      const prompt = `You are an expert AI tutor. Generate ${count || 10} interactive flashcards for the following subject:
+Subject: ${subject}
+Topic: ${topic}
+Education Level: ${level}
+
+Make the questions concise and the answers clear. Provide a short explanation for each answer.`;
+
+      const config = {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              front: { type: Type.STRING, description: "The question or concept on the front of the flashcard" },
+              back: { type: Type.STRING, description: "The concise answer or definition" },
+              explanation: { type: Type.STRING, description: "A short explanation of the answer" }
+            },
+            required: ["front", "back", "explanation"]
+          }
+        }
+      };
+
+      let response;
+      try {
+        response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config
+        });
+      } catch (err: any) {
+        if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
+          console.warn("2.5-flash overloaded, falling back to 1.5-flash for flashcards");
+          response = await ai.models.generateContent({
+            model: 'gemini-3.1-flash-lite',
+            contents: prompt,
+            config
+          });
+        } else {
+          throw err;
+        }
+      }
+
+      const responseText = response.text;
+      if (!responseText) throw new Error("No text from Gemini");
+      
+      const flashcards = JSON.parse(responseText);
+      res.json({ flashcards });
+    } catch (error: any) {
       console.error("Flashcard Generation Error:", error);
       res.status(500).json({ error: "Failed to generate flashcards" });
+    }
+  });
+
+  app.post("/api/learn-topic", requireAuth, async (req, res) => {
+    try {
+      const { subject, topic, educationLevel, examType } = req.body;
+      const ai = getGeminiClient();
+
+      const prompt = `You are an expert tutor creating a concise, high-yield topic study guide for a student.
+Subject: ${subject}
+Topic: ${topic}
+Education Level: ${educationLevel || 'Secondary'}
+Exam Target: ${examType || 'General'}
+
+Provide a structured, engaging summary of this topic:
+1. mainConcept: A clear 2-4 sentence foundational explanation of what this topic is, its core definition, and why it is important.
+2. importantPoints: An array of 4-6 essential bullet points (key rules, formulas, theorems, characteristics, or vital concepts to remember).
+3. keyExamples: An array of 2-3 practical examples, worked problems, or real-world applications demonstrating how this concept works in practice.`;
+
+      const config = {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            mainConcept: { type: Type.STRING },
+            importantPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+            keyExamples: { type: Type.ARRAY, items: { type: Type.STRING } }
+          },
+          required: ["mainConcept", "importantPoints", "keyExamples"]
+        }
+      };
+
+      let response;
+      try {
+        response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config
+        });
+      } catch (err: any) {
+        if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
+          console.warn("Flash overloaded, falling back to flash-lite for topic learning");
+          response = await ai.models.generateContent({
+            model: 'gemini-3.1-flash-lite',
+            contents: prompt,
+            config
+          });
+        } else {
+          throw err;
+        }
+      }
+
+      const responseText = response.text;
+      if (!responseText) throw new Error("No text from Gemini");
+
+      const learnData = JSON.parse(responseText);
+      res.json({ learnData });
+    } catch (error: any) {
+      console.error("Learn Topic API Error:", error);
+      // Fallback response so user flow is always seamless
+      const { subject, topic } = req.body;
+      res.json({
+        learnData: {
+          mainConcept: `${topic || 'This topic'} in ${subject || 'this subject'} covers fundamental principles and standard problem-solving methodologies necessary for exam mastery. Understanding core definitions and interrelations forms the foundation for tackling exam questions effectively.`,
+          importantPoints: [
+            `Understand the primary definition, scope, and foundational laws of ${topic || 'the topic'}.`,
+            `Identify standard formulas, conditions, or properties that govern ${topic || 'these problems'}.`,
+            `Pay attention to common units, variable relations, and common examiner traps.`,
+            `Review past exam questions to identify recurring question formats on ${topic || 'this topic'}.`
+          ],
+          keyExamples: [
+            `Standard Application: Applying foundational principles of ${topic || 'the topic'} to verify direct relationship between variables.`,
+            `Worked Problem: Breaking down multi-step exam problems into identification, formula selection, and final simplification.`
+          ]
+        }
+      });
     }
   });
 

@@ -1,7 +1,8 @@
 const fs = require('fs');
-let content = fs.readFileSync('server.ts', 'utf8');
+let code = fs.readFileSync('server.ts', 'utf8');
 
-content = content.replace(/hale-generator-95g21.firebasestorage.app/g, 'educore-66491.firebasestorage.app');
+// Replace invalid models
+code = code.replace(/gemini-3\.6-flash/g, 'gemini-2.5-flash');
+code = code.replace(/gemini-3\.1-flash-lite/g, 'gemini-1.5-flash');
 
-fs.writeFileSync('server.ts', content);
-console.log('patched server.ts again');
+fs.writeFileSync('server.ts', code);

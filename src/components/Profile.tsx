@@ -1,12 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { getLevelInfo } from '../lib/achievements';
 import { motion, AnimatePresence } from 'motion/react';
-import {
-  User, Award, Flame, Clock, BookOpen, Search, BrainCircuit, PenTool, MessageSquare, 
-  Settings, HelpCircle, Info, LogOut, ChevronRight, Bookmark, 
-  FileText, Download, Moon, Sun, Monitor, Bell, Shield, 
-  Trash2, Edit3, Image as ImageIcon, MapPin, GraduationCap, ArrowLeft, Camera, Check, X, AlertCircle
-, Phone, Mail, Copy, CheckCircle2 , ShieldAlert } from 'lucide-react';
+import { User, Award, Trophy, Target, Flame, CheckCircle, Clock, BookOpen, Search, BrainCircuit, PenTool, MessageSquare, Settings, HelpCircle, Info, LogOut, ChevronRight, Bookmark, FileText, Download, Moon, Sun, Monitor, Bell, Shield, Trash2, Edit3, Image as ImageIcon, MapPin, GraduationCap, ArrowLeft, Camera, Check, X, AlertCircle, Phone, Mail, Copy, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { collection, query, where, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { db } from '../lib/firebase';
@@ -841,7 +837,7 @@ export default function Profile({ setView }: ProfileProps) {
             <div className="flex items-center justify-center gap-3">
               <div className="flex flex-col items-center bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800/50 rounded-xl px-4 py-2">
                 <span className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">Level</span>
-                <span className="text-xl font-black text-blue-700 dark:text-blue-400">{userProfile?.level || 1}</span>
+                <span className="text-xl font-black text-blue-700 dark:text-blue-400">{getLevelInfo(userProfile?.xp || 0).level}</span>
               </div>
               <div className="flex flex-col items-center bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-800/50 rounded-xl px-4 py-2">
                 <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">XP</span>
@@ -874,6 +870,33 @@ export default function Profile({ setView }: ProfileProps) {
         <StatCard icon={BrainCircuit} title="Practice Sessions" value={stats.practiceSessions} />
         <StatCard icon={Award} title="Average Score" value={stats.avgScore} />
       </div>
+
+      
+      {/* Achievements Section */}
+      {userProfile?.achievements && userProfile.achievements.length > 0 && (
+         <div className="mb-8">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 px-2">Recent Achievements</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {userProfile.achievements.map((ach: any) => {
+                 let Icon = Trophy;
+                 if (ach.icon === 'Flame') Icon = Flame;
+                 if (ach.icon === 'Target') Icon = Target;
+                 if (ach.icon === 'CheckCircle') Icon = CheckCircle;
+                 
+                 return (
+                   <div key={ach.id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-yellow-100 dark:border-yellow-900/30 flex flex-col items-center text-center shadow-sm relative overflow-hidden">
+                     <div className="absolute top-0 right-0 w-16 h-16 bg-yellow-400 opacity-5 rounded-bl-[100px]"></div>
+                     <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/40 text-yellow-600 dark:text-yellow-400 rounded-full flex items-center justify-center mb-3">
+                        <Icon size={24} />
+                     </div>
+                     <h4 className="font-bold text-sm text-slate-800 dark:text-white mb-1">{ach.title}</h4>
+                     <p className="text-[10px] text-slate-500">{ach.description}</p>
+                   </div>
+                 );
+              })}
+            </div>
+         </div>
+      )}
 
       <SectionHeading>My Learning & Content</SectionHeading>
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm flex flex-col mb-8">

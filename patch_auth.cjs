@@ -1,44 +1,259 @@
 const fs = require('fs');
-let code = fs.readFileSync('src/contexts/AuthContext.tsx', 'utf8');
 
-// 1. Remove theme from interface
-code = code.replace(`  theme: "light" | "dark" | "system";\n`, ``);
+const authCode = `import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { User, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut as firebaseSignOut, onAuthStateChanged, getIdToken } from 'firebase/auth';
+import { auth, googleProvider, db } from '../lib/firebase';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
-// 2. Remove theme from default settings
-code = code.replace(`  theme: 'system',\n`, ``);
+export interface UserSettings {
+  fontSize: "small" | "medium" | "large";
+  defaultPracticeDifficulty: "Easy" | "Medium" | "Hard" | "Mixed";
+  aiTutorTone: "Friendly" | "Direct" | "Socratic";
+}
 
-// 3. Remove localStorage init
-const initTheme = `  const [settings, setSettings] = useState<UserSettings>(() => {
-    const localTheme = localStorage.getItem('educore_theme') as UserSettings['theme'];
-    return { ...defaultSettings, theme: localTheme || defaultSettings.theme };
-  });`;
-const newInit = `  const [settings, setSettings] = useState<UserSettings>(defaultSettings);`;
-code = code.replace(initTheme, newInit);
+interface AuthContextType {
+  user: User | null;
+  userProfile: any | null;
+  settings: UserSettings;
+  updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
+  refreshProfile: () => Promise<void>;
+  isSuperAdmin: boolean;
+  loading: boolean;
+  error: string | null;
+  signInWithGoogle: () => Promise<void>;
+  signOut: () => Promise<void>;
+  getToken: () => Promise<string | null>;
+  oauthToken: string | null;
+  clearError: () => void;
+  setError: (err: string | null) => void;
+}
 
-// 4. Remove handleStorage theme sync
-const storageEvent = `    const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'educore_theme' && e.newValue) {
-        setSettings(prev => ({ ...prev, theme: e.newValue as UserSettings['theme'] }));
+const AuthContext = createContext<AuthContextType>({} as AuthContextType);
+export const useAuth = () => useContext(AuthContext);
+
+const defaultSettings: UserSettings = {
+  fontSize: 'medium',
+  defaultPracticeDifficulty: 'Medium',
+  aiTutorTone: 'Friendly'
+};
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [settings, setSettings] = useState<UserSettings>(defaultSettings);
+  const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<any | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [oauthToken, setOauthToken] = useState<string | null>(null);
+  
+  // Keep track of our unsubscribe functions for cleanup
+  const profileUnsubRef = useRef<(() => void) | null>(null);
+  const settingsUnsubRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (auth) {
+      getRedirectResult(auth).then(result => {
+        if (result) {
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          if (credential?.accessToken) {
+            setOauthToken(credential.accessToken);
+          }
+        }
+      }).catch(err => {
+        console.error("Redirect sign-in error", err);
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!auth) {
+      console.warn("Firebase Auth is not initialized.");
+      setLoading(false);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      // Clear listeners if user signs out or changes
+      if (profileUnsubRef.current) profileUnsubRef.current();
+      if (settingsUnsubRef.current) settingsUnsubRef.current();
+      
+      setUser(currentUser);
+
+      if (currentUser) {
+        try {
+          if (!db) throw new Error("Firestore is not initialized.");
+          const userRef = doc(db, 'users', currentUser.uid);
+          
+          let isActualSuperAdmin = currentUser.email === 'emmanuelomojola07@gmail.com';
+          setIsSuperAdmin(isActualSuperAdmin);
+
+          // Bootstrap documents if missing
+          const docSnap = await getDoc(userRef);
+          if (!docSnap.exists()) {
+            const generatedUsername = currentUser.email ? currentUser.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '') + Math.floor(Math.random() * 1000) : 'user_' + currentUser.uid.substring(0, 6);
+            const newUserProfile = {
+              uid: currentUser.uid,
+              email: currentUser.email || '',
+              displayName: currentUser.displayName || '',
+              name: currentUser.displayName || '',
+              username: generatedUsername,
+              photoURL: currentUser.photoURL || '',
+              educationLevel: 'Secondary',
+              country: 'International',
+              progress: 0,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              role: isActualSuperAdmin ? 'super_admin' : 'student',
+              isSuperAdmin: isActualSuperAdmin
+            };
+            await setDoc(userRef, newUserProfile, { merge: true });
+          } else {
+             const data = docSnap.data();
+             if (isActualSuperAdmin && !data.isSuperAdmin) {
+               await setDoc(userRef, { role: 'super_admin', isSuperAdmin: true }, { merge: true });
+             }
+          }
+          
+          const settingsSnap = await getDoc(doc(db, 'settings', currentUser.uid));
+          if (!settingsSnap.exists()) {
+              await setDoc(doc(db, 'settings', currentUser.uid), { ...defaultSettings, uid: currentUser.uid });
+          }
+
+          await setDoc(doc(db, 'user_progress', currentUser.uid), { uid: currentUser.uid }, { merge: true });
+          await setDoc(doc(db, 'bookmarks', currentUser.uid), { uid: currentUser.uid }, { merge: true });
+          await setDoc(doc(db, 'notes', currentUser.uid), { uid: currentUser.uid }, { merge: true });
+
+          // Establish Real-Time Listeners
+          profileUnsubRef.current = onSnapshot(userRef, (snapshot) => {
+             if (snapshot.exists()) {
+                 let data = snapshot.data();
+                 if (data.subscriptionStatus === 'active' && data.subscriptionExpires) {
+                    if (Date.now() > data.subscriptionExpires) {
+                        data.subscriptionStatus = 'expired';
+                        setDoc(userRef, { subscriptionStatus: 'expired' }, { merge: true });
+                    }
+                 }
+                 setUserProfile(data);
+             }
+          });
+          
+          settingsUnsubRef.current = onSnapshot(doc(db, 'settings', currentUser.uid), (snapshot) => {
+              if (snapshot.exists()) {
+                  setSettings({ ...defaultSettings, ...snapshot.data() } as UserSettings);
+              }
+          });
+
+        } catch (err) {
+          console.warn("Error setting up user profile:", err);
+        }
+      } else {
+        setUserProfile(null);
+        setSettings(defaultSettings);
+        setIsSuperAdmin(false);
       }
+      
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribe();
+      if (profileUnsubRef.current) profileUnsubRef.current();
+      if (settingsUnsubRef.current) settingsUnsubRef.current();
     };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);`;
-code = code.replace(storageEvent, ``);
+  }, []);
 
-// 5. Remove loadedSettings localStorage set
-const loadedSettingsSet = `              if (loadedSettings.theme) {
-                localStorage.setItem('educore_theme', loadedSettings.theme);
-              }`;
-code = code.replace(loadedSettingsSet, ``);
+  const refreshProfile = async () => {
+      // Intentionally left as a stub or force-fetch, but onSnapshot handles live updates
+  };
 
-// 6. Remove initial setDoc with theme
-code = code.replace(`{ uid: currentUser.uid, theme: 'system' }`, `{ uid: currentUser.uid }`);
+  const updateSettings = async (newSettings: Partial<UserSettings>) => {
+    const updated = { ...settings, ...newSettings };
+    setSettings(updated);
+    if (user && db) {
+      try {
+        await setDoc(doc(db, 'settings', user.uid), updated, { merge: true });
+      } catch (err) {
+        console.warn("Failed to sync settings to Firestore", err);
+      }
+    }
+  };
 
-// 7. Remove updateSettings localStorage logic
-const updateSettingsLogic = `    if (newSettings.theme) {
-      localStorage.setItem('educore_theme', newSettings.theme);
-    }`;
-code = code.replace(updateSettingsLogic, ``);
+  const clearError = () => setError(null);
 
-fs.writeFileSync('src/contexts/AuthContext.tsx', code);
-console.log('patched AuthContext.tsx');
+  const signInWithGoogle = async () => {
+    if (!auth) {
+      setError("Authentication server is currently unavailable. Please try again later.");
+      return;
+    }
+    setError(null);
+    try {
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (isMobile) {
+        await signInWithRedirect(auth, googleProvider);
+      } else {
+        try {
+          const result = await signInWithPopup(auth, googleProvider);
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          if (credential?.accessToken) {
+            setOauthToken(credential.accessToken);
+          }
+        } catch (err: any) {
+          if (err.code === "auth/popup-blocked") {
+            await signInWithRedirect(auth, googleProvider);
+          } else {
+            throw err;
+          }
+        }
+      }
+    } catch (err: any) {
+      if (err.code === 'auth/popup-blocked') {
+        setError("Popup blocked by browser. Please allow popups or try opening the app in a new tab.");
+      } else if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
+        setError("Sign-in was cancelled. Please try again.");
+      } else {
+        setError(err.message || 'Failed to sign in with Google.');
+      }
+    }
+  };
+  
+  const signOut = async () => {
+    if (!auth) return;
+    try {
+      if (user) {
+        try {
+          // Attempt to delete sessions from Firestore when logging out
+          const { deleteDoc } = await import("firebase/firestore");
+          await deleteDoc(doc(db, "practice_sessions", user.uid)).catch(() => {});
+          await deleteDoc(doc(db, "tutor_sessions", user.uid)).catch(() => {});
+        } catch(e) {}
+      }
+      localStorage.removeItem("practice_session");
+      localStorage.removeItem("tutor_session");
+      localStorage.removeItem("zetadu_current_view");
+      
+      setOauthToken(null);
+      setUser(null);
+      setUserProfile(null);
+      setSettings(defaultSettings);
+      setIsSuperAdmin(false);
+      
+      await firebaseSignOut(auth);
+    } catch (error) {
+      console.warn("Error signing out", error);
+    }
+  };
+
+  const getToken = async () => {
+    if (!user) return null;
+    return await getIdToken(user);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, userProfile, refreshProfile, settings, updateSettings, isSuperAdmin, loading, error, signInWithGoogle, signOut, getToken, clearError, setError, oauthToken }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+`;
+
+fs.writeFileSync('src/contexts/AuthContext.tsx', authCode);

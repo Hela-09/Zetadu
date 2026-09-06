@@ -55,6 +55,7 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
   const [messages, setMessages] = useState<ChatMessage[]>([defaultInitialMessage]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   useEffect(() => {
     if (textareaRef.current) {
       if (input === '') {
@@ -328,9 +329,117 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
     }
   };
 
+  
+  const handleRetry = async () => {
+    setChatError(null);
+    if (messages.length > 0 && messages[messages.length - 1].role === 'user') {
+       const userMsg = messages[messages.length - 1];
+       const previousHistory = messages.slice(0, -1);
+       await processChat(userMsg, previousHistory);
+    }
+  };
+
+  const processChat = async (userMsg: ChatMessage, currentHistory: ChatMessage[]) => {
+    setIsLoading(true);
+    setChatError(null);
+    try {
+      const token = await getToken();
+      
+      // Limit history to last 10 messages for performance and token saving
+      const truncatedHistory = currentHistory.slice(-10);
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          message: userMsg.text,
+          attachments: userMsg.attachments,
+          history: truncatedHistory,
+          stream: true,
+          context: {
+            educationLevel: userProfile?.educationLevel || 'Secondary',
+            country: userProfile?.country || 'International',
+            tone: settings?.aiTutorTone || 'Friendly'
+          }
+        })
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+            throw new Error('Authentication required');
+        }
+        if (response.status === 503) {
+            throw new Error('The AI model is currently overloaded. Please try again.');
+        }
+        throw new Error('Chat failed (' + response.status + ')');
+      }
+
+      if (!response.body) throw new Error("No response body");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = '';
+
+      // Initialize the tutor message with empty text
+      setMessages([...currentHistory, userMsg, { role: 'tutor', text: '' }]);
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        
+        setIsLoading(false);
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+            try {
+              const data = JSON.parse(line.substring(6));
+              if (data.error) {
+                 throw new Error(data.error);
+              }
+              if (data.text) {
+                fullResponse += data.text;
+                // Update the last message
+                setMessages(prev => {
+                  const newMsgs = [...prev];
+                  newMsgs[newMsgs.length - 1].text = fullResponse;
+                  return newMsgs;
+                });
+                
+                // Keep scrolling down gently as content arrives
+                if (!showScrollButton && scrollAreaRef.current) {
+                  const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
+                  if (scrollHeight - scrollTop - clientHeight < 150) {
+                     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn("Error parsing chunk", e);
+            }
+          }
+        }
+      }
+
+      const finalMessages = [...currentHistory, userMsg, { role: 'tutor', text: fullResponse } as ChatMessage];
+      setMessages(finalMessages);
+      await autoSaveConversation(finalMessages);
+      
+    } catch (error: any) {
+      console.error('Chat error:', error);
+      setChatError(error.message === 'Authentication required' ? 'Please sign in to use the AI Tutor.' : "I'm having trouble connecting right now. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSend = async () => {
     if ((!input.trim() && selectedFiles.length === 0) || isLoading || isUploading) return;
-
 
     setIsUploading(true);
     let uploadedAttachments: any[] = [];
@@ -343,7 +452,6 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
           const compressedFile = await compressImage(file);
           formData.append('files', compressedFile);
         }
-        
         
         const uploadRes = await fetch('/api/upload', {
           method: 'POST',
@@ -367,7 +475,6 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
           const errText = await uploadRes.text();
           throw new Error('Upload returned HTML: ' + errText.substring(0, 100));
         }
-
       }
     } catch(err) {
        console.error("Upload error", err);
@@ -380,68 +487,20 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
 
     const userMsg: ChatMessage = { role: 'user', text: input, attachments: uploadedAttachments };
     const currentHistory = [...messages];
-    const messagesWithUser = [...currentHistory, userMsg];
-    setMessages(messagesWithUser);
+    
+    // Add user message immediately
+    setMessages([...currentHistory, userMsg]);
     setInput('');
     setSelectedFiles([]);
+    setChatError(null);
+    
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-    setIsLoading(true);
 
-    try {
-      const token = await getToken();
-      
-      
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          message: userMsg.text,
-          attachments: userMsg.attachments,
-          history: currentHistory,
-          context: {
-            educationLevel: userProfile?.educationLevel || 'Secondary',
-            country: userProfile?.country || 'International',
-            tone: settings?.aiTutorTone || 'Friendly'
-          }
-        })
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-            throw new Error('Authentication required');
-        }
-        const errText = await response.text();
-        throw new Error('Chat failed (' + response.status + '): ' + errText.substring(0, 100));
-      }
-      
-      const contentType = response.headers.get("content-type");
-      if (!contentType || contentType.indexOf("application/json") === -1) {
-        const errText = await response.text(); throw new Error('Chat returned non-JSON response: ' + errText.substring(0, 100));
-      }
-
-      const data = await response.json();
-
-      const tutorResponse = data.text;
-      
-      const finalMessages = [...messagesWithUser, { role: 'tutor', text: tutorResponse } as ChatMessage];
-      setMessages(finalMessages);
-      
-      await autoSaveConversation(finalMessages);
-      
-    } catch (error: any) {
-      console.warn('Error fetching chat:', error);
-      const errMessages = [...messagesWithUser, { role: 'tutor', text: error.message === 'Authentication required' ? 'Please sign in to use the AI Tutor.' : "I'm sorry, I'm having trouble connecting right now. Please try again later." } as ChatMessage];
-      setMessages(errMessages);
-    } finally {
-      setIsLoading(false);
-    }
+    await processChat(userMsg, currentHistory);
   };
+
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -682,7 +741,28 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
                 </motion.div>
               )}
             </AnimatePresence>
-            <div ref={messagesEndRef} />
+            
+              {chatError && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center justify-between w-full p-4 mb-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl text-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">Oops!</span>
+                    <span>{chatError}</span>
+                  </div>
+                  <button
+                    onClick={handleRetry}
+                    disabled={isLoading}
+                    className="px-4 py-2 bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 rounded-xl transition-colors font-medium whitespace-nowrap"
+                  >
+                    Try Again
+                  </button>
+                </motion.div>
+              )}
+              <div ref={messagesEndRef} />
+
             </div>
           </div>
           <AnimatePresence>

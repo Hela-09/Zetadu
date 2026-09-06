@@ -4,14 +4,18 @@ import { getFirestore, Firestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBzS_kYtaSYSAx39DBhNAP6l6IGsIUHTqs",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "educore-66491.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "educore-66491",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "educore-66491.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1042086916215",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1042086916215:web:6b6bce4648c9fb88b8d672",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-J6WZQCSEYF"
+  // HARDCODED to guarantee ALL domains use the exact same Zetadu Firebase project
+  // and auth handler (educore-66491). Bypasses any conflicting environment variables.
+  apiKey: "AIzaSyBzS_kYtaSYSAx39DBhNAP6l6IGsIUHTqs",
+  authDomain: "educore-66491.firebaseapp.com",
+  projectId: "educore-66491",
+  storageBucket: "educore-66491.firebasestorage.app",
+  messagingSenderId: "1042086916215",
+  appId: "1:1042086916215:web:6b6bce4648c9fb88b8d672",
+  measurementId: "G-J6WZQCSEYF"
 };
+
+export const FIRESTORE_DATABASE_ID = (typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_DATABASE_ID) || "ai-studio-zetadu-c6308d9c-0c0e-4c1f-8911-aa88c989aa89";
 
 let app: FirebaseApp | undefined;
 let auth: Auth | any = null;
@@ -23,10 +27,10 @@ try {
   if (firebaseConfig.apiKey) {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
     auth = getAuth(app);
-    setPersistence(auth, browserLocalPersistence).catch(console.warn);
     
-    // Use the default database for the new project
-    db = getFirestore(app);
+    // Explicitly connect to the named database: ai-studio-zetadu-c6308d9c-0c0e-4c1f-8911-aa88c989aa89
+    db = getFirestore(app, FIRESTORE_DATABASE_ID);
+
     storage = getStorage(app);
   } else {
     console.warn("Firebase configuration is missing.");

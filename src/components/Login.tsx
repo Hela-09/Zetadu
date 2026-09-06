@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, ArrowLeft } from 'lucide-react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile } from 'firebase/auth';
+import { setPersistence, browserLocalPersistence, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 
 type ViewState = 'login' | 'register' | 'forgot-password';
@@ -62,6 +62,7 @@ export default function Login() {
     try {
       clearError();
       setLoading(true);
+      await setPersistence(auth, browserLocalPersistence);
       await signInWithEmailAndPassword(auth, email, password);
     } catch (err: any) {
       console.error(err);
@@ -128,6 +129,7 @@ export default function Login() {
     try {
       clearError();
       setGoogleLoading(true);
+      await setPersistence(auth, browserLocalPersistence);
       await signInWithGoogle();
     } catch (err: any) {
       console.error(err);
