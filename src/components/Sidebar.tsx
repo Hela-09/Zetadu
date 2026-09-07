@@ -2,7 +2,7 @@ import React from 'react';
 import { ViewType } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import Logo from './Logo';
-import { Home, BookOpen, MessageSquare, User, Download, Briefcase, Layers, Compass } from 'lucide-react';
+import { Home, BookOpen, MessageSquare, User, Download, Briefcase, Layers, Compass, Search, FileUp } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface SidebarProps {
@@ -14,6 +14,7 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
   const { isInstallable, triggerInstall } = usePWAInstall();
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
+    { id: 'upload_notes', label: 'Upload Notes', icon: FileUp },
     { id: 'journey', label: 'Study Journey', icon: Compass },
     { id: 'subjects', label: 'Learn', icon: BookOpen },
     { id: 'flashcards', label: 'Flashcards', icon: Layers },
@@ -31,7 +32,27 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
         </div>
       </div>
 
-      <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
+      <div className="px-4 pb-2">
+        <button
+          id="sidebar-search-btn"
+          onClick={() => {
+            const event = new CustomEvent('open-zetadu-search');
+            window.dispatchEvent(event);
+          }}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 text-slate-400 hover:text-slate-200 text-xs transition-all cursor-pointer group"
+          title="Search Zetadu (⌘K)"
+        >
+          <div className="flex items-center gap-2">
+            <Search size={16} className="group-hover:text-blue-400 transition-colors" />
+            <span className="font-medium">Search...</span>
+          </div>
+          <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-slate-900 text-slate-400 rounded border border-slate-700">
+            ⌘K
+          </kbd>
+        </button>
+      </div>
+
+      <nav className="flex-1 px-4 py-2 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentView === item.id || (item.id === 'subjects' && currentView === 'practice');

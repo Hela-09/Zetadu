@@ -37,23 +37,33 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
   const { user, getToken, userProfile, settings, oauthToken, signInWithGoogle } = useAuth();
   
   const [targetSubject] = useState(() => localStorage.getItem('zetadu_target_subject') || '');
+  const [targetTopic] = useState(() => localStorage.getItem('zetadu_target_topic') || '');
+  const [initialTutorPrompt] = useState(() => localStorage.getItem('zetadu_tutor_prompt') || '');
   
   useEffect(() => {
     if (localStorage.getItem('zetadu_target_subject')) {
       localStorage.removeItem('zetadu_target_subject');
     }
+    if (localStorage.getItem('zetadu_target_topic')) {
+      localStorage.removeItem('zetadu_target_topic');
+    }
+    if (localStorage.getItem('zetadu_tutor_prompt')) {
+      localStorage.removeItem('zetadu_tutor_prompt');
+    }
   }, []);
 
   const defaultInitialMessage: ChatMessage = { 
     role: 'tutor', 
-    text: targetSubject 
-      ? `Hello! I see you want to study **${targetSubject}**. I'm your AI tutor. I can explain concepts, help you work through practice problems, or clarify anything you're confused about in ${targetSubject}. What topic would you like to start with?`
-      : "Hello! I'm your AI tutor. I can explain concepts, help you work through practice problems, or clarify anything you're confused about. What would you like to study today?" 
+    text: targetTopic
+      ? `Hello! I see you want help with your weak topic **${targetTopic}** in ${targetSubject || 'your studies'}. I'm your AI tutor. I can break down the core concepts step-by-step, review common exam traps, and guide you through practice problems. What specific area of ${targetTopic} would you like to tackle first?`
+      : targetSubject 
+        ? `Hello! I see you want to study **${targetSubject}**. I'm your AI tutor. I can explain concepts, help you work through practice problems, or clarify anything you're confused about in ${targetSubject}. What topic would you like to start with?`
+        : "Hello! I'm your AI tutor. I can explain concepts, help you work through practice problems, or clarify anything you're confused about. What would you like to study today?" 
   };
   
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([defaultInitialMessage]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(initialTutorPrompt || '');
   const [isLoading, setIsLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   useEffect(() => {

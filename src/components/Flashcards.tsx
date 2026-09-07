@@ -105,6 +105,7 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
   // Active study state
   const [activeDeck, setActiveDeck] = useState<FlashcardDeck | null>(null);
   const [studyCards, setStudyCards] = useState<Flashcard[]>([]);
+  const [initialStudyCardIndex, setInitialStudyCardIndex] = useState(0);
 
   // Manual create state
   const [formData, setFormData] = useState({
@@ -237,6 +238,34 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
     }
   }, []);
 
+  // Handle auto-focus from Weak Topics
+  useEffect(() => {
+    const targetTopic = localStorage.getItem('zetadu_flashcard_topic');
+    const targetSubject = localStorage.getItem('zetadu_target_subject') || '';
+    if (!targetTopic || loading) return;
+
+    localStorage.removeItem('zetadu_flashcard_topic');
+    const norm = targetTopic.trim().toLowerCase();
+    const matchedDeck = decks.find(
+      (d) =>
+        d.topic.toLowerCase().includes(norm) ||
+        norm.includes(d.topic.toLowerCase()) ||
+        d.name.toLowerCase().includes(norm)
+    );
+
+    if (matchedDeck && matchedDeck.cards.length > 0) {
+      handleSelectDeck(matchedDeck);
+    } else {
+      setGenerateData((prev) => ({
+        ...prev,
+        topic: targetTopic,
+        subject: targetSubject || prev.subject || 'General',
+        count: 10
+      }));
+      setMode('generate');
+    }
+  }, [decks, loading]);
+
   // START STUDYING A DECK
   const handleSelectDeck = (deck: FlashcardDeck, filterMode: 'all' | 'due' | 'bookmarked' = 'all') => {
     let cardsToStudy = [...deck.cards];
@@ -260,6 +289,21 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
 
     setActiveDeck(deck);
     setStudyCards(cardsToStudy);
+    
+    // Jump to specific card if searched
+    const targetCardId = localStorage.getItem('zetadu_flashcard_card_id');
+    if (targetCardId) {
+      localStorage.removeItem('zetadu_flashcard_card_id');
+      const foundIdx = cardsToStudy.findIndex(c => c.id === targetCardId);
+      if (foundIdx !== -1) {
+        setInitialStudyCardIndex(foundIdx);
+      } else {
+        setInitialStudyCardIndex(0);
+      }
+    } else {
+      setInitialStudyCardIndex(0);
+    }
+
     setMode('study');
   };
 
@@ -299,6 +343,13 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
     }
 
     try {
+      if (user) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const localKey = `zetadu_today_flashcards_${user.uid}_${todayStr}`;
+        const curr = parseInt(localStorage.getItem(localKey) || '0', 10);
+        localStorage.setItem(localKey, String(curr + 1));
+      }
+
       const cardRef = doc(db, 'flashcards', cardId);
       await updateDoc(cardRef, {
         rating: rating,
@@ -686,6 +737,7 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
         subject={activeDeck.subject}
         topic={activeDeck.topic}
         cards={studyCards}
+        initialCardIndex={initialStudyCardIndex}
         onExit={handleExitStudy}
         onRateCard={handleRateCard}
         onToggleBookmark={handleToggleBookmark}

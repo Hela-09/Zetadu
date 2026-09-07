@@ -78,9 +78,58 @@
         "lastOpened": { "type": "number" }
       },
       "required": ["uid", "subjectId"]
+    },
+    "DailyStudyPlan": {
+      "title": "DailyStudyPlan",
+      "description": "Stores user daily study plan with tasks based on weak topics",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "date": { "type": "string" },
+        "tasks": { "type": "array" },
+        "completedCount": { "type": "number" },
+        "totalTasks": { "type": "number" },
+        "allCompleted": { "type": "boolean" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["uid", "date", "tasks"]
+    },
+    "StudyNotes": {
+      "title": "StudyNotes",
+      "description": "Stores user study notes and processed AI materials",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "notes": { "type": "array" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["uid"]
+    },
+    "UserFollowedSchools": {
+      "title": "UserFollowedSchools",
+      "description": "Schools followed by a student for personalized updates",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "followedSchoolIds": { "type": "array", "items": { "type": "string" } },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["uid", "followedSchoolIds"]
     }
   },
   "firestore": {
+    "user_followed_schools/{docId}": {
+      "schema": { "$ref": "#/entities/UserFollowedSchools" },
+      "description": "Followed schools preferences for a user."
+    },
+    "notes/{docId}": {
+      "schema": { "$ref": "#/entities/StudyNotes" },
+      "description": "User study notes documents."
+    },
+    "daily_study_plans/{docId}": {
+      "schema": { "$ref": "#/entities/DailyStudyPlan" },
+      "description": "User daily study plans."
+    },
     "learning_data/{docId}": {
       "schema": { "$ref": "#/entities/LearningData" },
       "description": "Learning sessions."

@@ -11,6 +11,7 @@ interface FlashcardStudyScreenProps {
   subject: string;
   topic: string;
   cards: Flashcard[];
+  initialCardIndex?: number;
   onExit: () => void;
   onRateCard: (cardId: string, rating: 'Again' | 'Hard' | 'Good' | 'Easy') => Promise<void>;
   onToggleBookmark: (cardId: string) => Promise<void>;
@@ -22,13 +23,14 @@ export default function FlashcardStudyScreen({
   subject,
   topic,
   cards: initialCards,
+  initialCardIndex = 0,
   onExit,
   onRateCard,
   onToggleBookmark,
   onContinueToPractice
 }: FlashcardStudyScreenProps) {
   const [cards, setCards] = useState<Flashcard[]>(initialCards);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(initialCardIndex);
   const [isFlipped, setIsFlipped] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
   const [shuffleToast, setShuffleToast] = useState(false);
@@ -38,10 +40,10 @@ export default function FlashcardStudyScreen({
 
   useEffect(() => {
     setCards(initialCards);
-    setCurrentIndex(0);
+    setCurrentIndex(initialCardIndex || 0);
     setIsFlipped(false);
     setSessionCompleted(false);
-  }, [initialCards]);
+  }, [initialCards, initialCardIndex]);
 
   const currentCard = cards[currentIndex];
   const progressPercent = cards.length > 0 ? ((currentIndex + 1) / cards.length) * 100 : 0;

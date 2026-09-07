@@ -27,6 +27,10 @@ service cloud.firestore {
       allow read, write: if isAuthenticated() && (request.auth.uid == docId || isSuperAdmin());
     }
 
+    match /user_followed_schools/{docId} {
+      allow read, write: if isAuthenticated() && (request.auth.uid == docId || isSuperAdmin());
+    }
+
     match /system/super_admin {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
@@ -74,6 +78,10 @@ service cloud.firestore {
     }
 
     match /study_journeys/{docId} {
+      allow read, write: if isAuthenticated() && (request.auth.uid == docId || isSuperAdmin());
+    }
+
+    match /daily_study_plans/{docId} {
       allow read, write: if isAuthenticated() && (request.auth.uid == docId || isSuperAdmin());
     }
 

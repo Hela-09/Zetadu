@@ -224,6 +224,64 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
     }
   }, [user, hasRestored, restoreSessionData]);
 
+  // Handle Search navigation targets (Direct Question or Topic selection)
+  useEffect(() => {
+    const targetQStr = localStorage.getItem('zetadu_target_question');
+    if (targetQStr) {
+      localStorage.removeItem('zetadu_target_question');
+      try {
+        const parsed = JSON.parse(targetQStr);
+        if (parsed && (parsed.question || parsed.text)) {
+          const qText = parsed.question || parsed.text;
+          const qObj: Question = {
+            question: qText,
+            options: parsed.options && parsed.options.length > 0 ? parsed.options : ['Option A', 'Option B', 'Option C', 'Option D'],
+            correctAnswerIndex: parsed.correctAnswer ?? 0,
+            explanation: parsed.explanation || 'Review topic notes and syllabus for full derivation.',
+            difficulty: parsed.difficulty || 'Medium',
+            topic: parsed.topic || topic || 'General Practice'
+          };
+          if (parsed.subject) setSubject(parsed.subject);
+          if (parsed.subjectId) setSubjectId(parsed.subjectId);
+          if (parsed.topic) setTopic(parsed.topic);
+          setQuestions([qObj]);
+          setCurrentQIndex(0);
+          setAnswers({});
+          setMarkedForReview({});
+          setIsSubmitted(false);
+          setScore(0);
+          setSetupMode(false);
+          setViewMode('practice');
+          setTimerRemaining(15 * 60);
+          return;
+        }
+      } catch (e) {
+        console.warn('Failed to parse search target question:', e);
+      }
+    }
+
+    const targetTopic = localStorage.getItem('zetadu_target_topic');
+    const targetSubj = localStorage.getItem('zetadu_target_subject');
+    const targetSubjId = localStorage.getItem('zetadu_target_subject_id');
+    if (targetTopic || targetSubj) {
+      if (targetTopic) {
+        setTopic(targetTopic);
+        localStorage.removeItem('zetadu_target_topic');
+      }
+      if (targetSubj) {
+        setSubject(targetSubj);
+        localStorage.removeItem('zetadu_target_subject');
+      }
+      if (targetSubjId) {
+        setSubjectId(targetSubjId);
+        localStorage.removeItem('zetadu_target_subject_id');
+      }
+      setSetupStep(2);
+      setSetupMode(true);
+      setViewMode('practice');
+    }
+  }, []);
+
   // Persist session state helper (saves to memory, localStorage, and Firestore)
   const persistSessionToFirebase = useCallback(async (overrides?: Partial<any>) => {
     if (setupMode || questions.length === 0 || isSubmitted) return;
@@ -556,6 +614,11 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
     
     if (user) {
       try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const localQKey = `zetadu_today_questions_${user.uid}_${todayStr}`;
+        const prevQ = parseInt(localStorage.getItem(localQKey) || '0', 10);
+        localStorage.setItem(localQKey, String(prevQ + questions.length));
+
         await addDoc(collection(db, 'learning_data'), {
           uid: user.uid,
           subject,

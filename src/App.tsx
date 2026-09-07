@@ -3,10 +3,11 @@ import Sidebar from './components/Sidebar';
 import BottomNav from './components/BottomNav';
 import Login from './components/Login';
 import { ViewType } from './types';
-import { LogOut } from 'lucide-react';
+import { LogOut, Search } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from './contexts/AuthContext';
 import PaymentGate from './components/PaymentGate';
+import SearchModal from './components/SearchModal';
 
 
 const Home = React.lazy(() => import('./components/Home'));
@@ -19,6 +20,8 @@ const DailyChallenge = React.lazy(() => import('./components/DailyChallenge'));
 const Opportunities = React.lazy(() => import('./components/Opportunities'));
 const Flashcards = React.lazy(() => import('./components/Flashcards'));
 const StudyJourney = React.lazy(() => import('./components/StudyJourney'));
+const WeakTopics = React.lazy(() => import('./components/WeakTopics'));
+const UploadNotes = React.lazy(() => import('./components/UploadNotes'));
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewType>(() => {
@@ -26,6 +29,35 @@ export default function App() {
   });
   const { user, userProfile, settings, updateSettings, isSuperAdmin, loading, signOut } = useAuth();
   const [adminChecked, setAdminChecked] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  // Global search shortcut (Cmd+K / Ctrl+K or custom open event)
+  React.useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input or textarea
+      const target = e.target as HTMLElement;
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen((prev) => !prev);
+      } else if (e.key === '/' && !isInput && !isSearchOpen) {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+
+    const handleCustomOpenSearch = () => {
+      setIsSearchOpen(true);
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    window.addEventListener('open-zetadu-search', handleCustomOpenSearch);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+      window.removeEventListener('open-zetadu-search', handleCustomOpenSearch);
+    };
+  }, [isSearchOpen]);
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   React.useEffect(() => {
@@ -107,7 +139,7 @@ export default function App() {
         )}
 
         <main className={`flex-1 flex flex-col min-h-0 relative ${currentView === 'tutor' ? 'p-0 overflow-hidden' : 'p-4 md:p-8 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8 overflow-y-auto '}`}>
-          <header className={`flex justify-between items-center shrink-0 gap-4 flex-wrap ${currentView === 'tutor' ? 'hidden' : 'mb-6 md:mb-8'}`}>
+          <header className={`flex justify-between items-center shrink-0 gap-3 md:gap-4 flex-wrap ${currentView === 'tutor' ? 'hidden' : 'mb-6 md:mb-8'}`}>
             <div className="flex items-center gap-3">
               <div className="space-y-1">
                 <p className="text-blue-600 font-semibold text-[10px] md:text-xs uppercase tracking-wider">
@@ -118,7 +150,38 @@ export default function App() {
                 </h1>
               </div>
             </div>
+
+            {/* Global Search Bar Trigger (Desktop & Tablet) */}
+            <div className="flex-1 max-w-sm lg:max-w-md mx-2 hidden sm:block">
+              <button
+                id="header-global-search-btn"
+                onClick={() => setIsSearchOpen(true)}
+                className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 text-slate-400 dark:text-slate-400 shadow-2xs hover:shadow-xs transition-all cursor-pointer group"
+                title="Search subjects, topics, flashcards, questions (⌘K)"
+              >
+                <div className="flex items-center gap-2 text-xs truncate">
+                  <Search size={15} className="group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors shrink-0" />
+                  <span className="truncate">Search subjects, topics, flashcards...</span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <kbd className="hidden md:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded border border-slate-200 dark:border-slate-600">
+                    ⌘K
+                  </kbd>
+                </div>
+              </button>
+            </div>
+
             <div className="flex items-center gap-2 md:gap-4 ml-auto">
+              {/* Mobile Search Button */}
+              <button
+                id="mobile-header-search-btn"
+                onClick={() => setIsSearchOpen(true)}
+                className="sm:hidden p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-blue-600 transition-colors cursor-pointer"
+                aria-label="Search"
+                title="Search Zetadu"
+              >
+                <Search size={18} />
+              </button>
 
               <div className="hidden sm:block text-right">
                 <p className="text-xs text-slate-500 font-medium">Welcome back,</p>
@@ -165,6 +228,8 @@ export default function App() {
               {currentView === 'daily_challenge' && <DailyChallenge setView={setCurrentView} />}
               {currentView === 'flashcards' && <Flashcards setView={setCurrentView} />}
               {currentView === 'journey' && <StudyJourney setView={setCurrentView} />}
+              {currentView === 'weak_topics' && <WeakTopics setView={setCurrentView} />}
+              {currentView === 'upload_notes' && <UploadNotes setView={setCurrentView} />}
                 </motion.div>
               </AnimatePresence>
             </Suspense>
@@ -173,6 +238,12 @@ export default function App() {
         
         {currentView !== 'tutor' && <BottomNav currentView={currentView} setCurrentView={setCurrentView} />}
         
+        {/* Global Search Modal */}
+        <SearchModal 
+          isOpen={isSearchOpen} 
+          onClose={() => setIsSearchOpen(false)} 
+          setView={setCurrentView} 
+        />
       </div>
     </div>
   );

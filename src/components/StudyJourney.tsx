@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Compass,
@@ -22,7 +22,8 @@ import {
   Zap,
   BookmarkPlus,
   Play,
-  FileCheck
+  FileCheck,
+  Search
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { ViewType, Flashcard, StudyJourneyState, StudyJourneyQuestion, StudyJourneyLearnData } from '../types';
@@ -35,6 +36,7 @@ import {
   calculateTopicMastery,
   convertMistakesToFlashcards
 } from '../lib/studyJourneyService';
+import { generateTopicFlashcards, generateTopicQuestions } from '../utils/studyJourneyContent';
 import FlashcardStudyScreen from './flashcards/FlashcardStudyScreen';
 import { collection, getDocs, query, where, addDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -50,9 +52,12 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
   const [selectedLevel, setSelectedLevel] = useState<string>('Secondary');
   const [selectedExam, setSelectedExam] = useState<string>('WAEC / WASSCE');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('mathematics');
+  const [subjectSearchQuery, setSubjectSearchQuery] = useState<string>('');
   const [selectedTopic, setSelectedTopic] = useState<string>('Quadratic Equations & Functions');
   const [customTopicInput, setCustomTopicInput] = useState<string>('');
   const [isCustomTopic, setIsCustomTopic] = useState<boolean>(false);
+  const [flashcardCount, setFlashcardCount] = useState<number>(10);
+  const [practiceCount, setPracticeCount] = useState<number>(10);
 
   // Active Journey State
   const [journey, setJourney] = useState<StudyJourneyState | null>(null);
@@ -81,6 +86,30 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
   const [selectedRetestAnswers, setSelectedRetestAnswers] = useState<Record<number, number>>({});
   const [retestTimeRemaining, setRetestTimeRemaining] = useState<number>(300); // 5 minutes
 
+  // Available subjects filtered by curriculum and search query
+  const availableSubjects = useMemo(() => {
+    let list = ALL_SUBJECTS;
+    if (selectedLevel === 'Primary') {
+      const primaryIds = [
+        'mathematics', 'english', 'basic-science', 'basic-technology', 'social-studies',
+        'civic', 'computer', 'phe', 'crs', 'irs', 'cca', 'agric', 'home-economics'
+      ];
+      list = ALL_SUBJECTS.filter((s) => primaryIds.includes(s.id));
+    } else if (selectedLevel === 'Secondary' && (selectedExam.includes('Junior') || selectedExam.includes('BECE'))) {
+      const jssIds = [
+        'mathematics', 'english', 'basic-science', 'basic-technology', 'social-studies',
+        'civic', 'computer', 'phe', 'crs', 'irs', 'cca', 'agric', 'home-economics',
+        'business-studies', 'french', 'yoruba', 'igbo', 'hausa'
+      ];
+      list = ALL_SUBJECTS.filter((s) => jssIds.includes(s.id));
+    }
+    if (subjectSearchQuery.trim()) {
+      const q = subjectSearchQuery.trim().toLowerCase();
+      list = list.filter((s) => s.name.toLowerCase().includes(q));
+    }
+    return list;
+  }, [selectedLevel, selectedExam, subjectSearchQuery]);
+
   // Load existing journey on mount
   useEffect(() => {
     async function checkExistingJourney() {
@@ -93,6 +122,12 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
         if (saved && saved.status === 'in_progress') {
           setSavedJourneyCandidate(saved);
           setHasSavedJourneyPrompt(true);
+          if (saved.flashcardTargetCount) {
+            setFlashcardCount(saved.flashcardTargetCount);
+          }
+          if (saved.practiceTargetCount) {
+            setPracticeCount(saved.practiceTargetCount);
+          }
         }
       } catch (e) {
         console.warn('Error loading journey:', e);
@@ -120,6 +155,16 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
       setSelectedExam(availableExams[0]);
     }
   }, [selectedLevel]);
+
+  // Keep selected subject valid when level/exam changes
+  useEffect(() => {
+    if (!subjectSearchQuery.trim() && availableSubjects.length > 0) {
+      const exists = availableSubjects.some((s) => s.id === selectedSubjectId);
+      if (!exists) {
+        setSelectedSubjectId(availableSubjects[0].id);
+      }
+    }
+  }, [selectedLevel, selectedExam, availableSubjects, selectedSubjectId, subjectSearchQuery]);
 
   // Sync default topic when subject changes
   useEffect(() => {
@@ -212,8 +257,10 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
         topic: finalTopic,
         step: 1,
         learnData,
+        flashcardTargetCount: flashcardCount,
+        practiceTargetCount: practiceCount,
         flashcardsStudied: 0,
-        flashcardsTotal: 0,
+        flashcardsTotal: flashcardCount,
         status: 'in_progress',
         createdAt: Date.now(),
         updatedAt: Date.now()
@@ -233,6 +280,12 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
     if (savedJourneyCandidate) {
       setJourney(savedJourneyCandidate);
       setHasSavedJourneyPrompt(false);
+      if (savedJourneyCandidate.flashcardTargetCount) {
+        setFlashcardCount(savedJourneyCandidate.flashcardTargetCount);
+      }
+      if (savedJourneyCandidate.practiceTargetCount) {
+        setPracticeCount(savedJourneyCandidate.practiceTargetCount);
+      }
 
       // Hydrate state if step was practice or retest
       if (savedJourneyCandidate.step === 3 && savedJourneyCandidate.practiceResults?.questions) {
@@ -276,6 +329,8 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
     setIsGenerating(true);
 
     try {
+      const targetCardCount = journey.flashcardTargetCount || flashcardCount || 10;
+
       // 1. Check if user already has flashcards for this subject/topic
       let cards: Flashcard[] = [];
       try {
@@ -296,8 +351,8 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
         console.warn('Error fetching existing flashcards:', err);
       }
 
-      // 2. If fewer than 4 cards exist, generate structured cards for this topic
-      if (cards.length < 4) {
+      // 2. If fewer than targetCardCount exist, generate structured cards for this topic
+      if (cards.length < targetCardCount) {
         let token = '';
         try {
           token = await user.getIdToken();
@@ -314,7 +369,7 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
               subject: journey.subject,
               topic: journey.topic,
               level: journey.educationLevel,
-              count: 6
+              count: targetCardCount
             })
           });
 
@@ -352,45 +407,23 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
         }
       }
 
-      // If still empty (e.g. offline), provide high-yield cards
-      if (cards.length === 0) {
-        cards = [
-          {
-            id: 'fallback_1',
-            uid: user.uid,
-            subject: journey.subject,
-            topic: journey.topic,
-            front: `What is the primary governing principle of ${journey.topic}?`,
-            back: `It establishes the formal relationship between variable factors under standard conditions in ${journey.subject}.`,
-            difficulty: 'Medium',
-            createdAt: Date.now()
-          },
-          {
-            id: 'fallback_2',
-            uid: user.uid,
-            subject: journey.subject,
-            topic: journey.topic,
-            front: `Name one crucial examiner trap to avoid in ${journey.topic}.`,
-            back: `Neglecting boundary conditions and failing to verify dimensional units before calculation.`,
-            difficulty: 'Hard',
-            createdAt: Date.now()
-          },
-          {
-            id: 'fallback_3',
-            uid: user.uid,
-            subject: journey.subject,
-            topic: journey.topic,
-            front: `How is ${journey.topic} verified in practical applications?`,
-            back: `Through empirical observation, controlled variable isolation, and algebraic proof.`,
-            difficulty: 'Easy',
-            createdAt: Date.now()
-          }
-        ];
+      // 3. If still fewer than targetCardCount, supplement with high-yield syllabus cards
+      if (cards.length < targetCardCount) {
+        cards = generateTopicFlashcards(
+          journey.subject,
+          journey.topic,
+          journey.educationLevel,
+          targetCardCount,
+          cards,
+          user.uid
+        );
       }
+
+      cards = cards.slice(0, targetCardCount);
 
       setJourneyFlashcards(cards);
       await advanceToStep(2, {
-        flashcardsTotal: cards.length,
+        flashcardsTotal: targetCardCount,
         flashcardsStudied: 0
       });
     } catch (err) {
@@ -425,6 +458,7 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
     setIsGenerating(true);
 
     try {
+      const targetPracticeCount = journey.practiceTargetCount || practiceCount || 10;
       let token = '';
       try {
         token = await user.getIdToken();
@@ -443,7 +477,7 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
             subject: journey.subject,
             topic: journey.topic,
             difficulty: 'Medium',
-            amount: 5,
+            amount: targetPracticeCount,
             educationLevel: journey.educationLevel,
             country: 'Nigeria',
             practiceMode: 'Topic Practice'
@@ -465,72 +499,25 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
         console.warn('Practice generation endpoint error:', e);
       }
 
-      // Safe fallback questions if API busy
-      if (questions.length === 0) {
-        questions = [
-          {
-            question: `In ${journey.subject}, what is the foundational characteristic of ${journey.topic}?`,
-            options: [
-              'It follows direct proportional variation under constant conditions.',
-              'It operates independently of physical or mathematical constraints.',
-              'It applies exclusively to theoretical models with no practical usage.',
-              'It violates standard conservation principles.'
-            ],
-            correctAnswer: 0,
-            explanation: 'The fundamental characteristic is verified by direct proportional relationship and standard axiomatic rules.'
-          },
-          {
-            question: `Which of the following is essential when solving multi-step questions on ${journey.topic}?`,
-            options: [
-              'Omitting intermediate derivations to save time',
-              'Identifying given parameters, required variables, and the appropriate governing formula',
-              'Assuming all coefficients equal zero',
-              'Disregarding standard SI units'
-            ],
-            correctAnswer: 1,
-            explanation: 'Proper parameter identification and formula selection ensures accuracy and prevents sign errors.'
-          },
-          {
-            question: `A student makes an error while evaluating ${journey.topic}. What is the most common pitfall?`,
-            options: [
-              'Writing the final answer clearly',
-              'Misapplying operational signs or inverse operations',
-              'Double checking intermediate calculations',
-              'Stating the correct definition'
-            ],
-            correctAnswer: 1,
-            explanation: 'Operational sign inversion and bracket distribution errors represent the most frequent examiner-tested misconceptions.'
-          },
-          {
-            question: `How is the principle of ${journey.topic} classified in modern ${journey.subject} curricula?`,
-            options: [
-              'Core high-yield syllabus requirement',
-              'Optional non-examinable footnote',
-              'Obsolete historical trivia',
-              'Unverified hypothesis'
-            ],
-            correctAnswer: 0,
-            explanation: 'This topic forms an essential part of the standard WAEC, JAMB, and national assessment syllabi.'
-          },
-          {
-            question: `What is the expected outcome when applying the standard method to ${journey.topic}?`,
-            options: [
-              'A verifiable, reproducible solution with clear logical reasoning',
-              'An indeterminate contradiction',
-              'Arbitrary random values',
-              'An unsolvable paradox'
-            ],
-            correctAnswer: 0,
-            explanation: 'Standard methods yield clear, repeatable, and rigorously validated outcomes.'
-          }
-        ];
+      // Ensure exactly targetPracticeCount questions are present
+      if (questions.length < targetPracticeCount) {
+        questions = generateTopicQuestions(
+          journey.subject,
+          journey.topic,
+          journey.educationLevel,
+          journey.examType,
+          targetPracticeCount,
+          questions
+        );
       }
+
+      questions = questions.slice(0, targetPracticeCount);
 
       setPracticeQuestions(questions);
       setSelectedAnswers({});
       setCurrentQuestionIdx(0);
       setIsPracticeSubmitted(false);
-      setPracticeTimeRemaining(600);
+      setPracticeTimeRemaining(Math.max(300, targetPracticeCount * 60));
 
       await advanceToStep(3);
     } catch (err) {
@@ -915,31 +902,82 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
             </div>
           </div>
 
-          {/* 3. Subject */}
+          {/* 3. Subject Selection with Search */}
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">3</span>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Select Subject</h2>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">3</span>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Select Subject</h2>
+              </div>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                {availableSubjects.length} {availableSubjects.length === 1 ? 'subject' : 'subjects'}
+              </span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-56 overflow-y-auto pr-1">
-              {ALL_SUBJECTS.map((sub) => (
+
+            {/* Subject Search Bar */}
+            <div className="relative mb-3">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <Search size={18} />
+              </div>
+              <input
+                type="text"
+                value={subjectSearchQuery}
+                onChange={(e) => setSubjectSearchQuery(e.target.value)}
+                placeholder="Search subjects..."
+                aria-label="Search subjects"
+                className="w-full pl-10 pr-12 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              />
+              {subjectSearchQuery && (
                 <button
-                  key={sub.id}
-                  onClick={() => {
-                    setSelectedSubjectId(sub.id);
-                    setIsCustomTopic(false);
-                  }}
-                  className={`p-3 rounded-xl text-left border transition-all truncate flex items-center gap-2 cursor-pointer ${
-                    selectedSubjectId === sub.id
-                      ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-white font-bold'
-                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 text-slate-700 dark:text-slate-300 text-sm'
-                  }`}
+                  type="button"
+                  onClick={() => setSubjectSearchQuery('')}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                 >
-                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${sub.color}`} />
-                  <span className="truncate">{sub.name}</span>
+                  Clear
                 </button>
-              ))}
+              )}
             </div>
+
+            {/* Subject List / Grid */}
+            {availableSubjects.length === 0 ? (
+              <div className="py-8 px-4 text-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30">
+                <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                  No subjects found
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSubjectSearchQuery('')}
+                  className="mt-2 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                >
+                  Clear search to view all subjects
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                {availableSubjects.map((sub) => {
+                  const isSelected = selectedSubjectId === sub.id;
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedSubjectId(sub.id);
+                        setIsCustomTopic(false);
+                      }}
+                      className={`p-3 rounded-xl text-left border transition-all flex items-center gap-2.5 cursor-pointer ${
+                        isSelected
+                          ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-white font-bold ring-2 ring-blue-500/30'
+                          : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 text-sm bg-white dark:bg-slate-800'
+                      }`}
+                    >
+                      <span className={`w-3 h-3 rounded-full shrink-0 ${sub.color || 'bg-blue-500'}`} />
+                      <span className="break-words leading-snug whitespace-normal flex-1">{sub.name}</span>
+                      {isSelected && <CheckCircle2 size={16} className="text-blue-600 dark:text-blue-400 shrink-0 ml-auto" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* 4. Topic */}
@@ -950,8 +988,9 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">Select Topic</h2>
               </div>
               <button
+                type="button"
                 onClick={() => setIsCustomTopic(!isCustomTopic)}
-                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
               >
                 {isCustomTopic ? 'Choose from syllabus list' : '+ Enter custom topic'}
               </button>
@@ -976,6 +1015,7 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
                 {availableTopics.map((topicName) => (
                   <button
                     key={topicName}
+                    type="button"
                     onClick={() => setSelectedTopic(topicName)}
                     className={`p-3 rounded-xl text-left border transition-all flex items-center justify-between gap-2 cursor-pointer ${
                       selectedTopic === topicName
@@ -991,13 +1031,71 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
             )}
           </div>
 
+          {/* 5. Flashcards to Study */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">5</span>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Flashcards to Study</h2>
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">({flashcardCount} cards)</span>
+            </div>
+            <div className="flex flex-wrap gap-2.5">
+              {[5, 10, 20, 30, 50].map((num) => (
+                <button
+                  key={num}
+                  id={`flashcard-count-${num}`}
+                  type="button"
+                  onClick={() => setFlashcardCount(num)}
+                  className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all cursor-pointer ${
+                    flashcardCount === num
+                      ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400/50'
+                      : 'bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 border border-transparent'
+                  }`}
+                >
+                  {num}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 6. Practice Questions to Answer */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">6</span>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Practice Questions to Answer</h2>
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">({practiceCount} questions)</span>
+            </div>
+            <div className="flex flex-wrap gap-2.5">
+              {[5, 10, 20, 30, 50, 100].map((num) => (
+                <button
+                  key={num}
+                  id={`practice-count-${num}`}
+                  type="button"
+                  onClick={() => setPracticeCount(num)}
+                  className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all cursor-pointer ${
+                    practiceCount === num
+                      ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400/50'
+                      : 'bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 border border-transparent'
+                  }`}
+                >
+                  {num}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Launch Action */}
           <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-xs text-slate-500 dark:text-slate-400">
-              Selected: <strong className="text-slate-800 dark:text-white">{currentSubjectObj.name}</strong> •{' '}
-              <strong className="text-slate-800 dark:text-white">
-                {isCustomTopic ? customTopicInput || 'Custom Topic' : selectedTopic}
-              </strong>
+            <div className="text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
+              <div>
+                Selected: <strong className="text-slate-800 dark:text-white">{currentSubjectObj.name}</strong> •{' '}
+                <strong className="text-slate-800 dark:text-white">
+                  {isCustomTopic ? customTopicInput || 'Custom Topic' : selectedTopic}
+                </strong>
+              </div>
+              <div className="text-slate-600 dark:text-slate-300 font-medium">
+                Scope: <span className="text-blue-600 dark:text-blue-400 font-bold">{flashcardCount} flashcards</span> •{' '}
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold">{practiceCount} practice questions</span>
+              </div>
             </div>
 
             <button
@@ -1291,7 +1389,7 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
               </div>
 
               {/* Question Number Pills */}
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto pr-1">
                 {practiceQuestions.map((_, idx) => {
                   const isAnswered = selectedAnswers[idx] !== undefined;
                   const isCurrent = currentQuestionIdx === idx;

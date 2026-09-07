@@ -1,12 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, ArrowRight, BookOpen, PenTool, MessageSquare, Target, Activity, Search, Bell, Clock, ChevronRight, CheckCircle, BrainCircuit, Zap, Flame, Trophy, Calendar, Play, Settings, Compass } from 'lucide-react';
+import { Sparkles, ArrowRight, BookOpen, PenTool, MessageSquare, Target, Activity, Search, Bell, Clock, ChevronRight, CheckCircle, BrainCircuit, Zap, Flame, Trophy, Calendar, Play, Settings, Compass, AlertTriangle, Layers, FileUp } from 'lucide-react';
 import { ViewType,  TutorConversation, SubjectHistory, StudyJourneyState } from '../types';
 import { collection, query, where, getDocs, getDoc, doc, orderBy, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { getLevelInfo } from '../lib/achievements';
 import { loadStudyJourney, clearStudyJourney } from '../lib/studyJourneyService';
+import { fetchStudentTopicAnalysis, StudentTopicAnalysis, TopicResultSummary } from '../utils/weakTopics';
+import WeakTopicActionModal from './WeakTopicActionModal';
+import DailyStudyPlanCard from './DailyStudyPlanCard';
+import ReviewMistakesModal from './ReviewMistakesModal';
+import { getDailyStudyPlan, markMistakesReviewed } from '../utils/dailyStudyPlan';
+import { DailyStudyPlan } from '../types';
 
 interface HomeProps {
   setView: (view: ViewType) => void;
@@ -18,11 +24,61 @@ export default function Home({ setView }: HomeProps) {
   // New State metrics
   const [examReadiness, setExamReadiness] = useState(0);
   const [streak, setStreak] = useState(userProfile?.streak || 0);
-  const [topicCategories, setTopicCategories] = useState<{weak: any[], developing: any[], strong: any[]}>({ weak: [], developing: [], strong: [] });
+  const [topicAnalysis, setTopicAnalysis] = useState<StudentTopicAnalysis | null>(null);
+  const [selectedWeakTopic, setSelectedWeakTopic] = useState<TopicResultSummary | null>(null);
+  const [activeTab, setActiveTab] = useState<'all' | 'weak' | 'average' | 'strong'>('weak');
   const [recentPractice, setRecentPractice] = useState<any | null>(null);
   const [activeJourney, setActiveJourney] = useState<StudyJourneyState | null>(null);
   
+  // Daily Study Plan State
+  const [dailyPlan, setDailyPlan] = useState<DailyStudyPlan | null>(null);
+  const [dailyPlanLoading, setDailyPlanLoading] = useState(false);
+  const [reviewMistakesTopic, setReviewMistakesTopic] = useState<TopicResultSummary | null>(null);
+  
   const [loading, setLoading] = useState(true);
+
+  const refreshDailyPlan = async () => {
+    if (!user) return;
+    setDailyPlanLoading(true);
+    try {
+      const plan = await getDailyStudyPlan(user.uid);
+      setDailyPlan(plan);
+    } catch (e) {
+      console.warn("Failed to refresh daily study plan:", e);
+    } finally {
+      setDailyPlanLoading(false);
+    }
+  };
+
+  const handleOpenMistakeReview = () => {
+    const target = topicAnalysis?.weakTopics[0] ||
+      topicAnalysis?.averageTopics[0] ||
+      (topicAnalysis?.allTopics && topicAnalysis.allTopics.length > 0 ? topicAnalysis.allTopics[0] : null);
+    
+    if (target) {
+      setReviewMistakesTopic(target);
+    } else {
+      setReviewMistakesTopic({
+        topic: dailyPlan?.primaryTopic || 'General Review',
+        subject: dailyPlan?.primarySubject || 'Core Subjects',
+        subjectId: 'mathematics',
+        totalQuestions: 0,
+        correctCount: 0,
+        incorrectCount: 0,
+        accuracy: 0,
+        category: 'weak',
+        mistakes: []
+      });
+    }
+  };
+
+  const handleCompleteMistakesReview = async () => {
+    if (user) {
+      await markMistakesReviewed(user.uid);
+      const updated = await getDailyStudyPlan(user.uid);
+      setDailyPlan(updated);
+    }
+  };
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -38,83 +94,27 @@ export default function Home({ setView }: HomeProps) {
           console.warn('Failed to load study journey in Home:', e);
         }
 
-        const learningDataRef = collection(db, 'learning_data');
-        const q = query(learningDataRef, where('uid', '==', user.uid));
-        const querySnapshot = await getDocs(q);
-        
-        let totalQuestions = 0;
-        let totalScore = 0;
-        let count = 0;
-        const topicStats: Record<string, { score: number, total: number, subject: string }> = {};
-        
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          const qCount = data.totalQuestions || 0;
-          const sCount = data.score || 0;
-          const fallbackSubject = data.subject || 'General';
-          
-          totalQuestions += qCount;
-          totalScore += sCount;
-          
-          if (data.answeredQuestions && Array.isArray(data.answeredQuestions)) {
-            data.answeredQuestions.forEach((q: any) => {
-               const t = q.topic || data.topic || fallbackSubject;
-               if (!topicStats[t]) topicStats[t] = { score: 0, total: 0, subject: fallbackSubject };
-               topicStats[t].total += 1;
-               
-               let correctValue = q.correctAnswerIndex !== undefined ? q.correctAnswerIndex : q.correctAnswer;
-               let isCorrect = false;
-               const userAns = q.userAnswerIndex;
-               
-               if (userAns !== undefined && userAns !== null && userAns !== -1) {
-                 if (typeof correctValue === 'number' && correctValue === userAns) {
-                   isCorrect = true;
-                 } else if (typeof correctValue === 'string') {
-                   const normalizedStr = correctValue.trim().toLowerCase();
-                   let expectedIdx = -1;
-                   if (['a', 'b', 'c', 'd'].includes(normalizedStr)) {
-                     expectedIdx = normalizedStr.charCodeAt(0) - 97;
-                   } else if (q.options) {
-                     expectedIdx = q.options.findIndex((opt) => typeof opt === 'string' && opt.trim().toLowerCase() === normalizedStr);
-                   }
-                   if (expectedIdx === -1 && !isNaN(Number(normalizedStr))) {
-                     expectedIdx = Number(normalizedStr);
-                   }
-                   if (expectedIdx === userAns) isCorrect = true;
-                 }
-               }
-               
-               if (isCorrect) topicStats[t].score += 1;
-            });
-          } else {
-             const t = data.topic || fallbackSubject;
-             if (!topicStats[t]) topicStats[t] = { score: 0, total: 0, subject: fallbackSubject };
-             topicStats[t].total += qCount;
-             topicStats[t].score += sCount;
-          }
-        });
-        
-        if (totalQuestions > 0) {
-          const readiness = (totalScore / totalQuestions) * 100;
-          setExamReadiness(Math.round(readiness));
+        // Fetch comprehensive real student practice results
+        const analysisData = await fetchStudentTopicAnalysis(user.uid);
+        setTopicAnalysis(analysisData);
+        setExamReadiness(analysisData.overallAccuracy || 0);
+
+        if (analysisData.weakTopics.length > 0) {
+          setActiveTab('weak');
+        } else if (analysisData.averageTopics.length > 0) {
+          setActiveTab('average');
         } else {
-          setExamReadiness(0);
+          setActiveTab('all');
         }
         
-        const areas = Object.keys(topicStats)
-          .map(topic => {
-            const stats = topicStats[topic];
-            const pct = Math.round((stats.score / stats.total) * 100);
-            return { name: topic, pct, total: stats.total, subject: stats.subject };
-          })
-          .filter(a => a.total >= 2); // Do not judge based on 1 question
-          
-        const weak = areas.filter(a => a.pct < 50).sort((a, b) => a.pct - b.pct);
-        const developing = areas.filter(a => a.pct >= 50 && a.pct < 75).sort((a, b) => a.pct - b.pct);
-        const strong = areas.filter(a => a.pct >= 75).sort((a, b) => b.pct - a.pct);
-        
-        setTopicCategories({ weak, developing, strong });
-        
+        // Fetch Daily Study Plan
+        try {
+          const plan = await getDailyStudyPlan(user.uid);
+          setDailyPlan(plan);
+        } catch (planErr) {
+          console.warn('Failed to load daily study plan in fetchStats:', planErr);
+        }
+
         // Fetch Last Practice
         const pracSnap = await getDoc(doc(db, 'practice_sessions', user.uid));
         if (pracSnap.exists()) {
@@ -127,7 +127,6 @@ export default function Home({ setView }: HomeProps) {
         } else {
             console.warn("Stats fetch warning:", err);
         }
-        // Silently handle error to prevent AI Studio metadata triggers
       } finally {
         setLoading(false);
       }
@@ -147,18 +146,12 @@ export default function Home({ setView }: HomeProps) {
   }
 
   const startRecommendedPractice = () => {
-    let target = topicCategories.weak[0] || topicCategories.developing[0] || topicCategories.strong[0];
+    const target = topicAnalysis?.weakTopics[0] || topicAnalysis?.averageTopics[0] || topicAnalysis?.strongTopics[0];
     if (target) {
-      localStorage.setItem('zetadu_target_topic', target.name);
+      localStorage.removeItem('practice_session');
+      localStorage.setItem('zetadu_target_topic', target.topic);
       localStorage.setItem('zetadu_target_subject', target.subject);
-      
-      // Try to find the matching subject id
-      const formattedSubject = target.subject.toLowerCase();
-      let subjectId = formattedSubject.replace(/[^a-z0-9]/g, '-');
-      if (formattedSubject.includes('english')) subjectId = 'english';
-      else if (formattedSubject.includes('math')) subjectId = 'mathematics';
-      
-      localStorage.setItem('zetadu_target_subject_id', subjectId);
+      localStorage.setItem('zetadu_target_subject_id', target.subjectId);
     }
     setView('practice');
   };
@@ -209,11 +202,53 @@ export default function Home({ setView }: HomeProps) {
         })()}
       </div>
 
+      {/* Quick Search Bar Banner on Home */}
+      <div 
+        id="home-search-banner"
+        onClick={() => {
+          const event = new CustomEvent('open-zetadu-search');
+          window.dispatchEvent(event);
+        }}
+        className="w-full bg-white dark:bg-slate-800/90 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-xs hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all cursor-pointer flex items-center justify-between gap-4 group"
+      >
+        <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform border border-blue-100 dark:border-blue-900/40">
+            <Search size={18} />
+          </div>
+          <div className="truncate">
+            <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+              Find Subjects, Topics, Flashcards & Practice Questions
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+              Type to search any subject syllabus, flashcards, or practice questions instantly...
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <kbd className="hidden md:inline-block px-2 py-1 text-xs font-mono bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-600">
+            ⌘K
+          </kbd>
+          <span className="text-xs font-bold text-blue-600 dark:text-blue-400 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+            Search <ArrowRight size={14} />
+          </span>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* Main Content Area */}
         <div className="lg:col-span-8 flex flex-col gap-8">
           
+          {/* Daily Study Plan */}
+          <DailyStudyPlanCard
+            plan={dailyPlan}
+            loading={dailyPlanLoading}
+            topicSummary={topicAnalysis?.weakTopics[0] || topicAnalysis?.averageTopics[0] || null}
+            onRefresh={refreshDailyPlan}
+            onOpenMistakeReview={handleOpenMistakeReview}
+            setView={setView}
+            onPlanUpdated={(updated) => setDailyPlan(updated)}
+          />
           
           {/* Daily Challenge */}
           <div 
@@ -237,124 +272,278 @@ export default function Home({ setView }: HomeProps) {
             </div>
           </div>
 
-          {/* Personal Study Coach */}
-          <div className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-3xl p-6 md:p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-2xl flex items-center justify-center">
-                <BrainCircuit size={24} />
+          {/* Weak Topics & Performance Diagnostics */}
+          <div id="weak-topics-home-card" className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-3xl p-6 md:p-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-rose-50 dark:bg-rose-950/40 text-rose-600 rounded-2xl flex items-center justify-center border border-rose-100 dark:border-rose-900/50">
+                  <Target size={24} />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Weak Topics & Mastery</h2>
+                  <p className="text-slate-500 text-sm">Real-time analysis from your practice results.</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Personal Study Coach</h2>
-                <p className="text-slate-500">Analysis based on your practice sessions.</p>
-              </div>
+              <button
+                id="view-all-weak-topics-btn"
+                onClick={() => setView('weak_topics')}
+                className="self-start sm:self-auto px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>View Full Analysis</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+
+            {/* Metric Tabs */}
+            <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1">
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-300 flex items-center gap-1.5 shrink-0">
+                <AlertTriangle size={13} />
+                <span>Weak: {topicAnalysis?.weakTopics.length || 0}</span>
+              </span>
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 flex items-center gap-1.5 shrink-0">
+                <Activity size={13} />
+                <span>Average: {topicAnalysis?.averageTopics.length || 0}</span>
+              </span>
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 shrink-0">
+                <CheckCircle size={13} />
+                <span>Strong: {topicAnalysis?.strongTopics.length || 0}</span>
+              </span>
             </div>
 
             <div className="flex flex-col gap-8">
               
               {/* Weak Topics */}
               <div>
-                <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
-                  <Target size={20} className="text-rose-500" /> Focus Areas (Weak)
-                </h3>
-                {topicCategories.weak.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {topicCategories.weak.map((topic, i) => (
-                      <div key={i} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-700">
-                        <span className="font-medium text-slate-700 dark:text-slate-300 truncate mr-2" title={topic.name}>{topic.name}</span>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-sm font-bold text-slate-900 dark:text-white">{topic.pct}%</span>
-                          <div className="w-3 h-3 rounded-full bg-rose-500"></div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <Target size={18} className="text-rose-500" />
+                    <span>Weak Topics</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900">
+                      &lt; 50%
+                    </span>
+                  </h3>
+                  <span className="text-xs text-slate-400 hidden sm:inline">Click any weak topic to practice, review cards, or ask tutor</span>
+                </div>
+
+                {topicAnalysis && topicAnalysis.weakTopics.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {topicAnalysis.weakTopics.map((topic, i) => (
+                      <div
+                        key={`weak-${i}`}
+                        id={`weak-topic-item-${i}`}
+                        onClick={() => setSelectedWeakTopic(topic)}
+                        className="group flex flex-col justify-between bg-rose-50/40 dark:bg-rose-950/20 hover:bg-rose-50 dark:hover:bg-rose-950/40 p-4 rounded-2xl border-2 border-rose-200/80 dark:border-rose-900/60 hover:border-rose-500 dark:hover:border-rose-500 transition-all cursor-pointer shadow-xs"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block truncate">
+                              {topic.subject}
+                            </span>
+                            <span className="font-bold text-slate-900 dark:text-white truncate block text-sm group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors" title={topic.topic}>
+                              {topic.topic}
+                            </span>
+                          </div>
+                          <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800 shrink-0">
+                            {topic.accuracy}%
+                          </span>
+                        </div>
+
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mb-2 overflow-hidden">
+                          <div className="h-full bg-rose-500 rounded-full" style={{ width: `${Math.max(6, topic.accuracy)}%` }} />
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                          <span>{topic.correctCount}/{topic.totalQuestions} correct ({topic.incorrectCount} missed)</span>
+                          <span className="font-bold text-rose-600 dark:text-rose-400 inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                            <span>Take Action</span>
+                            <ChevronRight size={13} />
+                          </span>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-slate-500 italic text-sm">No weak areas identified yet. Keep practicing!</p>
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 text-slate-500 text-xs italic">
+                    {topicAnalysis?.hasResults
+                      ? 'No weak topics identified! You are performing at or above 50% in all tested topics.'
+                      : 'No practice results yet. Complete a quiz to analyze weak topics.'}
+                  </div>
                 )}
               </div>
 
-              {/* Developing Topics */}
+              {/* Average Topics */}
               <div>
-                <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
-                  <Activity size={20} className="text-amber-500" /> Developing
-                </h3>
-                {topicCategories.developing.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {topicCategories.developing.map((topic, i) => (
-                      <div key={i} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-700">
-                        <span className="font-medium text-slate-700 dark:text-slate-300 truncate mr-2" title={topic.name}>{topic.name}</span>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-sm font-bold text-slate-900 dark:text-white">{topic.pct}%</span>
-                          <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <Activity size={18} className="text-amber-500" />
+                    <span>Average Topics</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900">
+                      50% - 74%
+                    </span>
+                  </h3>
+                </div>
+
+                {topicAnalysis && topicAnalysis.averageTopics.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {topicAnalysis.averageTopics.map((topic, i) => (
+                      <div
+                        key={`avg-${i}`}
+                        id={`avg-topic-item-${i}`}
+                        onClick={() => setSelectedWeakTopic(topic)}
+                        className="group flex flex-col justify-between bg-slate-50/70 dark:bg-slate-900/50 hover:bg-slate-100/70 dark:hover:bg-slate-850 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-amber-400 transition-all cursor-pointer"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block truncate">
+                              {topic.subject}
+                            </span>
+                            <span className="font-bold text-slate-800 dark:text-white truncate block text-sm" title={topic.topic}>
+                              {topic.topic}
+                            </span>
+                          </div>
+                          <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
+                            {topic.accuracy}%
+                          </span>
+                        </div>
+
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mb-2 overflow-hidden">
+                          <div className="h-full bg-amber-500 rounded-full" style={{ width: `${topic.accuracy}%` }} />
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                          <span>{topic.correctCount}/{topic.totalQuestions} questions correct</span>
+                          <span className="font-semibold text-amber-600 dark:text-amber-400">Review</span>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-slate-500 italic text-sm">No developing areas identified yet.</p>
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 text-slate-500 text-xs italic">
+                    No average topics identified yet.
+                  </div>
                 )}
               </div>
 
               {/* Strong Topics */}
               <div>
-                <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
-                  <CheckCircle size={20} className="text-emerald-500" /> Strong
-                </h3>
-                {topicCategories.strong.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {topicCategories.strong.map((topic, i) => (
-                      <div key={i} className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-700">
-                        <span className="font-medium text-slate-700 dark:text-slate-300 truncate mr-2" title={topic.name}>{topic.name}</span>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-sm font-bold text-slate-900 dark:text-white">{topic.pct}%</span>
-                          <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <CheckCircle size={18} className="text-emerald-500" />
+                    <span>Strong Topics</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900">
+                      &ge; 75%
+                    </span>
+                  </h3>
+                </div>
+
+                {topicAnalysis && topicAnalysis.strongTopics.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {topicAnalysis.strongTopics.map((topic, i) => (
+                      <div
+                        key={`strong-${i}`}
+                        id={`strong-topic-item-${i}`}
+                        onClick={() => setSelectedWeakTopic(topic)}
+                        className="group flex flex-col justify-between bg-slate-50/70 dark:bg-slate-900/50 hover:bg-slate-100/70 dark:hover:bg-slate-850 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-emerald-400 transition-all cursor-pointer"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block truncate">
+                              {topic.subject}
+                            </span>
+                            <span className="font-bold text-slate-800 dark:text-white truncate block text-sm" title={topic.topic}>
+                              {topic.topic}
+                            </span>
+                          </div>
+                          <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shrink-0">
+                            {topic.accuracy}%
+                          </span>
+                        </div>
+
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mb-2 overflow-hidden">
+                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${topic.accuracy}%` }} />
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                          <span>{topic.correctCount}/{topic.totalQuestions} questions correct</span>
+                          <span className="font-semibold text-emerald-600 dark:text-emerald-400">Mastered</span>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-slate-500 italic text-sm">No strong areas identified yet.</p>
+                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 text-slate-500 text-xs italic">
+                    No strong topics identified yet.
+                  </div>
                 )}
               </div>
 
             </div>
             
-            <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-700">
+            <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               <button 
+                id="start-recommended-practice-btn"
                 onClick={startRecommendedPractice}
-                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-md flex items-center justify-center gap-2"
+                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Play size={18} className="fill-current" /> Start Recommended Practice
+              </button>
+              <button
+                id="explore-weak-topics-btn"
+                onClick={() => setView('weak_topics')}
+                className="w-full sm:w-auto bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-6 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Target size={18} className="text-rose-500" /> Explore All Weak Topics
               </button>
             </div>
             
           </div>
+
+          {/* Action Modal for Weak Topics */}
+          <WeakTopicActionModal
+            topic={selectedWeakTopic}
+            onClose={() => setSelectedWeakTopic(null)}
+            setView={setView}
+          />
+
+          {/* Review Mistakes Modal for Daily Study Plan */}
+          <ReviewMistakesModal
+            topicSummary={reviewMistakesTopic}
+            onClose={() => setReviewMistakesTopic(null)}
+            onCompleteReview={handleCompleteMistakesReview}
+            setView={setView}
+          />
           
           {/* Quick Actions */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <button onClick={() => setView('journey')} className="bg-white dark:bg-slate-800 p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-blue-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group">
-              <div className="w-12 h-12 mb-3 bg-blue-50 dark:bg-blue-900/30 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Compass size={26} />
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
+            <button id="quick-action-upload-notes" onClick={() => setView('upload_notes')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-blue-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
+              <div className="w-11 h-11 mb-2.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <FileUp size={24} />
               </div>
-              <h3 className="font-bold text-slate-800 dark:text-white text-sm">Study Journey</h3>
+              <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Upload Notes</h3>
             </button>
-            <button onClick={() => setView('tutor')} className="bg-white dark:bg-slate-800 p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-emerald-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group">
-              <div className="w-12 h-12 mb-3 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <MessageSquare size={26} />
+            <button onClick={() => setView('journey')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-indigo-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
+              <div className="w-11 h-11 mb-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Compass size={24} />
               </div>
-              <h3 className="font-bold text-slate-800 dark:text-white text-sm">AI Tutor</h3>
+              <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Study Journey</h3>
             </button>
-            <button onClick={() => setView('subjects')} className="bg-white dark:bg-slate-800 p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-indigo-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group">
-              <div className="w-12 h-12 mb-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <BookOpen size={26} />
+            <button onClick={() => setView('tutor')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-emerald-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
+              <div className="w-11 h-11 mb-2.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <MessageSquare size={24} />
               </div>
-              <h3 className="font-bold text-slate-800 dark:text-white text-sm">Library</h3>
+              <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">AI Tutor</h3>
             </button>
-            <button onClick={() => setView('practice')} className="bg-white dark:bg-slate-800 p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-blue-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group">
-              <div className="w-12 h-12 mb-3 bg-blue-50 dark:bg-blue-900/30 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <PenTool size={26} />
+            <button onClick={() => setView('subjects')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-amber-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
+              <div className="w-11 h-11 mb-2.5 bg-amber-50 dark:bg-amber-900/30 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <BookOpen size={24} />
               </div>
-              <h3 className="font-bold text-slate-800 dark:text-white text-sm">Practice</h3>
+              <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Library</h3>
+            </button>
+            <button onClick={() => setView('practice')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-rose-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
+              <div className="w-11 h-11 mb-2.5 bg-rose-50 dark:bg-rose-900/30 text-rose-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <PenTool size={24} />
+              </div>
+              <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Practice</h3>
             </button>
           </div>
         </div>
