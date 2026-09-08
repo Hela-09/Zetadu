@@ -381,9 +381,17 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
       if (!response.ok) {
         let errMessage = `Chat request failed (${response.status})`;
         try {
-          const errData = await response.json();
-          if (errData?.error) {
-            errMessage = errData.error;
+          const contentType = response.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const errData = await response.json();
+            if (errData?.error) {
+              errMessage = errData.error;
+            }
+          } else {
+            const textData = await response.text();
+            if (textData && !textData.startsWith('<!DOCTYPE')) {
+              errMessage = textData.substring(0, 200);
+            }
           }
         } catch (_) {}
 
@@ -396,7 +404,28 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
         throw new Error(errMessage);
       }
 
-      if (!response.body) throw new Error("No response body");
+      const contentType = response.headers.get('content-type') || '';
+
+      // Handle JSON response (non-streamed or fallback from server)
+      if (contentType.includes('application/json')) {
+        const json = await response.json();
+        if (json.error) throw new Error(json.error);
+        const fullResponse = json.text || '';
+        if (!fullResponse.trim()) {
+          throw new Error("The AI did not return a response. Please try again.");
+        }
+        const finalMessages = [...currentHistory, userMsg, { role: 'tutor', text: fullResponse } as ChatMessage];
+        setMessages(finalMessages);
+        await autoSaveConversation(finalMessages);
+        return;
+      }
+
+      // Handle unexpected HTML (e.g. rewrite collision)
+      if (contentType.includes('text/html')) {
+        throw new Error("Received HTML instead of API response. Please verify your Vercel deployment routes and check that GEMINI_API_KEY is configured in Vercel Project Settings.");
+      }
+
+      if (!response.body) throw new Error("No response body received from AI Tutor server.");
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -437,11 +466,18 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
                   }
                 }
               }
-            } catch (e) {
+            } catch (e: any) {
+              if (e?.message && !e.message.includes('JSON')) {
+                throw e;
+              }
               console.warn("Error parsing chunk", e);
             }
           }
         }
+      }
+
+      if (!fullResponse.trim()) {
+        throw new Error("The AI session ended without returning content. Please check your GEMINI_API_KEY in Vercel and try again.");
       }
 
       const finalMessages = [...currentHistory, userMsg, { role: 'tutor', text: fullResponse } as ChatMessage];

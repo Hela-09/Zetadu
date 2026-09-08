@@ -69,11 +69,13 @@ async function startServer() {
 
   let _geminiClient: any = null;
   const getGeminiClient = () => {
-    if (!process.env.GEMINI_API_KEY) {
+    let apiKey = (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '').trim();
+    apiKey = apiKey.replace(/^["']|["']$/g, '').trim();
+    if (!apiKey) {
       throw new Error("GEMINI_API_KEY environment variable is missing");
     }
     if (!_geminiClient) {
-      _geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      _geminiClient = new GoogleGenAI({ apiKey });
     }
     return _geminiClient;
   };

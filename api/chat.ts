@@ -63,6 +63,9 @@ Always prioritize accuracy, completeness, and clarity.`;
       res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('X-Accel-Buffering', 'no');
+      if (typeof (res as any).flushHeaders === 'function') {
+        (res as any).flushHeaders();
+      }
 
       let resultStream;
       try {
@@ -92,6 +95,9 @@ Always prioritize accuracy, completeness, and clarity.`;
       for await (const chunk of resultStream) {
         if (chunk.text) {
           res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+          if (typeof (res as any).flush === 'function') {
+            (res as any).flush();
+          }
         }
       }
 
