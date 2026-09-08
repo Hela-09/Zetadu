@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
-import { getGeminiClient, formatGeminiError, setCorsHeaders } from './_gemini';
+import { getGeminiClient, formatGeminiError, setCorsHeaders } from './_gemini.js';
 
 export const config = {
   api: {
