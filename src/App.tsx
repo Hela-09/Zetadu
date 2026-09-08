@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from './contexts/AuthContext';
 import PaymentGate from './components/PaymentGate';
 import SearchModal from './components/SearchModal';
+import { ThemeToggle } from './components/ThemeToggle';
 
 
 const Home = React.lazy(() => import('./components/Home'));
@@ -172,20 +173,23 @@ export default function App() {
               </button>
             </div>
 
-            <div className="flex items-center gap-2 md:gap-4 ml-auto">
+            <div className="flex items-center gap-2 md:gap-3 ml-auto">
               {/* Mobile Search Button */}
               <button
                 id="mobile-header-search-btn"
                 onClick={() => setIsSearchOpen(true)}
-                className="sm:hidden p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-blue-600 transition-colors cursor-pointer"
+                className="sm:hidden p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
                 aria-label="Search"
                 title="Search Zetadu"
               >
                 <Search size={18} />
               </button>
 
+              {/* Theme Toggle Button */}
+              <ThemeToggle />
+
               <div className="hidden sm:block text-right">
-                <p className="text-xs text-slate-500 font-medium">Welcome back,</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Welcome back,</p>
                 <p className="text-sm font-bold text-slate-800 dark:text-white">{user.displayName || 'Student'}</p>
               </div>
               <div 

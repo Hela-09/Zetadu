@@ -390,7 +390,7 @@ export default function Home({ setView }: HomeProps) {
                         key={`avg-${i}`}
                         id={`avg-topic-item-${i}`}
                         onClick={() => setSelectedWeakTopic(topic)}
-                        className="group flex flex-col justify-between bg-slate-50/70 dark:bg-slate-900/50 hover:bg-slate-100/70 dark:hover:bg-slate-850 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-amber-400 transition-all cursor-pointer"
+                        className="group flex flex-col justify-between bg-slate-50/70 dark:bg-slate-900/50 hover:bg-slate-100/70 dark:hover:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-amber-400 transition-all cursor-pointer"
                       >
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <div className="flex-1 min-w-0">
@@ -443,7 +443,7 @@ export default function Home({ setView }: HomeProps) {
                         key={`strong-${i}`}
                         id={`strong-topic-item-${i}`}
                         onClick={() => setSelectedWeakTopic(topic)}
-                        className="group flex flex-col justify-between bg-slate-50/70 dark:bg-slate-900/50 hover:bg-slate-100/70 dark:hover:bg-slate-850 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-emerald-400 transition-all cursor-pointer"
+                        className="group flex flex-col justify-between bg-slate-50/70 dark:bg-slate-900/50 hover:bg-slate-100/70 dark:hover:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-emerald-400 transition-all cursor-pointer"
                       >
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <div className="flex-1 min-w-0">
@@ -585,14 +585,14 @@ export default function Home({ setView }: HomeProps) {
                       setActiveJourney(null);
                       setView('journey');
                     }}
-                    className="py-2 px-3 rounded-xl bg-white dark:bg-slate-700 hover:bg-slate-100 text-slate-600 dark:text-slate-300 text-xs font-bold border border-slate-200 dark:border-slate-600 transition-colors cursor-pointer"
+                    className="py-2 px-3 rounded-xl bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 text-xs font-bold border border-slate-200 dark:border-slate-600 transition-colors cursor-pointer"
                   >
                     Start Over
                   </button>
                 </div>
               </div>
             ) : recentPractice ? (
-              <div onClick={() => setView('practice')} className="group p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700 hover:border-blue-300 cursor-pointer transition-colors">
+              <div onClick={() => setView('practice')} className="group p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500 cursor-pointer transition-colors">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-lg">
                     <PenTool size={16} />
@@ -600,10 +600,10 @@ export default function Home({ setView }: HomeProps) {
                   <span className="font-bold text-sm text-slate-800 dark:text-white">Unfinished Practice</span>
                 </div>
                 <h4 className="font-bold text-slate-900 dark:text-white truncate">{recentPractice.subject || 'General'}</h4>
-                <p className="text-xs text-slate-500 mt-1">Pick up where you left off</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Pick up where you left off</p>
               </div>
             ) : (
-              <div onClick={() => setView('tutor')} className="group p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700 hover:border-emerald-300 cursor-pointer transition-colors">
+              <div onClick={() => setView('tutor')} className="group p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-500 cursor-pointer transition-colors">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-lg">
                     <MessageSquare size={16} />
@@ -611,7 +611,7 @@ export default function Home({ setView }: HomeProps) {
                   <span className="font-bold text-sm text-slate-800 dark:text-white">AI Tutor</span>
                 </div>
                 <h4 className="font-bold text-slate-900 dark:text-white truncate">Start a new session</h4>
-                <p className="text-xs text-slate-500 mt-1">Ask questions or review a topic</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Ask questions or review a topic</p>
               </div>
             )}
           </div>

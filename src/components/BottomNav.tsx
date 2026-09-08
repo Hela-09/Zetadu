@@ -13,12 +13,12 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
     { id: 'home', label: 'Home', icon: Home },
     { id: 'subjects', label: 'Learn', icon: BookOpen },
     { id: 'flashcards', label: 'Cards', icon: Layers },
-    { id: 'opportunities', label: 'Opp\s', icon: Briefcase },
+    { id: 'opportunities', label: 'Explore', icon: Briefcase },
     { id: 'profile', label: 'Profile', icon: User },
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 pb-[env(safe-area-inset-bottom)]">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 pb-[env(safe-area-inset-bottom)] shadow-lg">
       <div className="flex items-center justify-around px-2 py-2">
         {navItems.map((item) => {
           const Icon = item.icon;
