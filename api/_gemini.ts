@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 let geminiClient: GoogleGenAI | null = null;
 
 export function getGeminiClient(): GoogleGenAI {
-  let apiKey = (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '').trim();
+  let apiKey = (process.env.GEMINI_API_KEY || '').trim();
   // Strip optional surrounding quotes if pasted into Vercel UI with quotes
   apiKey = apiKey.replace(/^["']|["']$/g, '').trim();
 

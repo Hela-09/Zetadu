@@ -69,7 +69,7 @@ async function startServer() {
 
   let _geminiClient: any = null;
   const getGeminiClient = () => {
-    let apiKey = (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '').trim();
+    let apiKey = (process.env.GEMINI_API_KEY || '').trim();
     apiKey = apiKey.replace(/^["']|["']$/g, '').trim();
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY environment variable is missing");
