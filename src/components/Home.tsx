@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, ArrowRight, BookOpen, PenTool, MessageSquare, Target, Activity, Search, Bell, Clock, ChevronRight, CheckCircle, BrainCircuit, Zap, Flame, Trophy, Calendar, Play, Settings, Compass, AlertTriangle, Layers, FileUp } from 'lucide-react';
+import { Sparkles, ArrowRight, BookOpen, PenTool, MessageSquare, Target, Activity, Search, Bell, Clock, ChevronRight, CheckCircle, BrainCircuit, Zap, Flame, Trophy, Calendar, Play, Settings, Compass, AlertTriangle, Layers, FileUp, GraduationCap } from 'lucide-react';
 import { ViewType,  TutorConversation, SubjectHistory, StudyJourneyState } from '../types';
 import { collection, query, where, getDocs, getDoc, doc, orderBy, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -614,6 +614,29 @@ export default function Home({ setView }: HomeProps) {
                 <p className="text-xs text-slate-500 mt-1">Ask questions or review a topic</p>
               </div>
             )}
+          </div>
+
+          {/* School Updates Card */}
+          <div className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-3xl p-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <GraduationCap size={18} className="text-blue-600 dark:text-blue-400" />
+                <span>School Updates</span>
+              </h3>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300">
+                Post-UTME
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+              Stay ahead of Post-UTME screening, cut-off marks, and admission deadlines for your followed schools.
+            </p>
+            <button
+              onClick={() => setView('school_updates')}
+              className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            >
+              <span>View School Updates</span>
+              <ArrowRight size={14} />
+            </button>
           </div>
         </div>
       </div>

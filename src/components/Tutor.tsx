@@ -379,13 +379,21 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
       });
 
       if (!response.ok) {
+        let errMessage = `Chat request failed (${response.status})`;
+        try {
+          const errData = await response.json();
+          if (errData?.error) {
+            errMessage = errData.error;
+          }
+        } catch (_) {}
+
         if (response.status === 401) {
-            throw new Error('Authentication required');
+          throw new Error(errMessage || 'Authentication required. Please sign in.');
         }
         if (response.status === 503) {
-            throw new Error('The AI model is currently overloaded. Please try again.');
+          throw new Error(errMessage || 'The AI model is currently overloaded. Please try again.');
         }
-        throw new Error('Chat failed (' + response.status + ')');
+        throw new Error(errMessage);
       }
 
       if (!response.body) throw new Error("No response body");
@@ -442,7 +450,10 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
       
     } catch (error: any) {
       console.error('Chat error:', error);
-      setChatError(error.message === 'Authentication required' ? 'Please sign in to use the AI Tutor.' : "I'm having trouble connecting right now. Please try again.");
+      const displayMessage = error?.message && error.message !== 'Failed to fetch'
+        ? error.message
+        : "I'm having trouble connecting to the AI Tutor server. Please check your connection and verify your Vercel deployment configuration.";
+      setChatError(displayMessage);
     } finally {
       setIsLoading(false);
     }

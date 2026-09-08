@@ -22,6 +22,7 @@ const Flashcards = React.lazy(() => import('./components/Flashcards'));
 const StudyJourney = React.lazy(() => import('./components/StudyJourney'));
 const WeakTopics = React.lazy(() => import('./components/WeakTopics'));
 const UploadNotes = React.lazy(() => import('./components/UploadNotes'));
+const SchoolUpdates = React.lazy(() => import('./components/SchoolUpdates'));
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewType>(() => {
@@ -230,6 +231,7 @@ export default function App() {
               {currentView === 'journey' && <StudyJourney setView={setCurrentView} />}
               {currentView === 'weak_topics' && <WeakTopics setView={setCurrentView} />}
               {currentView === 'upload_notes' && <UploadNotes setView={setCurrentView} />}
+              {currentView === 'school_updates' && <SchoolUpdates setView={setCurrentView} />}
                 </motion.div>
               </AnimatePresence>
             </Suspense>

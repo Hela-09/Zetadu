@@ -2,7 +2,7 @@ import React from 'react';
 import { ViewType } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import Logo from './Logo';
-import { Home, BookOpen, MessageSquare, User, Download, Briefcase, Layers, Compass, Search, FileUp } from 'lucide-react';
+import { Home, BookOpen, MessageSquare, User, Download, Briefcase, Layers, Compass, Search, FileUp, GraduationCap } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface SidebarProps {
@@ -14,6 +14,7 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
   const { isInstallable, triggerInstall } = usePWAInstall();
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
+    { id: 'school_updates', label: 'School Updates', icon: GraduationCap },
     { id: 'upload_notes', label: 'Upload Notes', icon: FileUp },
     { id: 'journey', label: 'Study Journey', icon: Compass },
     { id: 'subjects', label: 'Learn', icon: BookOpen },
