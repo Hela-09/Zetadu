@@ -1489,14 +1489,14 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
           </AnimatePresence>
 
           {/* Bottom Navigation Controls Bar */}
-          <div className="mt-6 flex flex-wrap gap-3 items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs">
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between bg-white dark:bg-slate-800 p-3.5 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs">
             {/* Previous and Next Buttons (Requirement 7) */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
               <button
                 id="quiz-nav-prev-btn"
                 onClick={handlePrev}
                 disabled={currentQIndex === 0}
-                className="flex items-center justify-center gap-1.5 px-4 sm:px-6 py-3 min-h-[44px] rounded-xl font-bold text-sm sm:text-base transition-colors bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-6 py-3 min-h-[44px] rounded-xl font-bold text-sm sm:text-base transition-colors bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
                 <ArrowLeft size={18} /> <span>Previous</span>
               </button>
@@ -1505,19 +1505,19 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
                 id="quiz-nav-next-btn"
                 onClick={handleNext}
                 disabled={currentQIndex === questions.length - 1}
-                className="flex items-center justify-center gap-1.5 px-4 sm:px-6 py-3 min-h-[44px] rounded-xl font-bold text-sm sm:text-base transition-colors bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-6 py-3 min-h-[44px] rounded-xl font-bold text-sm sm:text-base transition-colors bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
                 <span>Next</span> <ArrowRight size={18} />
               </button>
             </div>
 
             {/* Middle/Right: Mobile Questions Panel Toggle & ONLY ONE Submit Button (Requirements 5 & 14) */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
               {/* Mobile Drawer Trigger (Hidden on Desktop) */}
               <button 
                 id="quiz-open-mobile-drawer-btn"
                 onClick={() => setShowMobileNav(true)}
-                className="lg:hidden flex items-center justify-center gap-2 px-4 py-3 min-h-[44px] rounded-xl font-bold text-sm transition-colors bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 cursor-pointer"
+                className="lg:hidden flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-3 min-h-[44px] rounded-xl font-bold text-xs sm:text-sm transition-colors bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 cursor-pointer"
               >
                 <Menu size={18} />
                 <span>Questions ({answeredCount}/{questions.length})</span>
@@ -1528,7 +1528,7 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
                 <button
                   id="quiz-submit-single-button"
                   onClick={() => setShowSubmitPrompt(true)}
-                  className="flex items-center justify-center gap-2 px-6 py-3 min-h-[44px] rounded-xl font-bold text-sm sm:text-base transition-colors bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer"
+                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-6 py-3 min-h-[44px] rounded-xl font-bold text-sm sm:text-base transition-colors bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer"
                 >
                   <CheckCircle2 size={18} />
                   <span>Submit Quiz</span>
@@ -1539,7 +1539,7 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
                 <button
                   id="quiz-review-back-to-summary"
                   onClick={() => setViewMode('results')}
-                  className="flex items-center justify-center gap-2 px-5 py-3 min-h-[44px] rounded-xl font-bold text-sm transition-colors bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer"
+                  className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 sm:px-5 py-3 min-h-[44px] rounded-xl font-bold text-sm transition-colors bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer"
                 >
                   <span>Results Summary</span>
                 </button>

@@ -169,7 +169,7 @@ export default function FlashcardDeckList({
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-fade-in relative z-10">
+    <div className="w-full max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-fade-in relative z-10 pb-28 sm:pb-32">
       {/* HEADER SECTION */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -945,6 +945,9 @@ export default function FlashcardDeckList({
           )}
         </div>
       )}
+
+      {/* Mobile Clearance Spacer */}
+      <div className="md:hidden h-20 sm:h-24 w-full shrink-0 pointer-events-none" aria-hidden="true" />
     </div>
   );
 }

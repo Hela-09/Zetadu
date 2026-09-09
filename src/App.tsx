@@ -140,7 +140,7 @@ export default function App() {
           </div>
         )}
 
-        <main className={`flex-1 flex flex-col min-h-0 relative ${currentView === 'tutor' ? 'p-0 overflow-hidden' : 'p-4 md:p-8 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8 overflow-y-auto '}`}>
+        <main className={`flex-1 flex flex-col min-h-0 relative ${currentView === 'tutor' ? 'p-0 overflow-hidden' : 'p-3 sm:p-4 md:p-8 pb-[calc(7.5rem+env(safe-area-inset-bottom))] md:pb-8 overflow-y-auto'}`}>
           <header className={`flex justify-between items-center shrink-0 gap-3 md:gap-4 flex-wrap ${currentView === 'tutor' ? 'hidden' : 'mb-6 md:mb-8'}`}>
             <div className="flex items-center gap-3">
               <div className="space-y-1">
@@ -236,6 +236,15 @@ export default function App() {
               {currentView === 'weak_topics' && <WeakTopics setView={setCurrentView} />}
               {currentView === 'upload_notes' && <UploadNotes setView={setCurrentView} />}
               {currentView === 'school_updates' && <SchoolUpdates setView={setCurrentView} />}
+
+                  {/* Guaranteed Mobile Bottom Spacer for clearance above BottomNav */}
+                  {currentView !== 'tutor' && (
+                    <div 
+                      id="mobile-bottom-nav-spacer" 
+                      className="md:hidden w-full h-24 sm:h-28 shrink-0 pointer-events-none" 
+                      aria-hidden="true" 
+                    />
+                  )}
                 </motion.div>
               </AnimatePresence>
             </Suspense>

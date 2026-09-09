@@ -123,7 +123,7 @@ export default function Subjects({ setView }: { setView?: (view: ViewType) => vo
 
   if (selectedSubject) {
     return (
-      <div className="w-full max-w-5xl mx-auto pb-8 flex flex-col">
+      <div className="w-full max-w-5xl mx-auto pb-28 sm:pb-32 flex flex-col">
         <button onClick={() => setSelectedSubject(null)} className="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1 mb-6 transition-colors bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 w-fit shadow-sm hover:shadow-md">
           <ChevronLeft size={16} /> Back to Library
         </button>
@@ -226,12 +226,15 @@ export default function Subjects({ setView }: { setView?: (view: ViewType) => vo
             </div>
           </button>
         </div>
+
+        {/* Mobile Clearance Spacer */}
+        <div className="md:hidden h-20 sm:h-24 w-full shrink-0 pointer-events-none" aria-hidden="true" />
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto pb-12 flex flex-col">
+    <div className="w-full max-w-7xl mx-auto pb-28 sm:pb-32 flex flex-col">
       <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 shrink-0">
         <div>
           <p className="text-sm font-bold tracking-widest text-blue-600 dark:text-blue-400 uppercase mb-2">
@@ -268,7 +271,7 @@ export default function Subjects({ setView }: { setView?: (view: ViewType) => vo
         ))}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 flex-1 pb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 flex-1 pb-20 sm:pb-24">
         <AnimatePresence mode="popLayout">
           {filteredSubjects.map((subject, i) => (
             <motion.div
@@ -328,6 +331,9 @@ export default function Subjects({ setView }: { setView?: (view: ViewType) => vo
           </div>
         )}
       </div>
+
+      {/* Mobile Clearance Spacer */}
+      <div className="md:hidden h-20 sm:h-24 w-full shrink-0 pointer-events-none" aria-hidden="true" />
     </div>
   );
 }

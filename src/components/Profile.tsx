@@ -811,7 +811,7 @@ export default function Profile({ setView }: ProfileProps) {
   if (activeSection === 'subject_history') return <SubjectHistoryView />;
 
   return (
-    <div className="max-w-3xl mx-auto w-full pb-8 animate-in fade-in duration-300">
+    <div className="max-w-3xl mx-auto w-full pb-16 sm:pb-20 animate-in fade-in duration-300">
       {/* Header Profile Section */}
       <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 md:p-8 border border-slate-100 dark:border-slate-700/50 shadow-sm flex flex-col md:flex-row items-center gap-6 mb-8 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-10"></div>

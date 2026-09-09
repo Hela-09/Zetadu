@@ -748,7 +748,7 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
   // 2. GENERATE WITH AI FORM
   if (mode === 'generate') {
     return (
-      <div className="w-full max-w-2xl mx-auto pb-12 animate-fade-in">
+      <div className="w-full max-w-2xl mx-auto pb-28 sm:pb-32 animate-fade-in">
         <div className="flex items-center gap-4 mb-8">
           <button 
             onClick={() => setMode('dashboard')} 
@@ -877,7 +877,7 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
   // 3. POST-GENERATION DISPLAY SCREEN (IMMEDIATELY DISPLAYED & SAVED)
   if (mode === 'post_generate' && generatedDeck && generatedCards.length > 0) {
     return (
-      <div className="w-full max-w-5xl mx-auto pb-16 animate-fade-in">
+      <div className="w-full max-w-5xl mx-auto pb-28 sm:pb-32 animate-fade-in">
         {/* Header with details & auto-save badge */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
@@ -1085,7 +1085,7 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
   // 4. CREATE FLASHCARD FORM
   if (mode === 'create') {
     return (
-      <div className="w-full max-w-2xl mx-auto pb-12 animate-fade-in">
+      <div className="w-full max-w-2xl mx-auto pb-28 sm:pb-32 animate-fade-in">
         <div className="flex items-center gap-4 mb-8">
           <button 
             onClick={() => setMode('dashboard')} 

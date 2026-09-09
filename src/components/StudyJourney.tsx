@@ -1168,8 +1168,8 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
       </div>
 
       {/* 6-Step Progress Tracker */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 md:p-4 border border-slate-200 dark:border-slate-700 shadow-sm mb-8 overflow-x-auto no-scrollbar">
-        <div className="flex items-center justify-between min-w-[540px]">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 md:p-4 border border-slate-200 dark:border-slate-700 shadow-sm mb-6 md:mb-8 overflow-x-auto no-scrollbar">
+        <div className="flex items-center justify-between min-w-[520px] md:min-w-0 px-1 py-1">
           {STEPS.map((stepItem, idx) => {
             const isDone = journey.step > stepItem.num;
             const isCurrent = journey.step === stepItem.num;
@@ -1179,7 +1179,7 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
               <React.Fragment key={stepItem.num}>
                 <div className="flex flex-col items-center gap-1.5 shrink-0">
                   <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs transition-all ${
+                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-bold text-xs transition-all ${
                       isDone
                         ? 'bg-emerald-500 text-white shadow-sm'
                         : isCurrent
@@ -1187,10 +1187,10 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
                         : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'
                     }`}
                   >
-                    {isDone ? <CheckCircle2 size={20} /> : <IconComponent size={18} />}
+                    {isDone ? <CheckCircle2 size={18} /> : <IconComponent size={17} />}
                   </div>
                   <span
-                    className={`text-xs font-bold ${
+                    className={`text-[11px] sm:text-xs font-bold whitespace-nowrap ${
                       isCurrent
                         ? 'text-blue-600 dark:text-blue-400'
                         : isDone
@@ -1203,7 +1203,7 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
                 </div>
                 {idx < STEPS.length - 1 && (
                   <div
-                    className={`flex-1 h-1 mx-2 rounded-full transition-all ${
+                    className={`flex-1 h-1 mx-1.5 sm:mx-2 min-w-[20px] rounded-full transition-all ${
                       journey.step > stepItem.num ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'
                     }`}
                   />

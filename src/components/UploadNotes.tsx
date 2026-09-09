@@ -457,7 +457,7 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
         </div>
 
         {/* View Switcher Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 self-start sm:self-auto">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 self-start sm:self-auto max-w-full no-scrollbar">
           <button
             id="tab-editor-btn"
             onClick={() => setActiveTab('editor')}

@@ -191,7 +191,7 @@ export default function FlashcardStudyScreen({
     const hasDifficult = counts.Again > 0 || counts.Hard > 0;
 
     return (
-      <div className="fixed inset-0 z-[60] bg-slate-50 dark:bg-slate-900 overflow-y-auto flex flex-col justify-between p-4 sm:p-6 md:p-8">
+      <div className="fixed inset-0 z-[60] bg-slate-50 dark:bg-slate-900 overflow-y-auto flex flex-col justify-between p-4 sm:p-6 md:p-8 pb-[calc(2rem+env(safe-area-inset-bottom))]">
         {/* Top bar */}
         <div className="w-full max-w-2xl mx-auto flex items-center justify-between pb-6">
           <div>
@@ -551,7 +551,7 @@ export default function FlashcardStudyScreen({
       </main>
 
       {/* BOTTOM NAVIGATION: PREVIOUS & NEXT CARD */}
-      <footer className="w-full max-w-3xl mx-auto px-4 sm:px-6 pb-6 pt-2">
+      <footer className="w-full max-w-3xl mx-auto px-4 sm:px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-2 shrink-0">
         <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-800 pt-4">
           <button
             onClick={handlePrev}

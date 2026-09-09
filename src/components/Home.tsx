@@ -157,7 +157,7 @@ export default function Home({ setView }: HomeProps) {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col gap-8 pb-12">
+    <div className="w-full max-w-7xl mx-auto flex flex-col gap-8 pb-28 sm:pb-32">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -640,6 +640,9 @@ export default function Home({ setView }: HomeProps) {
           </div>
         </div>
       </div>
+
+      {/* Mobile Clearance Spacer */}
+      <div className="md:hidden h-20 sm:h-24 w-full shrink-0 pointer-events-none" aria-hidden="true" />
     </div>
   );
 }

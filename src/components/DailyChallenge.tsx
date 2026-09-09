@@ -380,7 +380,7 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
   }
 
   return (
-    <div className="w-full max-w-3xl mx-auto h-[100dvh] md:h-auto flex flex-col md:pb-12 bg-white md:bg-transparent">
+    <div className="w-full max-w-3xl mx-auto min-h-full flex flex-col pb-8 md:pb-12 bg-white md:bg-transparent">
       {/* Header */}
       <div className="bg-white dark:bg-slate-800 p-4 md:rounded-3xl md:border-2 border-b-2 md:border-b-2 border-slate-100 dark:border-slate-700 flex justify-between items-center shrink-0 mb-0 md:mb-6 z-10 sticky top-0 md:relative shadow-sm md:shadow-none">
         <div className="flex items-center gap-3">
@@ -417,18 +417,18 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
       </div>
 
       {/* Question Card */}
-      <div className="flex-1 overflow-y-auto px-4 md:px-0">
-        <div className="bg-white dark:bg-slate-800 md:rounded-3xl md:border-2 border-slate-100 dark:border-slate-700 p-6 md:p-8 min-h-full md:min-h-0 flex flex-col">
-          <h3 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white mb-8 leading-snug">
+      <div className="flex-1 px-4 md:px-0">
+        <div className="bg-white dark:bg-slate-800 md:rounded-3xl md:border-2 border-slate-100 dark:border-slate-700 p-6 md:p-8 flex flex-col">
+          <h3 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white mb-8 leading-snug break-words">
             {currentQ.question}
           </h3>
           
-          <div className="flex flex-col gap-3 mt-auto md:mt-0">
+          <div className="flex flex-col gap-3">
             {currentQ.options.map((opt, idx) => (
               <button
                 key={idx}
                 onClick={() => setAnswers(prev => ({ ...prev, [currentQIndex]: idx }))}
-                className={`w-full text-left p-4 md:p-5 rounded-2xl border-2 transition-all font-medium text-[15px] md:text-base ${
+                className={`w-full text-left p-4 md:p-5 rounded-2xl border-2 transition-all font-medium text-[15px] md:text-base cursor-pointer ${
                   answers[currentQIndex] === idx 
                     ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 shadow-sm' 
                     : 'border-slate-200 dark:border-slate-700 hover:border-orange-300 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800'
@@ -440,7 +440,7 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
                   }`}>
                     {String.fromCharCode(65 + idx)}
                   </div>
-                  <span>{opt}</span>
+                  <span className="break-words">{opt}</span>
                 </div>
               </button>
             ))}
@@ -449,11 +449,11 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
       </div>
 
       {/* Navigation Footer */}
-      <div className="p-4 md:px-0 md:mt-6 shrink-0 flex items-center justify-between gap-4 bg-white md:bg-transparent border-t md:border-none border-slate-100 dark:border-slate-800">
+      <div className="p-4 md:px-0 mt-4 md:mt-6 shrink-0 flex items-center justify-between gap-4 bg-white md:bg-transparent border-t md:border-none border-slate-100 dark:border-slate-800 pb-[calc(1rem+env(safe-area-inset-bottom))] md:pb-0">
         <button
           onClick={() => setCurrentQIndex(Math.max(0, currentQIndex - 1))}
           disabled={currentQIndex === 0}
-          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold disabled:opacity-50 transition-colors"
+          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold disabled:opacity-50 transition-colors cursor-pointer"
         >
           <ArrowLeft size={20} /> <span className="hidden sm:inline">Previous</span>
         </button>
@@ -461,14 +461,14 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
         {currentQIndex === questions.length - 1 ? (
           <button
             onClick={handleSubmit}
-            className="flex-[2] md:flex-none flex items-center justify-center gap-2 px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg shadow-green-600/20 transition-all"
+            className="flex-[2] md:flex-none flex items-center justify-center gap-2 px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg shadow-green-600/20 transition-all cursor-pointer"
           >
             <CheckCircle2 size={20} /> Submit Challenge
           </button>
         ) : (
           <button
             onClick={() => setCurrentQIndex(Math.min(questions.length - 1, currentQIndex + 1))}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-xl font-bold transition-colors"
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-xl font-bold transition-colors cursor-pointer"
           >
             <span className="hidden sm:inline">Next</span> <ArrowRight size={20} />
           </button>

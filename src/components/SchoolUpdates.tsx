@@ -163,7 +163,7 @@ export default function SchoolUpdates({ setView }: SchoolUpdatesProps) {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+    <div className="flex-1 flex flex-col w-full bg-slate-50 dark:bg-slate-950">
       {/* Header */}
       <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-10 px-4 sm:px-8 py-5">
         <div className="max-w-6xl mx-auto">
@@ -232,7 +232,7 @@ export default function SchoolUpdates({ setView }: SchoolUpdatesProps) {
       </div>
 
       {/* Main Content Area */}
-      <div className="max-w-6xl mx-auto w-full px-4 sm:px-8 py-6 space-y-6">
+      <div className="max-w-6xl mx-auto w-full px-4 sm:px-8 py-6 pb-28 sm:pb-32 space-y-6">
         {/* Search & Category Filter Bar */}
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
           <div className="relative flex-1 max-w-md">
@@ -255,7 +255,7 @@ export default function SchoolUpdates({ setView }: SchoolUpdatesProps) {
           </div>
 
           {/* Categories Pill Navigation */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full no-scrollbar">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat}
@@ -420,6 +420,9 @@ export default function SchoolUpdates({ setView }: SchoolUpdatesProps) {
             })}
           </div>
         )}
+
+        {/* Mobile Clearance Spacer */}
+        <div className="md:hidden h-24 sm:h-28 w-full shrink-0 pointer-events-none" aria-hidden="true" />
       </div>
 
       {/* Modal: Select & Follow Schools */}

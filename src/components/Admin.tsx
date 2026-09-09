@@ -26,7 +26,7 @@ export default function Admin() {
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-slate-900 overflow-y-auto">
+    <div className="flex-1 flex flex-col w-full bg-slate-50 dark:bg-slate-900">
       {/* Header */}
       <div className="shrink-0 flex items-center gap-3 px-6 h-[72px] border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <ShieldAlert className="text-red-600 dark:text-red-500" size={24} />
@@ -42,7 +42,7 @@ export default function Admin() {
       </div>
 
       {/* Content */}
-      <div className="p-6">
+      <div className="p-4 sm:p-6 pb-32 sm:pb-36">
         <UsersTab activeTab={activeTab} />
       </div>
     </div>
