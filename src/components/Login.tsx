@@ -62,7 +62,6 @@ export default function Login() {
     try {
       clearError();
       setLoading(true);
-      await setPersistence(auth, browserLocalPersistence);
       await signInWithEmailAndPassword(auth, email, password);
     } catch (err: any) {
       console.error(err);
@@ -129,13 +128,19 @@ export default function Login() {
     try {
       clearError();
       setGoogleLoading(true);
-      await setPersistence(auth, browserLocalPersistence);
       await signInWithGoogle();
     } catch (err: any) {
-      console.error(err);
+      console.error("Google sign-in error in Login component:", err);
       setError(translateError(err));
-    } finally {
       setGoogleLoading(false);
+    } finally {
+      // If redirect was scheduled, keep spinner active until redirect begins
+      const isRedirecting = 
+        sessionStorage.getItem('zetadu_auth_redirect_in_progress') === 'true' ||
+        localStorage.getItem('zetadu_auth_redirect_in_progress') === 'true';
+      if (!isRedirecting) {
+        setGoogleLoading(false);
+      }
     }
   };
 

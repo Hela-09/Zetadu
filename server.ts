@@ -335,61 +335,157 @@ Each question must be a multiple choice question with 4 options, one correct ans
 
 
   
+  // Helper to deduplicate flashcards based on normalized question content
+  const deduplicateFlashcards = <T extends { front: string; back: string; explanation?: string }>(cards: T[]): T[] => {
+    const seen = new Set<string>();
+    const result: T[] = [];
+    for (const card of cards) {
+      if (!card || typeof card.front !== 'string' || typeof card.back !== 'string') continue;
+      const front = card.front.trim();
+      const back = card.back.trim();
+      if (!front || !back) continue;
+
+      // Normalize question: remove non-alphanumeric, lowercase, collapse whitespace
+      const normalized = front.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!normalized || normalized.length < 4) continue;
+
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      result.push({
+        ...card,
+        front,
+        back,
+        explanation: card.explanation?.trim() || ''
+      });
+    }
+    return result;
+  };
+
+  // Helper to execute Gemini content generation with fallback
+  const generateGeminiFlashcards = async (ai: any, prompt: string, schema: any, maxTokens: number = 8192) => {
+    const config = {
+      responseMimeType: "application/json",
+      responseSchema: schema,
+      maxOutputTokens: maxTokens
+    };
+
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config
+      });
+    } catch (err: any) {
+      const isOverloaded = err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503 || err?.status === 429;
+      if (isOverloaded) {
+        console.warn("gemini-3.8-flash overloaded, falling back to gemini-3.1-flash-lite");
+        response = await ai.models.generateContent({
+          model: 'gemini-3.1-flash-lite',
+          contents: prompt,
+          config
+        });
+      } else {
+        throw err;
+      }
+    }
+
+    const text = response.text;
+    if (!text) throw new Error("No text response received from AI model");
+    return JSON.parse(text);
+  };
+
   app.post("/api/generate-flashcards", requireAuth, async (req, res) => {
     try {
       const { text, count } = req.body;
+      const targetCount = Math.min(Math.max(Number(count) || 10, 5), 100);
       const ai = getGeminiClient();
-      
-      const prompt = `You are an expert AI tutor. Generate ${count || 10} interactive flashcards from the following study notes or lecture transcript. Make the questions concise and the answers clear.
+
+      const schema = {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            front: { type: Type.STRING, description: "The question or concept on the front of the flashcard" },
+            back: { type: Type.STRING, description: "The answer or definition on the back of the flashcard" },
+            explanation: { type: Type.STRING, description: "A short explanation of the answer" }
+          },
+          required: ["front", "back"]
+        }
+      };
+
+      if (targetCount <= 20) {
+        const prompt = `You are an expert AI tutor. Generate exactly ${targetCount} unique, high-quality interactive flashcards from the following study notes or lecture transcript.
+Ensure questions are concise, answers are clear and accurate, and EVERY flashcard tests a distinct concept or fact.
+CRITICAL: Every flashcard must be completely unique with NO duplicate questions or repeated concepts.
 
 Text:
 ${text}`;
 
-      const config = {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              front: { type: Type.STRING, description: "The question or concept on the front of the flashcard" },
-              back: { type: Type.STRING, description: "The answer or definition on the back of the flashcard" }
-            },
-            required: ["front", "back"]
-          }
-        }
-      };
-
-      let response;
-      try {
-        response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config
-        });
-      } catch (err: any) {
-        if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
-          console.warn("2.5-flash overloaded, falling back to 1.5-flash for flashcards");
-          response = await ai.models.generateContent({
-            model: 'gemini-3.1-flash-lite',
-            contents: prompt,
-            config
-          });
-        } else {
-          throw err;
-        }
+        const rawCards = await generateGeminiFlashcards(ai, prompt, schema, 4096);
+        const uniqueCards = deduplicateFlashcards(Array.isArray(rawCards) ? rawCards : []);
+        return res.json({ flashcards: uniqueCards.slice(0, targetCount) });
       }
-      
-      const responseText = response.text;
-      if (!responseText) throw new Error("No text from Gemini");
-      
-      const flashcards = JSON.parse(responseText);
-      res.json({ flashcards });
+
+      // For larger counts (30, 50, 75, 100), generate in parallel thematic sections to guarantee diversity and avoid duplicates
+      const numBatches = targetCount <= 30 ? 2 : targetCount <= 60 ? 3 : 4;
+      const cardsPerBatch = Math.ceil(targetCount / numBatches) + (targetCount >= 75 ? 4 : 2);
+
+      const sectionThemes = [
+        "Core definitions, terminology, fundamental premises, and main principles stated in the text.",
+        "Key mechanisms, procedures, formulas, step-by-step methods, and detailed facts from the text.",
+        "Comparative differences, reasons, exceptions, nuances, and cause-and-effect relationships from the text.",
+        "Practical applications, analytical conclusions, real-world examples, and exam review questions from the text."
+      ];
+
+      const batchPromises = Array.from({ length: numBatches }, async (_, index) => {
+        const theme = sectionThemes[index % sectionThemes.length];
+        const prompt = `You are an expert AI tutor creating unique revision flashcards from study text.
+Target Section Angle: ${theme}
+Generate exactly ${cardsPerBatch} interactive flashcards specifically exploring this perspective.
+CRITICAL RULES:
+1. Every question must be distinct and non-repetitive. Do NOT repeat or duplicate concepts.
+2. Focus strictly on this assigned section angle so this set does not overlap with other sections.
+
+Study Text:
+${text}`;
+
+        try {
+          const cards = await generateGeminiFlashcards(ai, prompt, schema, 4096);
+          return Array.isArray(cards) ? cards : [];
+        } catch (batchErr) {
+          console.warn(`Batch ${index} flashcards generation error:`, batchErr);
+          return [];
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      const combined = batchResults.flat();
+      let uniqueCards = deduplicateFlashcards(combined);
+
+      // If deduplication leaves us slightly short of targetCount, perform a quick supplementary generation
+      if (uniqueCards.length < targetCount) {
+        const missingCount = targetCount - uniqueCards.length;
+        const existingSamples = uniqueCards.slice(0, 15).map(c => c.front).join('; ');
+        const supplementPrompt = `Generate exactly ${missingCount + 2} additional UNIQUE flashcards from this text that do NOT overlap with existing cards.
+Existing questions already covered (DO NOT DUPLICATE): ${existingSamples}
+
+Study Text:
+${text}`;
+        try {
+          const supplementCards = await generateGeminiFlashcards(ai, supplementPrompt, schema, 2048);
+          if (Array.isArray(supplementCards)) {
+            uniqueCards = deduplicateFlashcards([...uniqueCards, ...supplementCards]);
+          }
+        } catch (_) {}
+      }
+
+      res.json({ flashcards: uniqueCards.slice(0, targetCount) });
     } catch (error: any) {
       const isOverloaded = error?.status === 503 || error?.message?.includes("503") || error?.status === "UNAVAILABLE" || error?.error?.code === 503 || error?.status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("resource_exhausted");
       if (isOverloaded) {
          console.warn("Flashcard Generation experienced high demand (503/429)");
-         res.status(503).json({ error: "High demand. Please try again." });
+         res.status(503).json({ error: "High demand. Please try again in a moment." });
       } else {
          console.error("Flashcard Generation Error:", error);
          res.status(500).json({ error: "Failed to generate flashcards" });
@@ -400,56 +496,108 @@ ${text}`;
   app.post("/api/generate-flashcards-structured", requireAuth, async (req, res) => {
     try {
       const { subject, topic, level, count } = req.body;
+      const targetCount = Math.min(Math.max(Number(count) || 10, 5), 100);
       const ai = getGeminiClient();
-      
-      const prompt = `You are an expert AI tutor. Generate ${count || 10} interactive flashcards for the following subject:
-Subject: ${subject}
-Topic: ${topic}
-Education Level: ${level}
 
-Make the questions concise and the answers clear. Provide a short explanation for each answer.`;
-
-      const config = {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              front: { type: Type.STRING, description: "The question or concept on the front of the flashcard" },
-              back: { type: Type.STRING, description: "The concise answer or definition" },
-              explanation: { type: Type.STRING, description: "A short explanation of the answer" }
-            },
-            required: ["front", "back", "explanation"]
-          }
+      const schema = {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            front: { type: Type.STRING, description: "The question or concept on the front of the flashcard" },
+            back: { type: Type.STRING, description: "The concise answer or definition" },
+            explanation: { type: Type.STRING, description: "A short explanation of the answer" }
+          },
+          required: ["front", "back", "explanation"]
         }
       };
 
-      let response;
-      try {
-        response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config
-        });
-      } catch (err: any) {
-        if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
-          console.warn("2.5-flash overloaded, falling back to 1.5-flash for flashcards");
-          response = await ai.models.generateContent({
-            model: 'gemini-3.1-flash-lite',
-            contents: prompt,
-            config
-          });
-        } else {
-          throw err;
-        }
+      if (targetCount <= 20) {
+        const prompt = `You are an expert AI tutor. Generate exactly ${targetCount} unique, high-yield interactive flashcards for:
+Subject: ${subject}
+Topic: ${topic}
+Education Level: ${level || 'Secondary / High School'}
+
+Ensure questions are concise, answers are clear, and provide a short explanation for each answer.
+CRITICAL: Every flashcard must address a distinct concept. Do NOT repeat questions or generate duplicates.`;
+
+        const rawCards = await generateGeminiFlashcards(ai, prompt, schema, 4096);
+        const uniqueCards = deduplicateFlashcards(Array.isArray(rawCards) ? rawCards : []);
+        return res.json({ flashcards: uniqueCards.slice(0, targetCount) });
       }
 
-      const responseText = response.text;
-      if (!responseText) throw new Error("No text from Gemini");
-      
-      const flashcards = JSON.parse(responseText);
-      res.json({ flashcards });
+      // For larger counts (30, 50, 75, 100), generate in parallel thematic sections
+      // Each section explores a strictly different pillar of the syllabus to guarantee zero duplication
+      const numBatches = targetCount <= 30 ? 2 : targetCount <= 60 ? 3 : 4;
+      const cardsPerBatch = Math.ceil(targetCount / numBatches) + (targetCount >= 75 ? 4 : 2);
+
+      const sectionThemes = [
+        {
+          title: "Foundational Definitions, Terminology & Core Principles",
+          instructions: `Focus strictly on fundamental principles, definitions, key terminology, standard classifications, and basic theoretical axioms of ${topic}.`
+        },
+        {
+          title: "Governing Laws, Formulas, Equations & Step-by-Step Mechanisms",
+          instructions: `Focus strictly on formulas, mathematical/scientific relations, governing rules, laws, chemical/biological/physical mechanisms, and procedural problem-solving steps in ${topic}.`
+        },
+        {
+          title: "Comparative Analysis, Exceptions & High-Yield Exam Misconceptions",
+          instructions: `Focus strictly on differences between ${topic} and related concepts, boundary conditions, edge cases, exceptions, and common student errors or misconceptions tested in examinations.`
+        },
+        {
+          title: "Practical Applications, Scenario-Based Analysis & Synthesis",
+          instructions: `Focus strictly on practical real-world applications, case studies, environmental/industrial uses, experimental setups, and scenario-based questions requiring analytical application of ${topic}.`
+        }
+      ];
+
+      const batchPromises = Array.from({ length: numBatches }, async (_, index) => {
+        const section = sectionThemes[index % sectionThemes.length];
+        const prompt = `You are an expert AI tutor creating a comprehensive revision deck for students.
+Subject: ${subject}
+Topic: ${topic}
+Education Level: ${level || 'Secondary / High School'}
+
+Assigned Pillar: ${section.title}
+Specific Guidance: ${section.instructions}
+
+Generate exactly ${cardsPerBatch} interactive flashcards exploring this assigned pillar.
+Make the front question concise and direct.
+Make the back answer clear and accurate.
+Provide a clear explanation for each answer.
+
+CRITICAL RULES:
+1. Every card must test a completely unique concept. Zero duplicate questions.
+2. Adhere strictly to the assigned pillar to prevent any overlap with other sections.`;
+
+        try {
+          const cards = await generateGeminiFlashcards(ai, prompt, schema, 4096);
+          return Array.isArray(cards) ? cards : [];
+        } catch (batchErr) {
+          console.warn(`Batch ${index} structured flashcards generation error:`, batchErr);
+          return [];
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      const combined = batchResults.flat();
+      let uniqueCards = deduplicateFlashcards(combined);
+
+      // Top-up if deduplication leaves us slightly short of targetCount
+      if (uniqueCards.length < targetCount) {
+        const missingCount = targetCount - uniqueCards.length;
+        const existingSamples = uniqueCards.slice(0, 15).map(c => c.front).join('; ');
+        const supplementPrompt = `You are an expert AI tutor. Generate exactly ${missingCount + 2} additional UNIQUE flashcards for ${subject}: ${topic} (${level}).
+DO NOT duplicate any of these already covered questions: ${existingSamples}`;
+
+        try {
+          const supplementCards = await generateGeminiFlashcards(ai, supplementPrompt, schema, 2048);
+          if (Array.isArray(supplementCards)) {
+            uniqueCards = deduplicateFlashcards([...uniqueCards, ...supplementCards]);
+          }
+        } catch (_) {}
+      }
+
+      res.json({ flashcards: uniqueCards.slice(0, targetCount) });
     } catch (error: any) {
       console.error("Flashcard Generation Error:", error);
       res.status(500).json({ error: "Failed to generate flashcards" });
@@ -640,112 +788,252 @@ Formatting & Content Guidelines:
 
         return res.json({ explanation: response.text });
       } else if (action === 'flashcards') {
-        const prompt = `You are an expert tutor. Generate an array of ${count || 8} interactive flashcards from the provided study notes.
-Extract the most critical definitions, formulas, terms, and conceptual questions.
+        const targetCount = Math.min(Math.max(Number(count) || 10, 5), 100);
 
-Subject: ${subject || 'General Academic'}
-Topic: ${topic || 'Key Concepts'}
-
-Study Notes:
-${text || '(Notes provided in the attached document/image)'}
-
-Make questions concise and answers precise and clear.`;
-
-        parts.push({ text: prompt });
-
-        const config = {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                front: { type: Type.STRING, description: "The concept, question, or term on the front" },
-                back: { type: Type.STRING, description: "The clear answer or definition on the back" },
-                explanation: { type: Type.STRING, description: "A short 1-2 sentence clarification or memory hook" }
-              },
-              required: ["front", "back"]
-            }
+        const cardSchema = {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              front: { type: Type.STRING, description: "The concept, question, or term on the front" },
+              back: { type: Type.STRING, description: "The clear answer or definition on the back" },
+              explanation: { type: Type.STRING, description: "A short 1-2 sentence clarification or memory hook" }
+            },
+            required: ["front", "back"]
           }
         };
 
-        let response;
-        try {
-          response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents: [{ role: 'user', parts }],
-            config
-          });
-        } catch (err: any) {
-          if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
-            response = await ai.models.generateContent({
-              model: 'gemini-3.1-flash-lite',
-              contents: [{ role: 'user', parts }],
-              config
+        const callGeminiCards = async (promptText: string, maxTokens: number = 4096) => {
+          const reqParts = [...parts, { text: promptText }];
+          const cfg = {
+            responseMimeType: "application/json",
+            responseSchema: cardSchema,
+            maxOutputTokens: maxTokens
+          };
+          let resp;
+          try {
+            resp = await ai.models.generateContent({
+              model: 'gemini-3.8-flash',
+              contents: [{ role: 'user', parts: reqParts }],
+              config: cfg
             });
-          } else {
-            throw err;
+          } catch (err: any) {
+            const isOverloaded = err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503 || err?.status === 429;
+            if (isOverloaded) {
+              console.warn("gemini-3.8-flash overloaded in notes flashcards, falling back to gemini-3.1-flash-lite");
+              resp = await ai.models.generateContent({
+                model: 'gemini-3.1-flash-lite',
+                contents: [{ role: 'user', parts: reqParts }],
+                config: cfg
+              });
+            } else {
+              throw err;
+            }
           }
+          const txt = resp.text;
+          if (!txt) return [];
+          try {
+            const parsed = JSON.parse(txt);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        };
+
+        if (targetCount <= 20) {
+          const prompt = `You are an expert tutor. Generate exactly ${targetCount} unique, high-quality interactive study flashcards from the provided notes.
+Subject: ${subject || 'General Academic'}
+Topic: ${topic || 'Key Concepts'}
+Study Notes:
+${text || '(Notes provided in the attached document/image)'}
+
+CRITICAL RULES:
+- Make questions concise and answers precise and clear.
+- Every flashcard must address a distinct concept or fact. Zero duplicates.`;
+
+          const rawCards = await callGeminiCards(prompt, 4096);
+          const uniqueCards = deduplicateFlashcards(rawCards);
+          return res.json({ flashcards: uniqueCards.slice(0, targetCount) });
         }
 
-        const textRes = response.text;
-        if (!textRes) throw new Error("No flashcard data received from Gemini");
-        const flashcards = JSON.parse(textRes);
-        return res.json({ flashcards });
-      } else if (action === 'questions') {
-        const prompt = `You are an expert exam master. Generate an array of ${count || 5} multiple-choice practice questions testing the comprehension and application of these study notes.
+        // For counts > 20 (30, 50, 75, 100), generate in parallel thematic sections
+        const numBatches = targetCount <= 30 ? 2 : targetCount <= 60 ? 3 : 4;
+        const cardsPerBatch = Math.ceil(targetCount / numBatches) + (targetCount >= 75 ? 4 : 2);
 
+        const sectionThemes = [
+          "Core definitions, foundational terminology, axioms, and primary principles from these notes.",
+          "Formulas, equations, mechanisms, step-by-step procedures, and precise data/facts from these notes.",
+          "Comparative distinctions, causes and effects, boundary conditions, and common exam misconceptions from these notes.",
+          "Practical real-world applications, synthesis scenarios, analytical conclusions, and exam practice problems from these notes."
+        ];
+
+        const batchPromises = Array.from({ length: numBatches }, async (_, i) => {
+          const angle = sectionThemes[i % sectionThemes.length];
+          const prompt = `You are an expert tutor creating comprehensive flashcards from these notes.
+Target Angle: ${angle}
+Subject: ${subject || 'General Academic'}
+Topic: ${topic || 'Key Concepts'}
+Study Notes:
+${text || '(Notes provided in the attached document/image)'}
+
+Generate exactly ${cardsPerBatch} interactive flashcards specifically exploring this perspective.
+CRITICAL: Every flashcard must be unique and non-repetitive. Focus strictly on this angle so there is zero overlap with other sections.`;
+
+          return callGeminiCards(prompt, 4096);
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        let uniqueCards = deduplicateFlashcards(batchResults.flat());
+
+        if (uniqueCards.length < targetCount) {
+          const missing = targetCount - uniqueCards.length;
+          const samples = uniqueCards.slice(0, 15).map(c => c.front).join('; ');
+          const topUpPrompt = `Generate exactly ${missing + 2} additional UNIQUE flashcards from these notes that do NOT overlap with existing cards:
+Already covered: ${samples}
+Notes:
+${text || '(Notes provided in the attached document/image)'}`;
+          try {
+            const topUp = await callGeminiCards(topUpPrompt, 2048);
+            uniqueCards = deduplicateFlashcards([...uniqueCards, ...topUp]);
+          } catch (_) {}
+        }
+
+        return res.json({ flashcards: uniqueCards.slice(0, targetCount) });
+      } else if (action === 'questions') {
+        const targetCount = Math.min(Math.max(Number(count) || 5, 5), 100);
+
+        const questionSchema = {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              question: { type: Type.STRING },
+              options: { type: Type.ARRAY, items: { type: Type.STRING } },
+              correctAnswer: { type: Type.INTEGER, description: "0-indexed correct option (0, 1, 2, or 3)" },
+              explanation: { type: Type.STRING }
+            },
+            required: ["question", "options", "correctAnswer", "explanation"]
+          }
+        };
+
+        const deduplicateQuestions = (qList: any[]) => {
+          const seen = new Set<string>();
+          const result: any[] = [];
+          for (const q of qList) {
+            if (!q || typeof q.question !== 'string' || !Array.isArray(q.options) || q.options.length < 2) continue;
+            const norm = q.question.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+            if (!norm || norm.length < 5 || seen.has(norm)) continue;
+            seen.add(norm);
+            result.push({
+              question: q.question.trim(),
+              options: q.options.map((opt: any) => String(opt).trim()),
+              correctAnswer: typeof q.correctAnswer === 'number' && q.correctAnswer >= 0 && q.correctAnswer < q.options.length ? q.correctAnswer : 0,
+              explanation: typeof q.explanation === 'string' ? q.explanation.trim() : ''
+            });
+          }
+          return result;
+        };
+
+        const callGeminiQuestions = async (promptText: string, maxTokens: number = 8192) => {
+          const reqParts = [...parts, { text: promptText }];
+          const cfg = {
+            responseMimeType: "application/json",
+            responseSchema: questionSchema,
+            maxOutputTokens: maxTokens
+          };
+          let resp;
+          try {
+            resp = await ai.models.generateContent({
+              model: 'gemini-3.8-flash',
+              contents: [{ role: 'user', parts: reqParts }],
+              config: cfg
+            });
+          } catch (err: any) {
+            const isOverloaded = err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503 || err?.status === 429;
+            if (isOverloaded) {
+              console.warn("gemini-3.8-flash overloaded in notes questions, falling back to gemini-3.1-flash-lite");
+              resp = await ai.models.generateContent({
+                model: 'gemini-3.1-flash-lite',
+                contents: [{ role: 'user', parts: reqParts }],
+                config: cfg
+              });
+            } else {
+              throw err;
+            }
+          }
+          const txt = resp.text;
+          if (!txt) return [];
+          try {
+            const parsed = JSON.parse(txt);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        };
+
+        if (targetCount <= 15) {
+          const prompt = `You are an expert exam master. Generate exactly ${targetCount} unique multiple-choice practice questions testing the comprehension and application of these study notes.
 Subject: ${subject || 'General Academic'}
 Topic: ${topic || 'Key Concepts'}
 Education Level: ${educationLevel || 'Secondary / High School'}
-
 Study Notes:
 ${text || '(Notes provided in the attached document/image)'}
 
-Each question must test an important concept from the notes. Provide 4 distinct options, exactly 1 correct answer (0-indexed integer from 0 to 3), and a detailed explanation showing why the correct answer is right and clarifying misconceptions.`;
+RULES:
+- Each question must test a distinct, important concept from the notes.
+- Provide 4 distinct options, exactly 1 correct answer (0-indexed integer 0 to 3), and a clear explanation.
+- ZERO duplicate questions.`;
 
-        parts.push({ text: prompt });
-
-        const config = {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                question: { type: Type.STRING },
-                options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                correctAnswer: { type: Type.INTEGER, description: "0-indexed correct option" },
-                explanation: { type: Type.STRING }
-              },
-              required: ["question", "options", "correctAnswer", "explanation"]
-            }
-          }
-        };
-
-        let response;
-        try {
-          response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents: [{ role: 'user', parts }],
-            config
-          });
-        } catch (err: any) {
-          if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
-            response = await ai.models.generateContent({
-              model: 'gemini-3.1-flash-lite',
-              contents: [{ role: 'user', parts }],
-              config
-            });
-          } else {
-            throw err;
-          }
+          const rawQ = await callGeminiQuestions(prompt, 6144);
+          const uniqueQ = deduplicateQuestions(rawQ);
+          return res.json({ questions: uniqueQ.slice(0, targetCount) });
         }
 
-        const textRes = response.text;
-        if (!textRes) throw new Error("No questions data received from Gemini");
-        const questions = JSON.parse(textRes);
-        return res.json({ questions });
+        // For counts > 15 (20, 30, 50, 75, 100), generate in parallel thematic batches
+        const numBatches = targetCount <= 30 ? 2 : targetCount <= 60 ? 3 : 4;
+        const qPerBatch = Math.ceil(targetCount / numBatches) + (targetCount >= 75 ? 3 : 2);
+
+        const questionThemes = [
+          "Core definitions, fundamental terminology, and direct conceptual comprehension of principles in the notes.",
+          "Procedural methods, formulas, step-by-step problem solving, and quantitative/qualitative mechanisms in the notes.",
+          "Comparative analysis, distinguishing similar concepts, causes & effects, and frequent examiner traps or misconceptions.",
+          "Scenario-based applications, case analysis, practical implications, and synthesis/evaluation questions from the notes."
+        ];
+
+        const batchPromises = Array.from({ length: numBatches }, async (_, i) => {
+          const angle = questionThemes[i % questionThemes.length];
+          const prompt = `You are an expert exam master creating a high-standard practice exam from study notes.
+Assigned Dimension: ${angle}
+Subject: ${subject || 'General Academic'}
+Topic: ${topic || 'Key Concepts'}
+Education Level: ${educationLevel || 'Secondary / High School'}
+Study Notes:
+${text || '(Notes provided in the attached document/image)'}
+
+Generate exactly ${qPerBatch} unique multiple-choice practice questions strictly covering this assigned dimension.
+Provide 4 distinct options, exactly 1 correct answer (0-indexed integer 0 to 3), and a clear explanation.
+CRITICAL: Every question must be distinct and non-repetitive.`;
+
+          return callGeminiQuestions(prompt, 8192);
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        let uniqueQ = deduplicateQuestions(batchResults.flat());
+
+        if (uniqueQ.length < targetCount) {
+          const missing = targetCount - uniqueQ.length;
+          const samples = uniqueQ.slice(0, 10).map(q => q.question).join('; ');
+          const topUpPrompt = `Generate exactly ${missing + 2} additional UNIQUE multiple-choice practice questions from these notes.
+Do NOT duplicate any of these questions: ${samples}
+Notes:
+${text || '(Notes provided in the attached document/image)'}`;
+          try {
+            const topUp = await callGeminiQuestions(topUpPrompt, 4096);
+            uniqueQ = deduplicateQuestions([...uniqueQ, ...topUp]);
+          } catch (_) {}
+        }
+
+        return res.json({ questions: uniqueQ.slice(0, targetCount) });
       } else {
         return res.status(400).json({ error: `Unknown action: ${action}` });
       }

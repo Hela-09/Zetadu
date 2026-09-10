@@ -1045,7 +1045,7 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
               <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">({flashcardCount} cards)</span>
             </div>
             <div className="flex flex-wrap gap-2.5">
-              {[5, 10, 20, 30, 50].map((num) => (
+              {[5, 10, 20, 30, 50, 75, 100].map((num) => (
                 <button
                   key={num}
                   id={`flashcard-count-${num}`}

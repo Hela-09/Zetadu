@@ -186,8 +186,11 @@ export default function Flashcards({ onBack }: { onBack: () => void }) {
             >
               <option value={5}>5 Flashcards</option>
               <option value={10}>10 Flashcards</option>
-              <option value={15}>15 Flashcards</option>
               <option value={20}>20 Flashcards</option>
+              <option value={30}>30 Flashcards</option>
+              <option value={50}>50 Flashcards</option>
+              <option value={75}>75 Flashcards</option>
+              <option value={100}>100 Flashcards</option>
             </select>
           </div>
 

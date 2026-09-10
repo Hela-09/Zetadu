@@ -5,7 +5,7 @@ import {
   Upload, FileText, Sparkles, BrainCircuit, Layers, PenTool, CheckCircle2,
   XCircle, ArrowLeft, Copy, Check, Volume2, VolumeX, RotateCcw, Trash2,
   Save, BookOpen, ChevronLeft, ChevronRight, AlertCircle, Loader2,
-  ExternalLink, File, Image as ImageIcon, Plus, Clock, Bookmark
+  ExternalLink, File, Image as ImageIcon, Plus, Clock, Bookmark, X
 } from 'lucide-react';
 import { ViewType, StudyNote, NoteFlashcard, NotePracticeQuestion, NoteAttachment } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -16,6 +16,8 @@ interface UploadNotesProps {
 }
 
 type ProcessingAction = 'summarize' | 'explain' | 'flashcards' | 'questions';
+
+const COUNT_OPTIONS = [5, 10, 20, 30, 50, 75, 100];
 
 const SUBJECT_OPTIONS = [
   'General', 'Mathematics', 'English Language', 'Physics', 'Chemistry',
@@ -72,6 +74,37 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
   // Audio speech synthesis state
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [copiedType, setCopiedType] = useState<string | null>(null);
+
+  // Number selector modal state for Flashcards & Practice
+  const [numberModal, setNumberModal] = useState<{
+    isOpen: boolean;
+    type: 'flashcards' | 'questions';
+    count: number;
+  }>({
+    isOpen: false,
+    type: 'flashcards',
+    count: 10
+  });
+
+  const openCountModal = (type: 'flashcards' | 'questions') => {
+    if (!noteContent.trim() && attachments.length === 0) {
+      setAiError('Please enter notes or upload a file first.');
+      return;
+    }
+    setAiError(null);
+    setNumberModal({
+      isOpen: true,
+      type,
+      count: 10
+    });
+  };
+
+  const handleConfirmGeneration = () => {
+    const targetType = numberModal.type;
+    const targetCount = Math.min(Math.max(numberModal.count, 5), 100);
+    setNumberModal(prev => ({ ...prev, isOpen: false }));
+    runAiProcessing(targetType, targetCount);
+  };
 
   // Load saved notes on mount
   useEffect(() => {
@@ -211,19 +244,21 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
   };
 
   // AI Processing function
-  const runAiProcessing = async (action: ProcessingAction) => {
+  const runAiProcessing = async (action: ProcessingAction, requestedCount?: number) => {
     if (!noteContent.trim() && attachments.length === 0) {
       setAiError('Please enter notes or upload a file first.');
       return;
     }
+
+    const selectedCount = requestedCount || (action === 'flashcards' ? 10 : 5);
 
     setAiError(null);
     setProcessingAction(action);
 
     if (action === 'summarize') setProcessingStatus('Synthesizing high-yield summary & key takeaways...');
     else if (action === 'explain') setProcessingStatus('Deconstructing concepts into step-by-step intuition...');
-    else if (action === 'flashcards') setProcessingStatus('Generating active recall study flashcards...');
-    else if (action === 'questions') setProcessingStatus('Drafting exam-standard practice questions...');
+    else if (action === 'flashcards') setProcessingStatus(`Generating ${selectedCount} active recall study flashcards...`);
+    else if (action === 'questions') setProcessingStatus(`Drafting ${selectedCount} exam-standard practice questions...`);
 
     try {
       const token = await getToken();
@@ -246,7 +281,7 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
           subject: noteSubject,
           topic: noteTopic || noteTitle,
           educationLevel: userProfile?.educationLevel || 'Secondary',
-          count: action === 'flashcards' ? 8 : 5
+          count: selectedCount
         })
       });
 
@@ -845,10 +880,10 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
                 </div>
               </button>
 
-              {/* Option 3: Create Flashcards */}
+              {/* Option 3: Generate Flashcards */}
               <button
                 id="ai-flashcards-btn"
-                onClick={() => runAiProcessing('flashcards')}
+                onClick={() => openCountModal('flashcards')}
                 disabled={processingAction !== null || (!noteContent.trim() && attachments.length === 0)}
                 className="w-full text-left p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700/80 hover:border-indigo-500 bg-slate-50/60 dark:bg-slate-900/40 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-all group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -858,9 +893,9 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Create Flashcards</h4>
+                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Generate Flashcards</h4>
                       <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 group-hover:translate-x-0.5 transition-transform">
-                        Run →
+                        Choose Count →
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
@@ -873,7 +908,7 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
               {/* Option 4: Generate Practice Questions */}
               <button
                 id="ai-questions-btn"
-                onClick={() => runAiProcessing('questions')}
+                onClick={() => openCountModal('questions')}
                 disabled={processingAction !== null || (!noteContent.trim() && attachments.length === 0)}
                 className="w-full text-left p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700/80 hover:border-rose-500 bg-slate-50/60 dark:bg-slate-900/40 hover:bg-rose-50/40 dark:hover:bg-rose-950/20 transition-all group cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -883,9 +918,9 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Practice Questions</h4>
+                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Generate Practice</h4>
                       <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 group-hover:translate-x-0.5 transition-transform">
-                        Run →
+                        Choose Count →
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
@@ -972,10 +1007,10 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
                 <BrainCircuit size={14} /> Explain Concepts
               </button>
               <button
-                onClick={() => runAiProcessing('flashcards')}
+                onClick={() => openCountModal('flashcards')}
                 className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                <Layers size={14} /> Create Flashcards
+                <Layers size={14} /> Generate Flashcards
               </button>
             </div>
           </div>
@@ -1042,10 +1077,10 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
               ← Back to Notes Editor
             </button>
             <button
-              onClick={() => runAiProcessing('questions')}
+              onClick={() => openCountModal('questions')}
               className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
             >
-              <PenTool size={14} /> Test with Practice Quiz →
+              <PenTool size={14} /> Generate Practice Quiz →
             </button>
           </div>
         </div>
@@ -1068,6 +1103,14 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => openCountModal('flashcards')}
+                className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                title="Regenerate flashcards with a new count"
+              >
+                <RotateCcw size={14} /> Regenerate
+              </button>
+
               <button
                 id="save-deck-btn"
                 onClick={handleSaveFlashcardsToDecks}
@@ -1213,6 +1256,14 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
               <div className="px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200">
                 Score: <span className="text-blue-600 dark:text-blue-400">{calculatedScore}</span> / {answeredCount}
               </div>
+
+              <button
+                onClick={() => openCountModal('questions')}
+                className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                title="Regenerate practice questions with a new count"
+              >
+                <RotateCcw size={14} /> Regenerate Quiz
+              </button>
 
               <button
                 onClick={() => {
@@ -1423,6 +1474,155 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
           )}
         </div>
       )}
+
+      {/* Number Selector Modal for Flashcards & Practice */}
+      <AnimatePresence>
+        {numberModal.isOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+            onClick={() => setNumberModal(prev => ({ ...prev, isOpen: false }))}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ duration: 0.16 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden p-6 sm:p-7 flex flex-col gap-5"
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                      numberModal.type === 'flashcards'
+                        ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300'
+                        : 'bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-300'
+                    }`}
+                  >
+                    {numberModal.type === 'flashcards' ? <Layers size={22} /> : <PenTool size={22} />}
+                  </div>
+                  <div>
+                    <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white leading-tight">
+                      {numberModal.type === 'flashcards' ? 'Generate Flashcards' : 'Generate Practice'}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Select how many {numberModal.type === 'flashcards' ? 'flashcards' : 'questions'} to generate from your notes.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setNumberModal(prev => ({ ...prev, isOpen: false }))}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                  title="Close"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Selector Header and Maximum pill */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  Select Number:
+                </span>
+                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                  Maximum: 100
+                </span>
+              </div>
+
+              {/* Options Grid */}
+              <div className="grid grid-cols-4 sm:grid-cols-4 gap-2">
+                {COUNT_OPTIONS.map((num) => {
+                  const isSelected = numberModal.count === num;
+                  return (
+                    <button
+                      key={num}
+                      id={`notes-count-option-${num}`}
+                      type="button"
+                      onClick={() => setNumberModal(prev => ({ ...prev, count: num }))}
+                      className={`py-3 px-2 rounded-2xl flex flex-col items-center justify-center transition-all cursor-pointer ${
+                        isSelected
+                          ? numberModal.type === 'flashcards'
+                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20 ring-2 ring-indigo-600 ring-offset-2 dark:ring-offset-slate-800'
+                            : 'bg-rose-600 text-white shadow-md shadow-rose-500/20 ring-2 ring-rose-600 ring-offset-2 dark:ring-offset-slate-800'
+                          : 'bg-slate-50 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <span className="text-base font-extrabold">{num}</span>
+                      <span className={`text-[10px] font-medium leading-none mt-0.5 ${isSelected ? 'text-white/80' : 'text-slate-400 dark:text-slate-500'}`}>
+                        {numberModal.type === 'flashcards' ? 'cards' : 'questions'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Selection Summary and Custom Input */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Sparkles size={16} className={numberModal.type === 'flashcards' ? 'text-indigo-600 shrink-0' : 'text-rose-600 shrink-0'} />
+                  <div className="truncate">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block truncate">
+                      {numberModal.count} {numberModal.type === 'flashcards' ? 'Flashcards' : 'Practice Questions'}
+                    </span>
+                    <span className="text-[11px] text-slate-400 block truncate">
+                      Extracted directly from your study notes
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-xs text-slate-400 font-medium">Qty:</span>
+                  <input
+                    type="number"
+                    min={5}
+                    max={100}
+                    value={numberModal.count}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      if (!isNaN(val)) {
+                        setNumberModal(prev => ({
+                          ...prev,
+                          count: Math.min(Math.max(val, 1), 100)
+                        }));
+                      }
+                    }}
+                    className="w-16 px-2 py-1 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-center text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setNumberModal(prev => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  id="confirm-generate-btn"
+                  onClick={handleConfirmGeneration}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all shadow-md cursor-pointer flex items-center gap-2 ${
+                    numberModal.type === 'flashcards'
+                      ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20'
+                      : 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/20'
+                  }`}
+                >
+                  <Sparkles size={14} />
+                  <span>
+                    Generate {numberModal.count} {numberModal.type === 'flashcards' ? 'Flashcards' : 'Questions'}
+                  </span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

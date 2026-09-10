@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
-  collection, query, where, getDocs, doc, setDoc, addDoc, updateDoc, deleteDoc, increment 
+  collection, query, where, getDocs, doc, setDoc, addDoc, updateDoc, deleteDoc, increment, writeBatch 
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { 
@@ -598,15 +598,18 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
       }
 
       // AUTOMATIC SAVE:
-      // Save all validated cards to the logged-in user's Firebase account
+      // Save all validated cards to the logged-in user's Firebase account using writeBatch for high speed and reliability
+      const batch = writeBatch(db);
       const savedCards: Flashcard[] = [];
       for (const cardData of validatedCardsToSave) {
-        const docRef = await addDoc(collection(db, 'flashcards'), cardData);
+        const cardRef = doc(collection(db, 'flashcards'));
+        batch.set(cardRef, cardData);
         savedCards.push({
           ...cardData,
-          id: docRef.id
+          id: cardRef.id
         });
       }
+      await batch.commit();
 
       // Save/update deck metadata in Firebase
       try {
@@ -846,8 +849,11 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
               >
                 <option value={5}>5 Cards</option>
                 <option value={10}>10 Cards</option>
-                <option value={15}>15 Cards</option>
                 <option value={20}>20 Cards</option>
+                <option value={30}>30 Cards</option>
+                <option value={50}>50 Cards</option>
+                <option value={75}>75 Cards</option>
+                <option value={100}>100 Cards</option>
               </select>
             </div>
           </div>

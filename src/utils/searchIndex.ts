@@ -39,7 +39,7 @@ export async function preloadUserSearchData(userId: string): Promise<void> {
 
   // 1. Fetch user flashcards
   try {
-    const q = fsQuery(collection(db, 'flashcards'), where('uid', '==', userId), limit(60));
+    const q = fsQuery(collection(db, 'flashcards'), where('uid', '==', userId), limit(150));
     const snap = await getDocs(q);
     const cards: Flashcard[] = [];
     snap.forEach((docSnap) => {

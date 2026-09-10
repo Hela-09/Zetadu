@@ -22,6 +22,9 @@ let auth: Auth | any = null;
 let db: Firestore | any = null;
 let storage: any = null;
 const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
 
 try {
   if (firebaseConfig.apiKey) {

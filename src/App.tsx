@@ -110,16 +110,14 @@ export default function App() {
   }, []);
 
   React.useEffect(() => {
-    if (user && isSuperAdmin && !adminChecked) {
-      setCurrentView('admin', { replace: true });
+    if (user && !adminChecked) {
       setAdminChecked(true);
-    } else if (user && !isSuperAdmin && !adminChecked) {
-      setAdminChecked(true);
-      if (currentView === 'admin') {
+      // Navigate to Home page upon successful authentication
+      if (location.pathname === '/' || location.pathname === '/login' || currentView === 'admin') {
         setCurrentView('home', { replace: true });
       }
     }
-  }, [user, isSuperAdmin, adminChecked, currentView, setCurrentView]);
+  }, [user, adminChecked, currentView, setCurrentView, location.pathname]);
 
   React.useEffect(() => {
     let size = '16px';
