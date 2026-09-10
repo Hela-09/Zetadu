@@ -1,4 +1,5 @@
 import React, { useState, Suspense } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import BottomNav from './components/BottomNav';
 import Login from './components/Login';
@@ -9,7 +10,7 @@ import { useAuth } from './contexts/AuthContext';
 import PaymentGate from './components/PaymentGate';
 import SearchModal from './components/SearchModal';
 import { ThemeToggle } from './components/ThemeToggle';
-
+import { VIEW_TO_PATH } from './utils/navigation';
 
 const Home = React.lazy(() => import('./components/Home'));
 const Subjects = React.lazy(() => import('./components/Subjects'));
@@ -25,18 +26,53 @@ const WeakTopics = React.lazy(() => import('./components/WeakTopics'));
 const UploadNotes = React.lazy(() => import('./components/UploadNotes'));
 const SchoolUpdates = React.lazy(() => import('./components/SchoolUpdates'));
 
+function getEffectiveView(pathname: string): ViewType {
+  if (pathname === '/ai-tutor' || pathname === '/tutor') return 'tutor';
+  if (pathname === '/learn' || pathname === '/subjects') return 'subjects';
+  if (pathname.startsWith('/practice')) return 'practice';
+  if (pathname.startsWith('/flashcards')) return 'flashcards';
+  if (pathname.startsWith('/profile') || pathname.startsWith('/settings')) return 'profile';
+  if (pathname.startsWith('/opportunities') || pathname.startsWith('/explore')) return 'opportunities';
+  if (pathname.startsWith('/daily-challenge')) return 'daily_challenge';
+  if (pathname.startsWith('/study-journey') || pathname.startsWith('/journey')) return 'journey';
+  if (pathname.startsWith('/weak-topics')) return 'weak_topics';
+  if (pathname.startsWith('/upload-notes')) return 'upload_notes';
+  if (pathname.startsWith('/school-updates')) return 'school_updates';
+  if (pathname.startsWith('/admin')) return 'admin';
+  return 'home';
+}
+
 export default function App() {
-  const [currentView, setCurrentView] = useState<ViewType>(() => {
-    return (localStorage.getItem('zetadu_current_view') as ViewType) || 'home';
-  });
-  const { user, userProfile, settings, updateSettings, isSuperAdmin, loading, signOut } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const currentView = getEffectiveView(location.pathname);
+  const { user, userProfile, settings, isSuperAdmin, loading, signOut } = useAuth();
   const [adminChecked, setAdminChecked] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  // Centralized React Router navigation
+  const setCurrentView = React.useCallback(
+    (newView: ViewType | string, options?: { replace?: boolean; subState?: Record<string, any> }) => {
+      let targetPath = '';
+      if (typeof newView === 'string' && newView.startsWith('/')) {
+        targetPath = newView;
+      } else {
+        targetPath = VIEW_TO_PATH[newView as ViewType] || '/home';
+      }
+
+      if (options?.replace) {
+        navigate(targetPath, { replace: true, state: options?.subState });
+      } else {
+        navigate(targetPath, { state: options?.subState });
+      }
+    },
+    [navigate]
+  );
 
   // Global search shortcut (Cmd+K / Ctrl+K or custom open event)
   React.useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in an input or textarea
       const target = e.target as HTMLElement;
       const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
 
@@ -73,28 +109,17 @@ export default function App() {
     };
   }, []);
 
-
-
   React.useEffect(() => {
     if (user && isSuperAdmin && !adminChecked) {
-      setCurrentView('admin');
+      setCurrentView('admin', { replace: true });
       setAdminChecked(true);
     } else if (user && !isSuperAdmin && !adminChecked) {
       setAdminChecked(true);
       if (currentView === 'admin') {
-        setCurrentView('home');
+        setCurrentView('home', { replace: true });
       }
     }
-  }, [user, isSuperAdmin, adminChecked, currentView]);
-
-
-  React.useEffect(() => {
-    const prev = localStorage.getItem('zetadu_current_view');
-    if (prev && prev !== currentView && prev !== 'tutor') {
-      localStorage.setItem('zetadu_previous_view', prev);
-    }
-    localStorage.setItem('zetadu_current_view', currentView);
-  }, [currentView]);
+  }, [user, isSuperAdmin, adminChecked, currentView, setCurrentView]);
 
   React.useEffect(() => {
     let size = '16px';
@@ -102,8 +127,6 @@ export default function App() {
     if (settings?.fontSize === 'large') size = '18px';
     document.documentElement.style.fontSize = size;
   }, [settings?.fontSize]);
-
-
 
   if (loading) {
     return (
@@ -116,8 +139,6 @@ export default function App() {
   if (!user) {
     return <Login />;
   }
-
-
 
   // Check subscription status
   const isSubscriptionActive = userProfile?.subscriptionStatus === 'active';
@@ -132,7 +153,6 @@ export default function App() {
         <div className={`hidden md:flex relative z-50 ${currentView === 'tutor' ? '!hidden' : ''}`}>
           <Sidebar currentView={currentView} setCurrentView={setCurrentView} />
         </div>
-        
         
         {!isOnline && (
           <div className="offline-banner absolute top-0 left-0 right-0 bg-amber-500 text-white text-center py-1 text-xs font-medium z-[100] flex justify-center items-center gap-2">
@@ -216,26 +236,35 @@ export default function App() {
             }>
               <AnimatePresence mode="wait">
                 <motion.div
-                  key={currentView}
+                  key={location.pathname}
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -15 }}
                   transition={{ duration: 0.3, ease: "easeInOut" }}
                   className="flex-1 flex flex-col min-h-0 relative"
                 >
-              {currentView === 'home' && <Home setView={setCurrentView} />}
-              {currentView === 'subjects' && <Subjects setView={setCurrentView} />}
-              {currentView === 'practice' && <Practice setView={setCurrentView} />}
-              {currentView === 'tutor' && <Tutor setCurrentView={setCurrentView} />}
-              {currentView === 'profile' && <Profile setView={setCurrentView} />}
-              {currentView === 'opportunities' && <Opportunities />}
-              {currentView === 'admin' && <Admin />}
-              {currentView === 'daily_challenge' && <DailyChallenge setView={setCurrentView} />}
-              {currentView === 'flashcards' && <Flashcards setView={setCurrentView} />}
-              {currentView === 'journey' && <StudyJourney setView={setCurrentView} />}
-              {currentView === 'weak_topics' && <WeakTopics setView={setCurrentView} />}
-              {currentView === 'upload_notes' && <UploadNotes setView={setCurrentView} />}
-              {currentView === 'school_updates' && <SchoolUpdates setView={setCurrentView} />}
+                  <Routes>
+                    <Route path="/" element={<Navigate to="/home" replace />} />
+                    <Route path="/home" element={<Home setView={setCurrentView} />} />
+                    <Route path="/ai-tutor" element={<Tutor setCurrentView={setCurrentView} />} />
+                    <Route path="/tutor" element={<Navigate to="/ai-tutor" replace />} />
+                    <Route path="/learn" element={<Subjects setView={setCurrentView} />} />
+                    <Route path="/subjects" element={<Navigate to="/learn" replace />} />
+                    <Route path="/practice" element={<Practice setView={setCurrentView} />} />
+                    <Route path="/flashcards" element={<Flashcards setView={setCurrentView} />} />
+                    <Route path="/profile" element={<Profile setView={setCurrentView} />} />
+                    <Route path="/settings" element={<Profile setView={setCurrentView} />} />
+                    <Route path="/opportunities" element={<Opportunities />} />
+                    <Route path="/explore" element={<Navigate to="/opportunities" replace />} />
+                    <Route path="/daily-challenge" element={<DailyChallenge setView={setCurrentView} />} />
+                    <Route path="/study-journey" element={<StudyJourney setView={setCurrentView} />} />
+                    <Route path="/journey" element={<Navigate to="/study-journey" replace />} />
+                    <Route path="/weak-topics" element={<WeakTopics setView={setCurrentView} />} />
+                    <Route path="/upload-notes" element={<UploadNotes setView={setCurrentView} />} />
+                    <Route path="/school-updates" element={<SchoolUpdates setView={setCurrentView} />} />
+                    <Route path="/admin" element={<Admin />} />
+                    <Route path="*" element={<Navigate to="/home" replace />} />
+                  </Routes>
 
                   {/* Guaranteed Mobile Bottom Spacer for clearance above BottomNav */}
                   {currentView !== 'tutor' && (

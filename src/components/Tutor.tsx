@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, User, Sparkles, Loader2, Trash2, Paperclip, Bookmark, FileText, ChevronDown, MessageSquare, Plus, Clock, Search, X, PanelLeftClose, PanelLeftOpen, HardDrive } from 'lucide-react';
 import { useGooglePicker } from '../hooks/useGooglePicker';
-import { ChatMessage, TutorConversation } from '../types';
+import { ChatMessage, TutorConversation, ViewType } from '../types';
 import ReactMarkdown from 'react-markdown';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
@@ -595,11 +595,15 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
           {setCurrentView && (
             <button 
               onClick={() => {
-                const prev = localStorage.getItem('zetadu_previous_view');
-                if (prev && prev !== 'tutor') {
-                  setCurrentView(prev);
+                if (window.history.length > 1) {
+                  window.history.back();
                 } else {
-                  setCurrentView('home');
+                  const prev = localStorage.getItem('zetadu_previous_view');
+                  if (prev && prev !== 'tutor') {
+                    setCurrentView(prev as ViewType);
+                  } else {
+                    setCurrentView('home');
+                  }
                 }
               }}
               className="flex items-center justify-center gap-1.5 px-3 md:px-4 py-2 min-h-[44px] min-w-[44px] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors font-bold text-[15px]"

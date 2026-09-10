@@ -698,15 +698,23 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
         <div className="w-full max-w-7xl mx-auto pb-12 flex flex-col">
           <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shrink-0">
             <div className="flex items-center gap-4">
-              {onBack && (
-                <button 
-                  id="quiz-back-button"
-                  onClick={onBack} 
-                  className="p-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors self-start"
-                >
-                  <ArrowLeft size={24} />
-                </button>
-              )}
+              <button 
+                id="quiz-back-button"
+                onClick={() => {
+                  if (onBack) {
+                    onBack();
+                  } else if (window.history.length > 1) {
+                    window.history.back();
+                  } else if (setView) {
+                    setView('home');
+                  }
+                }} 
+                className="p-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors self-start cursor-pointer"
+                title="Go back"
+                aria-label="Go back"
+              >
+                <ArrowLeft size={24} />
+              </button>
               <div>
                 <p className="text-xs font-bold tracking-widest text-blue-600 dark:text-blue-400 uppercase mb-1">
                   Practice Session

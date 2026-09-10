@@ -5,7 +5,6 @@ import { db } from '../lib/firebase';
 import { collection, getDocs, query, where, addDoc, updateDoc } from 'firebase/firestore';
 import { ViewType } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-
 import { ALL_SUBJECTS } from '../data/subjects';
 
 export default function Subjects({ setView }: { setView?: (view: ViewType) => void }) {
@@ -42,7 +41,6 @@ export default function Subjects({ setView }: { setView?: (view: ViewType) => vo
     }
   };
 
-  
   const categories = ['All', ...Array.from(new Set(ALL_SUBJECTS.map(s => s.category))).sort()];
 
   
@@ -124,7 +122,10 @@ export default function Subjects({ setView }: { setView?: (view: ViewType) => vo
   if (selectedSubject) {
     return (
       <div className="w-full max-w-5xl mx-auto pb-28 sm:pb-32 flex flex-col">
-        <button onClick={() => setSelectedSubject(null)} className="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1 mb-6 transition-colors bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 w-fit shadow-sm hover:shadow-md">
+        <button 
+          onClick={() => setSelectedSubject(null)} 
+          className="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1 mb-6 transition-colors bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 w-fit shadow-sm hover:shadow-md cursor-pointer"
+        >
           <ChevronLeft size={16} /> Back to Library
         </button>
         

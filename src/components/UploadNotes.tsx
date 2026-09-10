@@ -435,7 +435,13 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
         <div className="flex items-center gap-3">
           <button
             id="back-to-home-btn"
-            onClick={() => setView('home')}
+            onClick={() => {
+              if (window.history.length > 1) {
+                window.history.back();
+              } else {
+                setView('home');
+              }
+            }}
             className="p-2.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors shadow-sm cursor-pointer"
             title="Return to Home"
           >

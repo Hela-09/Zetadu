@@ -36,6 +36,16 @@ const normalizeTimestamp = (val: any): number | undefined => {
 export default function Flashcards({ setView }: { setView?: (v: any) => void }) {
   const { user, getToken } = useAuth();
   const [mode, setMode] = useState<'dashboard' | 'create' | 'study' | 'generate' | 'post_generate'>('dashboard');
+
+  const navigateToMode = (newMode: 'dashboard' | 'create' | 'study' | 'generate' | 'post_generate') => {
+    setMode(newMode);
+  };
+
+  const exitToDashboard = () => {
+    setMode('dashboard');
+    setActiveDeck(null);
+    setStudyCards([]);
+  };
   
   // Decks & Cards state
   const [allCards, setAllCards] = useState<Flashcard[]>([]);
@@ -304,7 +314,7 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
       setInitialStudyCardIndex(0);
     }
 
-    setMode('study');
+    navigateToMode('study');
   };
 
   // STUDY CUSTOM LIST OF CARDS (e.g. from Due Today or Bookmarked cards views)
@@ -323,7 +333,7 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
     };
     setActiveDeck(customDeck);
     setStudyCards(cards);
-    setMode('study');
+    navigateToMode('study');
   };
 
   // RATE A CARD
@@ -397,7 +407,7 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
 
   // EXIT STUDY SESSION
   const handleExitStudy = () => {
-    setMode('dashboard');
+    exitToDashboard();
     setActiveDeck(null);
     setStudyCards([]);
   };
@@ -751,8 +761,8 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
       <div className="w-full max-w-2xl mx-auto pb-28 sm:pb-32 animate-fade-in">
         <div className="flex items-center gap-4 mb-8">
           <button 
-            onClick={() => setMode('dashboard')} 
-            className="p-2.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 transition-colors shadow-xs"
+            onClick={exitToDashboard} 
+            className="p-2.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 transition-colors shadow-xs cursor-pointer"
             aria-label="Back to decks"
           >
             <ArrowLeft size={20} />
@@ -846,8 +856,8 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
             <button
               type="button"
               disabled={generating}
-              onClick={() => setMode('dashboard')}
-              className="px-6 py-3.5 rounded-xl font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+              onClick={exitToDashboard}
+              className="px-6 py-3.5 rounded-xl font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 cursor-pointer"
             >
               Cancel
             </button>
@@ -882,8 +892,8 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => setMode('dashboard')} 
-              className="p-2.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 transition-colors shadow-xs"
+              onClick={exitToDashboard} 
+              className="p-2.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 transition-colors shadow-xs cursor-pointer"
               aria-label="Back to decks"
             >
               <ArrowLeft size={20} />
@@ -1088,8 +1098,8 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
       <div className="w-full max-w-2xl mx-auto pb-28 sm:pb-32 animate-fade-in">
         <div className="flex items-center gap-4 mb-8">
           <button 
-            onClick={() => setMode('dashboard')} 
-            className="p-2.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 transition-colors shadow-xs"
+            onClick={exitToDashboard} 
+            className="p-2.5 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 transition-colors shadow-xs cursor-pointer"
             aria-label="Back to decks"
           >
             <ArrowLeft size={20} />
@@ -1226,8 +1236,8 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
           <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-700/80">
             <button 
               type="button" 
-              onClick={() => setMode('dashboard')}
-              className="px-6 py-3 rounded-xl font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              onClick={exitToDashboard}
+              className="px-6 py-3 rounded-xl font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -1279,10 +1289,10 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
       onSelectDeck={handleSelectDeck}
       onToggleBookmark={handleToggleBookmark}
       onStudyCards={handleStudyCustomCards}
-      onCreateCard={() => setMode('create')}
+      onCreateCard={() => navigateToMode('create')}
       onGenerateAI={() => {
         setGenerationError(null);
-        setMode('generate');
+        navigateToMode('generate');
       }}
     />
   );

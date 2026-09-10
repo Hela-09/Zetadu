@@ -36,6 +36,14 @@ export default function Profile({ setView }: ProfileProps) {
   };
 
   const [activeSection, setActiveSection] = useState<string | null>(null);
+
+  const navigateToSection = (section: string | null) => {
+    setActiveSection(section);
+  };
+
+  const closeSection = () => {
+    setActiveSection(null);
+  };
   
   // Stats state
   const [stats, setStats] = useState({
@@ -107,7 +115,7 @@ export default function Profile({ setView }: ProfileProps) {
   }, [user]);
 
   const handleAction = (action: string) => {
-    setActiveSection(action);
+    navigateToSection(action);
     window.scrollTo(0, 0);
   };
 
@@ -202,7 +210,7 @@ export default function Profile({ setView }: ProfileProps) {
     return (
       <div className="animate-in fade-in slide-in-from-right-4 duration-300">
         <div className="flex items-center gap-4 mb-8">
-          <button onClick={() => setActiveSection(null)} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+          <button onClick={closeSection} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer" aria-label="Back">
             <ArrowLeft size={20} />
           </button>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Edit Profile</h2>
@@ -287,7 +295,7 @@ export default function Profile({ setView }: ProfileProps) {
     return (
       <div className="animate-in fade-in slide-in-from-right-4 duration-300">
         <div className="flex items-center gap-4 mb-8">
-          <button onClick={() => setActiveSection(null)} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+          <button onClick={closeSection} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer" aria-label="Back">
             <ArrowLeft size={20} />
           </button>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">General Settings & Preferences</h2>
@@ -418,7 +426,7 @@ export default function Profile({ setView }: ProfileProps) {
     return (
       <div className="animate-in fade-in slide-in-from-right-4 duration-300">
         <div className="flex items-center gap-4 mb-8">
-          <button onClick={() => setActiveSection(null)} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+          <button onClick={closeSection} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer" aria-label="Back">
             <ArrowLeft size={20} />
           </button>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Saved Content</h2>
@@ -440,7 +448,7 @@ export default function Profile({ setView }: ProfileProps) {
     return (
       <div className="animate-in fade-in duration-300">
         <div className="flex items-center gap-4 mb-6">
-          <button onClick={() => setActiveSection(null)} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+          <button onClick={closeSection} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer" aria-label="Back">
             <ArrowLeft size={20} />
           </button>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Achievements</h2>
@@ -495,7 +503,7 @@ export default function Profile({ setView }: ProfileProps) {
     return (
       <div className="animate-in fade-in slide-in-from-right-4 duration-300">
         <div className="flex items-center gap-4 mb-8">
-          <button onClick={() => setActiveSection(null)} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+          <button onClick={closeSection} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer" aria-label="Back">
             <ArrowLeft size={20} />
           </button>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Detailed Statistics</h2>
@@ -542,7 +550,7 @@ export default function Profile({ setView }: ProfileProps) {
     return (
       <div className="animate-in fade-in slide-in-from-right-4 duration-300">
         <div className="flex items-center gap-4 mb-8">
-          <button onClick={() => setActiveSection(null)} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+          <button onClick={closeSection} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer" aria-label="Back">
             <ArrowLeft size={20} />
           </button>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Help & Support</h2>
@@ -695,7 +703,7 @@ export default function Profile({ setView }: ProfileProps) {
     return (
       <div className="animate-in fade-in duration-300">
         <div className="flex items-center gap-4 mb-6">
-          <button onClick={() => setActiveSection(null)} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+          <button onClick={closeSection} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer" aria-label="Back">
             <ArrowLeft size={20} />
           </button>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">AI Tutor History</h2>
@@ -763,7 +771,7 @@ export default function Profile({ setView }: ProfileProps) {
     return (
       <div className="animate-in fade-in duration-300">
         <div className="flex items-center gap-4 mb-6">
-          <button onClick={() => setActiveSection(null)} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+          <button onClick={closeSection} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer" aria-label="Back">
             <ArrowLeft size={20} />
           </button>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Recently Studied Subjects</h2>
