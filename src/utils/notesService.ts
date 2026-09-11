@@ -1,5 +1,5 @@
 import { doc, getDoc, setDoc, addDoc, collection } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, isFirestoreQuotaExhausted } from '../lib/firebase';
 import { StudyNote, NoteFlashcard, NotePracticeQuestion } from '../types';
 
 const LOCAL_NOTES_KEY = 'zetadu_user_study_notes';
@@ -112,7 +112,7 @@ export async function saveUserNote(uid: string, note: StudyNote): Promise<void> 
     localStorage.setItem(LOCAL_NOTES_KEY, JSON.stringify(updated));
 
     // 2. Persist to Firestore
-    if (uid) {
+    if (uid && !isFirestoreQuotaExhausted()) {
       await setDoc(doc(db, 'notes', uid), {
         uid,
         notes: updated,
@@ -130,7 +130,7 @@ export async function deleteUserNote(uid: string, noteId: string): Promise<void>
     const updated = existing.filter(n => n.id !== noteId);
     localStorage.setItem(LOCAL_NOTES_KEY, JSON.stringify(updated));
 
-    if (uid) {
+    if (uid && !isFirestoreQuotaExhausted()) {
       await setDoc(doc(db, 'notes', uid), {
         uid,
         notes: updated,

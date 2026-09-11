@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut as firebaseSignOut, onAuthStateChanged, getIdToken } from 'firebase/auth';
-import { auth, googleProvider, db } from '../lib/firebase';
+import { auth, googleProvider, db, isFirestoreQuotaExhausted } from '../lib/firebase';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 export interface UserSettings {
@@ -97,84 +97,155 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const isActualSuperAdmin = currentUser.email === 'emmanuelomojola07@gmail.com';
       setIsSuperAdmin(isActualSuperAdmin);
 
-      // Check if user document already exists (DO NOT duplicate users)
-      const docSnap = await getDoc(userRef);
-      if (!docSnap.exists()) {
-        const generatedUsername = currentUser.email 
-          ? currentUser.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '') + Math.floor(Math.random() * 1000) 
-          : 'user_' + currentUser.uid.substring(0, 6);
-
-        const newUserProfile = {
-          uid: currentUser.uid,
-          email: currentUser.email || '',
-          displayName: currentUser.displayName || '',
-          name: currentUser.displayName || '',
-          username: generatedUsername,
-          photoURL: currentUser.photoURL || '',
-          educationLevel: 'Secondary',
-          country: 'International',
-          progress: 0,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          role: isActualSuperAdmin ? 'super_admin' : 'student',
-          isSuperAdmin: isActualSuperAdmin
-        };
-        await setDoc(userRef, newUserProfile, { merge: true });
-        setUserProfile(newUserProfile);
-      } else {
-        const data = docSnap.data();
-        if (isActualSuperAdmin && !data.isSuperAdmin) {
-          await setDoc(userRef, { role: 'super_admin', isSuperAdmin: true }, { merge: true });
-          data.role = 'super_admin';
-          data.isSuperAdmin = true;
+      // 1. Immediately hydrate from local cache if available so UI renders instantly
+      let currentLocalProfile: any = null;
+      try {
+        const cached = localStorage.getItem(`zetadu_profile_${currentUser.uid}`);
+        if (cached) {
+          currentLocalProfile = JSON.parse(cached);
+          setUserProfile(currentLocalProfile);
         }
-        setUserProfile(data);
+      } catch (_) {}
+
+      // 2. Fetch or initialize user document safely (handles quota limits without crashing)
+      try {
+        const docSnap = await getDoc(userRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (isActualSuperAdmin && !data.isSuperAdmin) {
+            data.role = 'super_admin';
+            data.isSuperAdmin = true;
+            setDoc(userRef, { role: 'super_admin', isSuperAdmin: true }, { merge: true }).catch(() => {});
+          }
+          setUserProfile(data);
+          try {
+            localStorage.setItem(`zetadu_profile_${currentUser.uid}`, JSON.stringify(data));
+          } catch (_) {}
+        } else {
+          const generatedUsername = currentUser.email 
+            ? currentUser.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '') + Math.floor(Math.random() * 1000) 
+            : 'user_' + currentUser.uid.substring(0, 6);
+
+          const newUserProfile = {
+            uid: currentUser.uid,
+            email: currentUser.email || '',
+            displayName: currentUser.displayName || '',
+            name: currentUser.displayName || '',
+            username: generatedUsername,
+            photoURL: currentUser.photoURL || '',
+            educationLevel: 'Secondary',
+            country: 'International',
+            progress: 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            role: isActualSuperAdmin ? 'super_admin' : 'student',
+            isSuperAdmin: isActualSuperAdmin,
+            subscriptionStatus: 'active'
+          };
+          
+          setUserProfile(newUserProfile);
+          try {
+            localStorage.setItem(`zetadu_profile_${currentUser.uid}`, JSON.stringify(newUserProfile));
+          } catch (_) {}
+
+          // Write to Firestore asynchronously without blocking on quota errors
+          if (!isFirestoreQuotaExhausted()) {
+            setDoc(userRef, newUserProfile, { merge: true }).catch((wErr) => {
+              console.warn("[Auth] Cloud profile save deferred (quota/offline):", wErr?.message);
+            });
+          }
+        }
+      } catch (readErr: any) {
+        console.warn("[Auth] Firestore profile read fallback (quota/network):", readErr?.message);
+        if (!currentLocalProfile) {
+          const fallbackProfile = {
+            uid: currentUser.uid,
+            email: currentUser.email || '',
+            displayName: currentUser.displayName || '',
+            name: currentUser.displayName || '',
+            username: currentUser.email ? currentUser.email.split('@')[0] : 'user',
+            photoURL: currentUser.photoURL || '',
+            educationLevel: 'Secondary',
+            country: 'International',
+            progress: 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            role: isActualSuperAdmin ? 'super_admin' : 'student',
+            isSuperAdmin: isActualSuperAdmin,
+            subscriptionStatus: 'active'
+          };
+          setUserProfile(fallbackProfile);
+          try {
+            localStorage.setItem(`zetadu_profile_${currentUser.uid}`, JSON.stringify(fallbackProfile));
+          } catch (_) {}
+        }
       }
 
-      // Load or initialize user settings
+      // 3. Load user settings with local cache fallback
       try {
+        const cachedSettings = localStorage.getItem(`zetadu_settings_${currentUser.uid}`);
+        if (cachedSettings) {
+          setSettings({ ...defaultSettings, ...JSON.parse(cachedSettings) });
+        }
         const settingsRef = doc(db, 'settings', currentUser.uid);
         const settingsSnap = await getDoc(settingsRef);
         if (!settingsSnap.exists()) {
-          await setDoc(settingsRef, { ...defaultSettings, uid: currentUser.uid });
+          if (!isFirestoreQuotaExhausted()) {
+            setDoc(settingsRef, { ...defaultSettings, uid: currentUser.uid }).catch(() => {});
+          }
         } else {
-          setSettings({ ...defaultSettings, ...settingsSnap.data() } as UserSettings);
+          const loadedSettings = { ...defaultSettings, ...settingsSnap.data() } as UserSettings;
+          setSettings(loadedSettings);
+          try {
+            localStorage.setItem(`zetadu_settings_${currentUser.uid}`, JSON.stringify(loadedSettings));
+          } catch (_) {}
         }
       } catch (sErr) {
-        console.warn("Settings init error:", sErr);
+        console.warn("[Auth] Settings init fallback:", sErr);
       }
 
-      // Initialize ancillary progress collections if not existing
-      try {
-        await setDoc(doc(db, 'user_progress', currentUser.uid), { uid: currentUser.uid }, { merge: true });
-        await setDoc(doc(db, 'bookmarks', currentUser.uid), { uid: currentUser.uid }, { merge: true });
-        await setDoc(doc(db, 'notes', currentUser.uid), { uid: currentUser.uid }, { merge: true });
-      } catch (dErr) {
-        console.warn("Ancillary doc init error:", dErr);
-      }
-
-      // Establish real-time listener for user profile updates
+      // 4. Establish real-time listener with error handler to prevent unhandled quota errors
       if (profileUnsubRef.current) profileUnsubRef.current();
-      profileUnsubRef.current = onSnapshot(userRef, (snapshot) => {
-        if (snapshot.exists()) {
-          let data = snapshot.data();
-          if (data.subscriptionStatus === 'active' && data.subscriptionExpires) {
-            if (Date.now() > data.subscriptionExpires) {
-              data.subscriptionStatus = 'expired';
-              setDoc(userRef, { subscriptionStatus: 'expired' }, { merge: true }).catch(() => {});
+      profileUnsubRef.current = onSnapshot(
+        userRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            let data = snapshot.data();
+            if (data.subscriptionStatus === 'active' && data.subscriptionExpires) {
+              if (Date.now() > data.subscriptionExpires) {
+                data.subscriptionStatus = 'expired';
+                setDoc(userRef, { subscriptionStatus: 'expired' }, { merge: true }).catch(() => {});
+              }
             }
+            setUserProfile(data);
+            try {
+              localStorage.setItem(`zetadu_profile_${currentUser.uid}`, JSON.stringify(data));
+            } catch (_) {}
           }
-          setUserProfile(data);
+        },
+        (snapshotErr) => {
+          // Gracefully suppress listener failures when daily quota is exceeded
+          console.warn("[Auth] Real-time profile listener notice (quota/offline):", snapshotErr?.message);
         }
-      });
+      );
 
-      // Establish real-time listener for settings updates
+      // 5. Establish settings listener with error handler
       if (settingsUnsubRef.current) settingsUnsubRef.current();
-      settingsUnsubRef.current = onSnapshot(doc(db, 'settings', currentUser.uid), (snapshot) => {
-        if (snapshot.exists()) {
-          setSettings({ ...defaultSettings, ...snapshot.data() } as UserSettings);
+      settingsUnsubRef.current = onSnapshot(
+        doc(db, 'settings', currentUser.uid),
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const updated = { ...defaultSettings, ...snapshot.data() } as UserSettings;
+            setSettings(updated);
+            try {
+              localStorage.setItem(`zetadu_settings_${currentUser.uid}`, JSON.stringify(updated));
+            } catch (_) {}
+          }
+        },
+        (snapshotErr) => {
+          console.warn("[Auth] Real-time settings listener notice (quota/offline):", snapshotErr?.message);
         }
-      });
+      );
 
       setUser(currentUser);
     } catch (err: any) {
@@ -264,11 +335,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateSettings = async (newSettings: Partial<UserSettings>) => {
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
-    if (user && db) {
+    if (user) {
       try {
-        await setDoc(doc(db, 'settings', user.uid), updated, { merge: true });
-      } catch (err) {
-        console.warn("Failed to sync settings to Firestore", err);
+        localStorage.setItem(`zetadu_settings_${user.uid}`, JSON.stringify(updated));
+      } catch (_) {}
+      if (db && !isFirestoreQuotaExhausted()) {
+        try {
+          await setDoc(doc(db, 'settings', user.uid), updated, { merge: true });
+        } catch (err) {
+          console.warn("Failed to sync settings to Firestore", err);
+        }
       }
     }
   };

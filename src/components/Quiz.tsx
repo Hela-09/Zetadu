@@ -350,7 +350,7 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
         }
         const updated = prev - 1;
         
-        // Save to localStorage every second
+        // Save to localStorage every second (instant and quota-free)
         try {
           const cached = localStorage.getItem('practice_session');
           if (cached) {
@@ -359,17 +359,6 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
             localStorage.setItem('practice_session', JSON.stringify(parsed));
           }
         } catch (e) {}
-
-        // Periodically sync timer to Firestore every 30 seconds
-        if (Math.abs(lastSavedTimerRef.current - updated) >= 30) {
-          lastSavedTimerRef.current = updated;
-          if (user) {
-            setDoc(doc(db, 'practice_sessions', user.uid), {
-              timerRemaining: updated,
-              updatedAt: serverTimestamp()
-            }, { merge: true }).catch(() => {});
-          }
-        }
 
         return updated;
       });

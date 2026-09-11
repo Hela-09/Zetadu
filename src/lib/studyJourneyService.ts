@@ -1,4 +1,4 @@
-import { db } from './firebase';
+import { db, isFirestoreQuotaExhausted } from './firebase';
 import { doc, getDoc, setDoc, deleteDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { StudyJourneyState, StudyJourneyQuestion } from '../types';
 
@@ -41,11 +41,13 @@ export async function saveStudyJourney(userId: string, journey: StudyJourneyStat
   }
 
   // Save to Firestore under user's UID doc
-  try {
-    const docRef = doc(db, 'study_journeys', userId);
-    await setDoc(docRef, sanitized, { merge: true });
-  } catch (err) {
-    console.error('Failed to save study journey to Firestore:', err);
+  if (!isFirestoreQuotaExhausted()) {
+    try {
+      const docRef = doc(db, 'study_journeys', userId);
+      await setDoc(docRef, sanitized, { merge: true });
+    } catch (err) {
+      console.warn('Could not save study journey to Firestore (using local storage):', err);
+    }
   }
 }
 

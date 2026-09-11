@@ -1,4 +1,4 @@
-import { db } from '../lib/firebase';
+import { db, isFirestoreQuotaExhausted } from '../lib/firebase';
 import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { DailyStudyPlan, DailyStudyTask } from '../types';
 import { fetchStudentTopicAnalysis, StudentTopicAnalysis, TopicResultSummary } from './weakTopics';
@@ -344,7 +344,7 @@ export async function saveDailyStudyPlan(plan: DailyStudyPlan): Promise<void> {
     localStorage.setItem(`zetadu_daily_plan_${plan.uid}_${plan.date}`, JSON.stringify(plan));
   } catch (e) {}
 
-  if (plan.uid && plan.uid !== 'guest') {
+  if (plan.uid && plan.uid !== 'guest' && !isFirestoreQuotaExhausted()) {
     try {
       const planRef = doc(db, 'daily_study_plans', plan.uid);
       await setDoc(planRef, plan, { merge: true });
