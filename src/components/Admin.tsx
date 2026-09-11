@@ -3,9 +3,10 @@ import { db } from '../lib/firebase';
 import { collection, query, orderBy, limit, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { 
   Users, BookOpen, BrainCircuit, Settings, ShieldAlert, 
-  BarChart3, Search, CheckCircle2, ChevronRight, X, Clock, CreditCard, ExternalLink
+  BarChart3, Search, CheckCircle2, ChevronRight, X, Clock, CreditCard, ExternalLink, Activity
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import AiUsageAdminTab from './AiUsageAdminTab';
 
 export default function Admin() {
   const { isSuperAdmin } = useAuth();
@@ -39,11 +40,16 @@ export default function Admin() {
         <TabButton active={activeTab === 'approved'} onClick={() => setActiveTab('approved')} icon={CheckCircle2} label="Approved Users" />
         <TabButton active={activeTab === 'expired'} onClick={() => setActiveTab('expired')} icon={Settings} label="Expired Users" />
         <TabButton active={activeTab === 'new'} onClick={() => setActiveTab('new')} icon={Users} label="New Users" />
+        <TabButton active={activeTab === 'ai_usage'} onClick={() => setActiveTab('ai_usage')} icon={BrainCircuit} label="AI Usage & Analytics" />
       </div>
 
       {/* Content */}
       <div className="p-4 sm:p-6 pb-32 sm:pb-36">
-        <UsersTab activeTab={activeTab} />
+        {activeTab === 'ai_usage' ? (
+          <AiUsageAdminTab />
+        ) : (
+          <UsersTab activeTab={activeTab} />
+        )}
       </div>
     </div>
   );

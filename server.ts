@@ -10,6 +10,7 @@ import { getStorage } from "firebase-admin/storage";
 import multer from "multer";
 import { getAuth } from "firebase-admin/auth";
 import fs from "fs";
+import { recordAiUsage, getUserAiUsage, getSuperAdminAiStats } from "./src/server/aiUsageTracker";
 
 // Initialize Firebase Admin
 try {
@@ -125,6 +126,38 @@ async function startServer() {
     }
   });
 
+  // AI Usage Endpoints
+  app.get("/api/ai-usage/me", requireAuth, (req, res) => {
+    try {
+      const user = (req as any).user;
+      const uid = user?.uid || user?.user_id;
+      if (!uid) {
+        return res.status(400).json({ error: "Missing user identification" });
+      }
+      const usage = getUserAiUsage(uid);
+      res.json(usage);
+    } catch (error: any) {
+      console.error("Error getting user AI usage:", error);
+      res.status(500).json({ error: "Failed to fetch AI usage" });
+    }
+  });
+
+  app.get("/api/ai-usage/admin-stats", requireAuth, (req, res) => {
+    try {
+      const user = (req as any).user;
+      const email = user?.email;
+      const isSuperAdmin = email === 'emmanuelomojola07@gmail.com';
+      if (!isSuperAdmin) {
+        return res.status(403).json({ error: "Forbidden: Super Admin access required" });
+      }
+      const stats = getSuperAdminAiStats();
+      res.json(stats);
+    } catch (error: any) {
+      console.error("Error getting super admin AI stats:", error);
+      res.status(500).json({ error: "Failed to fetch AI statistics" });
+    }
+  });
+
   app.post("/api/chat", requireAuth, async (req, res) => {
     try {
       const { message, history, context, stream } = req.body;
@@ -210,13 +243,37 @@ Always prioritize accuracy, completeness, and clarity. Analyze the entire image 
           }
         }
         
+        let streamUsage: any = null;
+        let streamText = "";
         for await (const chunk of resultStream) {
+          if (chunk.usageMetadata) {
+            streamUsage = chunk.usageMetadata;
+          }
           if (chunk.text) {
+             streamText += chunk.text;
              res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
           }
         }
         res.write('data: [DONE]\n\n');
         res.end();
+
+        // Track usage only upon successful stream completion
+        const user = (req as any).user;
+        const uid = user?.uid || user?.user_id;
+        if (uid) {
+          const inputTokens = streamUsage?.promptTokenCount || Math.ceil(JSON.stringify(contents).length / 4);
+          const outputTokens = streamUsage?.candidatesTokenCount || Math.ceil(streamText.length / 4);
+          const totalTokens = streamUsage?.totalTokenCount || (inputTokens + outputTokens);
+          recordAiUsage({
+            uid,
+            email: user?.email,
+            displayName: user?.name,
+            category: 'tutor',
+            inputTokens,
+            outputTokens,
+            totalTokens
+          });
+        }
       } else {
         let response;
         try {
@@ -238,6 +295,24 @@ Always prioritize accuracy, completeness, and clarity. Analyze the entire image 
           }
         }
         res.json({ text: response.text });
+
+        // Track usage only upon successful response
+        const user = (req as any).user;
+        const uid = user?.uid || user?.user_id;
+        if (uid) {
+          const inputTokens = response.usageMetadata?.promptTokenCount || Math.ceil(JSON.stringify(contents).length / 4);
+          const outputTokens = response.usageMetadata?.candidatesTokenCount || Math.ceil((response.text || '').length / 4);
+          const totalTokens = response.usageMetadata?.totalTokenCount || (inputTokens + outputTokens);
+          recordAiUsage({
+            uid,
+            email: user?.email,
+            displayName: user?.name,
+            category: 'tutor',
+            inputTokens,
+            outputTokens,
+            totalTokens
+          });
+        }
       }
     } catch (error: any) {
       const isOverloaded = error?.status === 503 || error?.message?.includes("503") || error?.status === "UNAVAILABLE" || error?.error?.code === 503 || error?.status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("resource_exhausted");
@@ -323,6 +398,24 @@ Each question must be a multiple choice question with 4 options, one correct ans
       if (!text) throw new Error("No text from Gemini");
       const questions = JSON.parse(text);
       res.json({ questions });
+
+      // Track usage only upon successful generation
+      const user = (req as any).user;
+      const uid = user?.uid || user?.user_id;
+      if (uid) {
+        const inputTokens = response.usageMetadata?.promptTokenCount || Math.ceil(prompt.length / 4);
+        const outputTokens = response.usageMetadata?.candidatesTokenCount || Math.ceil(text.length / 4);
+        const totalTokens = response.usageMetadata?.totalTokenCount || (inputTokens + outputTokens);
+        recordAiUsage({
+          uid,
+          email: user?.email,
+          displayName: user?.name,
+          category: 'practice',
+          inputTokens,
+          outputTokens,
+          totalTokens
+        });
+      }
     } catch (error: any) {
       if (error?.status === 503 || error?.message?.includes("503") || error?.status === "UNAVAILABLE" || error?.error?.code === 503 || error?.status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("resource_exhausted")) {
          res.status(503).json({ error: "High demand. Please try again." });
@@ -362,7 +455,13 @@ Each question must be a multiple choice question with 4 options, one correct ans
   };
 
   // Helper to execute Gemini content generation with fallback
-  const generateGeminiFlashcards = async (ai: any, prompt: string, schema: any, maxTokens: number = 8192) => {
+  const generateGeminiFlashcards = async (
+    ai: any,
+    prompt: string,
+    schema: any,
+    maxTokens: number = 8192,
+    tokenCollector?: { inputTokens: number; outputTokens: number; totalTokens: number }
+  ) => {
     const config = {
       responseMimeType: "application/json",
       responseSchema: schema,
@@ -392,6 +491,15 @@ Each question must be a multiple choice question with 4 options, one correct ans
 
     const text = response.text;
     if (!text) throw new Error("No text response received from AI model");
+
+    if (tokenCollector) {
+      const input = response.usageMetadata?.promptTokenCount || Math.ceil(prompt.length / 4);
+      const output = response.usageMetadata?.candidatesTokenCount || Math.ceil(text.length / 4);
+      tokenCollector.inputTokens += input;
+      tokenCollector.outputTokens += output;
+      tokenCollector.totalTokens += (response.usageMetadata?.totalTokenCount || (input + output));
+    }
+
     return JSON.parse(text);
   };
 
@@ -400,6 +508,7 @@ Each question must be a multiple choice question with 4 options, one correct ans
       const { text, count } = req.body;
       const targetCount = Math.min(Math.max(Number(count) || 10, 5), 100);
       const ai = getGeminiClient();
+      const tokenCollector = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 
       const schema = {
         type: Type.ARRAY,
@@ -422,9 +531,25 @@ CRITICAL: Every flashcard must be completely unique with NO duplicate questions 
 Text:
 ${text}`;
 
-        const rawCards = await generateGeminiFlashcards(ai, prompt, schema, 4096);
+        const rawCards = await generateGeminiFlashcards(ai, prompt, schema, 4096, tokenCollector);
         const uniqueCards = deduplicateFlashcards(Array.isArray(rawCards) ? rawCards : []);
-        return res.json({ flashcards: uniqueCards.slice(0, targetCount) });
+        res.json({ flashcards: uniqueCards.slice(0, targetCount) });
+
+        // Record usage only on success
+        const user = (req as any).user;
+        const uid = user?.uid || user?.user_id;
+        if (uid) {
+          recordAiUsage({
+            uid,
+            email: user?.email,
+            displayName: user?.name,
+            category: 'flashcards',
+            inputTokens: tokenCollector.inputTokens,
+            outputTokens: tokenCollector.outputTokens,
+            totalTokens: tokenCollector.totalTokens
+          });
+        }
+        return;
       }
 
       // For larger counts (30, 50, 75, 100), generate in parallel thematic sections to guarantee diversity and avoid duplicates
@@ -451,7 +576,7 @@ Study Text:
 ${text}`;
 
         try {
-          const cards = await generateGeminiFlashcards(ai, prompt, schema, 4096);
+          const cards = await generateGeminiFlashcards(ai, prompt, schema, 4096, tokenCollector);
           return Array.isArray(cards) ? cards : [];
         } catch (batchErr) {
           console.warn(`Batch ${index} flashcards generation error:`, batchErr);
@@ -473,7 +598,7 @@ Existing questions already covered (DO NOT DUPLICATE): ${existingSamples}
 Study Text:
 ${text}`;
         try {
-          const supplementCards = await generateGeminiFlashcards(ai, supplementPrompt, schema, 2048);
+          const supplementCards = await generateGeminiFlashcards(ai, supplementPrompt, schema, 2048, tokenCollector);
           if (Array.isArray(supplementCards)) {
             uniqueCards = deduplicateFlashcards([...uniqueCards, ...supplementCards]);
           }
@@ -481,6 +606,21 @@ ${text}`;
       }
 
       res.json({ flashcards: uniqueCards.slice(0, targetCount) });
+
+      // Record usage only on success
+      const user = (req as any).user;
+      const uid = user?.uid || user?.user_id;
+      if (uid) {
+        recordAiUsage({
+          uid,
+          email: user?.email,
+          displayName: user?.name,
+          category: 'flashcards',
+          inputTokens: tokenCollector.inputTokens,
+          outputTokens: tokenCollector.outputTokens,
+          totalTokens: tokenCollector.totalTokens
+        });
+      }
     } catch (error: any) {
       const isOverloaded = error?.status === 503 || error?.message?.includes("503") || error?.status === "UNAVAILABLE" || error?.error?.code === 503 || error?.status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("resource_exhausted");
       if (isOverloaded) {
@@ -498,6 +638,7 @@ ${text}`;
       const { subject, topic, level, count } = req.body;
       const targetCount = Math.min(Math.max(Number(count) || 10, 5), 100);
       const ai = getGeminiClient();
+      const tokenCollector = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 
       const schema = {
         type: Type.ARRAY,
@@ -521,9 +662,24 @@ Education Level: ${level || 'Secondary / High School'}
 Ensure questions are concise, answers are clear, and provide a short explanation for each answer.
 CRITICAL: Every flashcard must address a distinct concept. Do NOT repeat questions or generate duplicates.`;
 
-        const rawCards = await generateGeminiFlashcards(ai, prompt, schema, 4096);
+        const rawCards = await generateGeminiFlashcards(ai, prompt, schema, 4096, tokenCollector);
         const uniqueCards = deduplicateFlashcards(Array.isArray(rawCards) ? rawCards : []);
-        return res.json({ flashcards: uniqueCards.slice(0, targetCount) });
+        res.json({ flashcards: uniqueCards.slice(0, targetCount) });
+
+        const user = (req as any).user;
+        const uid = user?.uid || user?.user_id;
+        if (uid) {
+          recordAiUsage({
+            uid,
+            email: user?.email,
+            displayName: user?.name,
+            category: 'flashcards',
+            inputTokens: tokenCollector.inputTokens,
+            outputTokens: tokenCollector.outputTokens,
+            totalTokens: tokenCollector.totalTokens
+          });
+        }
+        return;
       }
 
       // For larger counts (30, 50, 75, 100), generate in parallel thematic sections
@@ -570,7 +726,7 @@ CRITICAL RULES:
 2. Adhere strictly to the assigned pillar to prevent any overlap with other sections.`;
 
         try {
-          const cards = await generateGeminiFlashcards(ai, prompt, schema, 4096);
+          const cards = await generateGeminiFlashcards(ai, prompt, schema, 4096, tokenCollector);
           return Array.isArray(cards) ? cards : [];
         } catch (batchErr) {
           console.warn(`Batch ${index} structured flashcards generation error:`, batchErr);
@@ -590,7 +746,7 @@ CRITICAL RULES:
 DO NOT duplicate any of these already covered questions: ${existingSamples}`;
 
         try {
-          const supplementCards = await generateGeminiFlashcards(ai, supplementPrompt, schema, 2048);
+          const supplementCards = await generateGeminiFlashcards(ai, supplementPrompt, schema, 2048, tokenCollector);
           if (Array.isArray(supplementCards)) {
             uniqueCards = deduplicateFlashcards([...uniqueCards, ...supplementCards]);
           }
@@ -598,6 +754,21 @@ DO NOT duplicate any of these already covered questions: ${existingSamples}`;
       }
 
       res.json({ flashcards: uniqueCards.slice(0, targetCount) });
+
+      // Record usage only on success
+      const user = (req as any).user;
+      const uid = user?.uid || user?.user_id;
+      if (uid) {
+        recordAiUsage({
+          uid,
+          email: user?.email,
+          displayName: user?.name,
+          category: 'flashcards',
+          inputTokens: tokenCollector.inputTokens,
+          outputTokens: tokenCollector.outputTokens,
+          totalTokens: tokenCollector.totalTokens
+        });
+      }
     } catch (error: any) {
       console.error("Flashcard Generation Error:", error);
       res.status(500).json({ error: "Failed to generate flashcards" });
@@ -658,6 +829,24 @@ Provide a structured, engaging summary of this topic:
 
       const learnData = JSON.parse(responseText);
       res.json({ learnData });
+
+      // Track usage only upon successful generation
+      const user = (req as any).user;
+      const uid = user?.uid || user?.user_id;
+      if (uid) {
+        const inputTokens = response.usageMetadata?.promptTokenCount || Math.ceil(prompt.length / 4);
+        const outputTokens = response.usageMetadata?.candidatesTokenCount || Math.ceil(responseText.length / 4);
+        const totalTokens = response.usageMetadata?.totalTokenCount || (inputTokens + outputTokens);
+        recordAiUsage({
+          uid,
+          email: user?.email,
+          displayName: user?.name,
+          category: 'tutor',
+          inputTokens,
+          outputTokens,
+          totalTokens
+        });
+      }
     } catch (error: any) {
       console.error("Learn Topic API Error:", error);
       // Fallback response so user flow is always seamless

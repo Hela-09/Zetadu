@@ -2,18 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getLevelInfo } from '../lib/achievements';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, Award, Trophy, Target, Flame, CheckCircle, Clock, BookOpen, Search, BrainCircuit, PenTool, MessageSquare, Settings, HelpCircle, Info, LogOut, ChevronRight, Bookmark, FileText, Download, Moon, Sun, Monitor, Bell, Shield, Trash2, Edit3, Image as ImageIcon, MapPin, GraduationCap, ArrowLeft, Camera, Check, X, AlertCircle, Phone, Mail, Copy, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { User, Award, Trophy, Target, Flame, CheckCircle, Clock, BookOpen, Search, BrainCircuit, PenTool, MessageSquare, Settings, HelpCircle, Info, LogOut, ChevronRight, Bookmark, FileText, Download, Moon, Sun, Monitor, Bell, Shield, Trash2, Edit3, Image as ImageIcon, MapPin, GraduationCap, ArrowLeft, Camera, Check, X, AlertCircle, Phone, Mail, Copy, CheckCircle2, ShieldAlert, Zap, DollarSign, Layers, TrendingUp, RefreshCw } from 'lucide-react';
 import { collection, query, where, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { db } from '../lib/firebase';
 import { ViewType } from '../types';
+import { fetchUserAiUsage, UserAiUsageResponse } from '../utils/aiUsageService';
 
 interface ProfileProps {
   setView: (view: ViewType) => void;
 }
 
 export default function Profile({ setView }: ProfileProps) {
-  const { user, userProfile, refreshProfile, settings, updateSettings, isSuperAdmin, signOut } = useAuth();
+  const { user, userProfile, refreshProfile, settings, updateSettings, isSuperAdmin, signOut, getToken } = useAuth();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -519,6 +520,166 @@ export default function Profile({ setView }: ProfileProps) {
           <StatCard icon={MessageSquare} title="AI Sessions" value={stats.tutorSessions} />
           <StatCard icon={Award} title="Learning Streak" value={stats.streak + ' Days'} />
         </div>
+
+        <div className="mt-8">
+          <button 
+            onClick={() => setActiveSection('ai_usage')}
+            className="w-full p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl border border-blue-100 dark:border-blue-800/40 flex items-center justify-between hover:shadow-sm transition-all cursor-pointer text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center">
+                <BrainCircuit size={20} />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-900 dark:text-white text-sm">AI Usage & Token Tracker</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400">View detailed Gemini token usage and estimated costs</p>
+              </div>
+            </div>
+            <ChevronRight className="text-slate-400" size={18} />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const AiUsageView = () => {
+    const [usage, setUsage] = useState<UserAiUsageResponse | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const loadUsage = async (isManual = false) => {
+      if (isManual) setRefreshing(true);
+      else setLoading(true);
+      try {
+        const token = await getToken();
+        const data = await fetchUserAiUsage(token);
+        setUsage(data);
+      } catch (err) {
+        console.error("Failed to load user AI usage", err);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    };
+
+    useEffect(() => {
+      loadUsage();
+    }, []);
+
+    return (
+      <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <button onClick={closeSection} className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer" aria-label="Back">
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <BrainCircuit className="text-blue-600 dark:text-blue-400" size={26} />
+                AI Usage Tracker
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Monitor your personal Gemini AI resource consumption across Zetadu
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => loadUsage(true)}
+            disabled={loading || refreshing}
+            className="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 rounded-full transition-colors cursor-pointer disabled:opacity-50"
+            title="Refresh AI Usage"
+          >
+            <RefreshCw size={18} className={refreshing ? "animate-spin" : ""} />
+          </button>
+        </div>
+
+        {loading && !usage ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <RefreshCw size={32} className="animate-spin text-blue-600 mb-3" />
+            <p className="text-sm">Fetching your AI usage records...</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Primary KPI Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard icon={Zap} title="AI Requests" value={usage?.requestsCount || 0} />
+              <StatCard icon={TrendingUp} title="Total Tokens" value={(usage?.totalTokens || 0).toLocaleString()} />
+              <StatCard icon={DollarSign} title="Estimated Cost" value={`$${(usage?.estimatedCost || 0).toFixed(4)}`} />
+              <StatCard 
+                icon={Clock} 
+                title="Last Active" 
+                value={usage?.lastUsedAt ? new Date(usage.lastUsedAt).toLocaleDateString() : 'Never'} 
+              />
+            </div>
+
+            {/* Token Details */}
+            <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3">Token Breakdown</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Input (Prompt) Tokens</div>
+                  <div className="text-xl font-mono font-bold text-slate-900 dark:text-white">
+                    {(usage?.inputTokens || 0).toLocaleString()}
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-1">Text & uploaded media sent to Gemini</div>
+                </div>
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Output (Response) Tokens</div>
+                  <div className="text-xl font-mono font-bold text-blue-600 dark:text-blue-400">
+                    {(usage?.outputTokens || 0).toLocaleString()}
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-1">Generated explanations, answers & cards</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Feature Usage Details */}
+            <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Activity by Feature</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Tutor */}
+                <div className="p-4 rounded-xl border border-blue-100 dark:border-blue-900/30 bg-blue-50/50 dark:bg-blue-900/10">
+                  <div className="flex items-center gap-2 mb-2 text-blue-600 dark:text-blue-400">
+                    <MessageSquare size={18} />
+                    <span className="font-bold text-sm">AI Tutor</span>
+                  </div>
+                  <div className="text-2xl font-mono font-black text-slate-900 dark:text-white">
+                    {usage?.tutorRequests || 0}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Questions & conversation turns</p>
+                </div>
+
+                {/* Practice */}
+                <div className="p-4 rounded-xl border border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/50 dark:bg-emerald-900/10">
+                  <div className="flex items-center gap-2 mb-2 text-emerald-600 dark:text-emerald-400">
+                    <PenTool size={18} />
+                    <span className="font-bold text-sm">AI Practice</span>
+                  </div>
+                  <div className="text-2xl font-mono font-black text-slate-900 dark:text-white">
+                    {usage?.practiceGenerations || 0}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Practice quiz generations</p>
+                </div>
+
+                {/* Flashcards */}
+                <div className="p-4 rounded-xl border border-purple-100 dark:border-purple-900/30 bg-purple-50/50 dark:bg-purple-900/10">
+                  <div className="flex items-center gap-2 mb-2 text-purple-600 dark:text-purple-400">
+                    <Layers size={18} />
+                    <span className="font-bold text-sm">AI Flashcards</span>
+                  </div>
+                  <div className="text-2xl font-mono font-black text-slate-900 dark:text-white">
+                    {usage?.flashcardGenerations || 0}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Flashcard deck generations</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200/60 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 text-center">
+              💡 Tracking is for monitoring and auditing purposes. No hard usage limits have been set on your account.
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -814,6 +975,7 @@ export default function Profile({ setView }: ProfileProps) {
   if (activeSection === 'settings') return <SettingsView />;
   if (activeSection === 'saved') return <SavedContentView />;
   if (activeSection === 'stats') return <StatsView />;
+  if (activeSection === 'ai_usage') return <AiUsageView />;
   if (activeSection === 'support') return <SupportView />;
   if (activeSection === 'tutor_history') return <TutorHistoryView />;
   if (activeSection === 'subject_history') return <SubjectHistoryView />;
@@ -909,6 +1071,7 @@ export default function Profile({ setView }: ProfileProps) {
       <SectionHeading>My Learning & Content</SectionHeading>
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm flex flex-col mb-8">
         <ActionRow icon={Award} title="Detailed Progress & Statistics" onClick={() => handleAction('stats')} />
+        <ActionRow icon={Zap} title="AI Usage & Token Tracker" value="Tutor, Practice & Flashcards" onClick={() => handleAction('ai_usage')} />
         <ActionRow icon={BookOpen} title="Subjects & Curriculum" onClick={() => { window.scrollTo(0, 0); setView('subjects'); }} />
         <ActionRow icon={Clock} title="Recently Studied Subjects" onClick={() => handleAction('subject_history')} />
         <ActionRow icon={BrainCircuit} title="Practice History" onClick={() => { window.scrollTo(0, 0); setView('practice'); }} />
