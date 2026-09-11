@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getLevelInfo } from '../lib/achievements';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, Award, Trophy, Target, Flame, CheckCircle, Clock, BookOpen, Search, BrainCircuit, PenTool, MessageSquare, Settings, HelpCircle, Info, LogOut, ChevronRight, Bookmark, FileText, Download, Moon, Sun, Monitor, Bell, Shield, Trash2, Edit3, Image as ImageIcon, MapPin, GraduationCap, ArrowLeft, Camera, Check, X, AlertCircle, Phone, Mail, Copy, CheckCircle2, ShieldAlert, Zap, DollarSign, Layers, TrendingUp, RefreshCw } from 'lucide-react';
+import { User, Award, Trophy, Target, Flame, CheckCircle, Clock, BookOpen, Search, BrainCircuit, PenTool, MessageSquare, Settings, HelpCircle, Info, LogOut, ChevronRight, Bookmark, FileText, Download, Moon, Sun, Monitor, Bell, Shield, Trash2, Edit3, Image as ImageIcon, MapPin, GraduationCap, ArrowLeft, Camera, Check, X, AlertCircle, Phone, Mail, Copy, CheckCircle2, ShieldAlert, Zap, DollarSign, Layers, TrendingUp, RefreshCw, Lock, KeyRound } from 'lucide-react';
 import { collection, query, where, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { db } from '../lib/firebase';
 import { ViewType } from '../types';
 import { fetchUserAiUsage, UserAiUsageResponse } from '../utils/aiUsageService';
+import PasswordSecurityView from './PasswordSecurityView';
 
 interface ProfileProps {
   setView: (view: ViewType) => void;
@@ -404,6 +405,24 @@ export default function Profile({ setView }: ProfileProps) {
                 <option value="India">India</option>
               </select>
             </div>
+          </div>
+          
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+              <h3 className="font-bold text-slate-800 dark:text-white">Account Security</h3>
+            </div>
+            <button 
+              onClick={() => navigateToSection('password_security')} 
+              className="w-full p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors text-left cursor-pointer"
+            >
+              <div>
+                <p className="font-medium text-slate-800 dark:text-white">Password & Security</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {user?.providerData?.some(p => p.providerId === 'password') ? "Change your account password" : "Managed via Google Single Sign-On"}
+                </p>
+              </div>
+              <ChevronRight size={18} className="text-slate-400" />
+            </button>
           </div>
           
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden">
@@ -972,6 +991,7 @@ export default function Profile({ setView }: ProfileProps) {
 // --- Main View ---
 
   if (activeSection === 'edit_profile') return <EditProfileView />;
+  if (activeSection === 'password_security') return <PasswordSecurityView onBack={closeSection} />;
   if (activeSection === 'settings') return <SettingsView />;
   if (activeSection === 'saved') return <SavedContentView />;
   if (activeSection === 'stats') return <StatsView />;
@@ -1089,8 +1109,14 @@ export default function Profile({ setView }: ProfileProps) {
         </>
       )}
 
-      <SectionHeading>Settings</SectionHeading>
+      <SectionHeading>Account & Settings</SectionHeading>
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm flex flex-col mb-8">
+        <ActionRow 
+          icon={Lock} 
+          title="Password & Security" 
+          value={user?.providerData?.some(p => p.providerId === 'password') ? "Change Password" : "Google Managed"} 
+          onClick={() => handleAction('password_security')} 
+        />
         <ActionRow icon={Settings} title="General Settings & Preferences" value="Font Size, Study Preferences" onClick={() => handleAction('settings')} />
       </div>
 
