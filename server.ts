@@ -11,6 +11,9 @@ import multer from "multer";
 import { getAuth } from "firebase-admin/auth";
 import fs from "fs";
 import { recordAiUsage, getUserAiUsage, getSuperAdminAiStats } from "./src/server/aiUsageTracker";
+import { disableUser, enableUser, isUserDisabled, getAllDisabledUsers } from "./src/server/disabledUsersStore";
+
+const SUPER_ADMIN_EMAIL = "emmanuelomojola07@gmail.com";
 
 // Initialize Firebase Admin
 try {
@@ -48,17 +51,57 @@ async function startServer() {
     }
     
     try {
-      const decodedToken = await getAuth().verifyIdToken(idToken);
-      (req as any).user = decodedToken;
+      // Check revoked tokens (checkRevoked = true) to immediately block invalidated/disabled sessions
+      let decodedToken: any = null;
+      try {
+        decodedToken = await getAuth().verifyIdToken(idToken, true);
+      } catch (verifyErr: any) {
+        if (verifyErr?.code === 'auth/id-token-revoked' || verifyErr?.code === 'auth/user-disabled') {
+          return res.status(403).json({ error: "Account disabled or session revoked", disabled: true });
+        }
+        // Fallback for container without service account credentials
+        decodedToken = await getAuth().verifyIdToken(idToken);
+      }
+
+      const uid = decodedToken.uid || decodedToken.user_id || decodedToken.sub;
+      const email = decodedToken.email;
+
+      // Verify disabled status via persistent local disabled store
+      const disabledCheck = isUserDisabled(uid, email);
+      if (disabledCheck.disabled) {
+        return res.status(403).json({ error: disabledCheck.reason || "Your account has been disabled by an administrator.", disabled: true });
+      }
+
+      // Verify disabled status via Firebase Admin Auth if available
+      try {
+        const userRecord = await getAuth().getUser(uid);
+        if (userRecord.disabled) {
+          return res.status(403).json({ error: "Your account has been disabled by an administrator.", disabled: true });
+        }
+      } catch (_) {}
+
+      (req as any).user = { ...decodedToken, uid, email };
       next();
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.code === 'auth/id-token-revoked' || error?.code === 'auth/user-disabled') {
+        return res.status(403).json({ error: "Account disabled or session revoked", disabled: true });
+      }
       // If Firebase Admin does not have service account credentials (common outside GCP/Vercel), decode token payload safely
       try {
         const parts = idToken.split('.');
         if (parts.length === 3) {
           const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
           if (payload && (payload.user_id || payload.sub)) {
-            (req as any).user = { uid: payload.user_id || payload.sub, email: payload.email };
+            const uid = payload.user_id || payload.sub;
+            const email = payload.email;
+
+            // Check if user is marked as disabled
+            const disabledCheck = isUserDisabled(uid, email);
+            if (disabledCheck.disabled) {
+              return res.status(403).json({ error: disabledCheck.reason || "Your account has been disabled by an administrator.", disabled: true });
+            }
+
+            (req as any).user = { uid, email };
             return next();
           }
         }
@@ -66,6 +109,16 @@ async function startServer() {
       console.error("Auth Error:", error);
       return res.status(401).json({ error: "Unauthorized: Invalid or expired token" });
     }
+  };
+
+  const requireSuperAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const user = (req as any).user;
+    const email = user?.email;
+    const isSuperAdmin = email === SUPER_ADMIN_EMAIL || email === process.env.SUPER_ADMIN_EMAIL;
+    if (!isSuperAdmin) {
+      return res.status(403).json({ error: "Forbidden: Super Admin privileges required" });
+    }
+    next();
   };
 
   let _geminiClient: any = null;
@@ -142,19 +195,156 @@ async function startServer() {
     }
   });
 
-  app.get("/api/ai-usage/admin-stats", requireAuth, (req, res) => {
+  app.get("/api/ai-usage/admin-stats", requireAuth, requireSuperAdmin, (req, res) => {
     try {
-      const user = (req as any).user;
-      const email = user?.email;
-      const isSuperAdmin = email === 'emmanuelomojola07@gmail.com';
-      if (!isSuperAdmin) {
-        return res.status(403).json({ error: "Forbidden: Super Admin access required" });
-      }
       const stats = getSuperAdminAiStats();
       res.json(stats);
     } catch (error: any) {
       console.error("Error getting super admin AI stats:", error);
       res.status(500).json({ error: "Failed to fetch AI statistics" });
+    }
+  });
+
+  // Public endpoint to check if an account or email is disabled
+  app.post("/api/auth/check-status", async (req, res) => {
+    const { email, uid } = req.body;
+    if (!email && !uid) {
+      return res.status(400).json({ error: "Email or UID required" });
+    }
+
+    try {
+      // 1. Check in local persistent disabled store
+      const disabledCheck = isUserDisabled(uid, email);
+      if (disabledCheck.disabled) {
+        return res.json({ disabled: true, reason: disabledCheck.reason });
+      }
+
+      // 2. Check in Firebase Admin Auth if available
+      if (uid) {
+        try {
+          const u = await getAuth().getUser(uid);
+          if (u.disabled) {
+            return res.json({ disabled: true, reason: "Account has been disabled by an administrator." });
+          }
+        } catch (_) {}
+      } else if (email) {
+        try {
+          const u = await getAuth().getUserByEmail(email.toLowerCase().trim());
+          if (u.disabled) {
+            return res.json({ disabled: true, reason: "This email address is associated with a disabled account." });
+          }
+        } catch (_) {}
+      }
+
+      return res.json({ disabled: false });
+    } catch (err) {
+      return res.json({ disabled: false });
+    }
+  });
+
+  // Disable user account
+  app.post("/api/admin/users/disable", requireAuth, requireSuperAdmin, async (req, res) => {
+    const { uid, email, reason } = req.body;
+    if (!uid) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    // Safety guard: Never disable the Super Admin
+    if (email === SUPER_ADMIN_EMAIL || uid === (req as any).user.uid) {
+      return res.status(400).json({ error: "Cannot disable the Super Admin account." });
+    }
+
+    let authDisabled = false;
+    let sessionsRevoked = false;
+
+    // 1. Update persistent local disabled store
+    disableUser(uid, email, reason, (req as any).user.email || SUPER_ADMIN_EMAIL);
+
+    // 2. Disable in Firebase Admin Auth & revoke active refresh tokens if available
+    try {
+      await getAuth().updateUser(uid, { disabled: true });
+      authDisabled = true;
+      await getAuth().revokeRefreshTokens(uid);
+      sessionsRevoked = true;
+    } catch (_) {}
+
+    return res.json({
+      success: true,
+      message: "User account disabled and active sessions revoked.",
+      authDisabled,
+      sessionsRevoked
+    });
+  });
+
+  // Enable user account
+  app.post("/api/admin/users/enable", requireAuth, requireSuperAdmin, async (req, res) => {
+    const { uid, email } = req.body;
+    if (!uid) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    let authEnabled = false;
+
+    // 1. Remove from persistent local disabled store
+    enableUser(uid, email);
+
+    // 2. Re-enable in Firebase Admin Auth if available
+    try {
+      await getAuth().updateUser(uid, { disabled: false });
+      authEnabled = true;
+    } catch (_) {}
+
+    return res.json({
+      success: true,
+      message: "User account enabled successfully. Access restored.",
+      authEnabled
+    });
+  });
+
+  // Comprehensive User Report (returns server-tracked AI usage and auth status)
+  app.get("/api/admin/users/:uid/report", requireAuth, requireSuperAdmin, async (req, res) => {
+    const { uid } = req.params;
+    if (!uid) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    try {
+      // Real AI usage stats from memory/file store
+      const aiUsage = getUserAiUsage(uid);
+      const disabledStatus = isUserDisabled(uid);
+      let authRecord: any = null;
+
+      // Check Firebase Auth Record if available
+      try {
+        const fbUser = await getAuth().getUser(uid);
+        authRecord = {
+          disabled: fbUser.disabled,
+          emailVerified: fbUser.emailVerified,
+          creationTime: fbUser.metadata.creationTime,
+          lastSignInTime: fbUser.metadata.lastSignInTime
+        };
+      } catch (_) {}
+
+      return res.json({
+        uid,
+        disabledStatus,
+        authRecord,
+        aiUsage: aiUsage || {
+          requestsCount: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          tutorRequests: 0,
+          practiceGenerations: 0,
+          flashcardGenerations: 0,
+          estimatedCost: 0,
+          lastUsedAt: 0,
+          dailyStats: {}
+        }
+      });
+    } catch (err: any) {
+      console.error("[Admin Report] Error:", err);
+      return res.status(500).json({ error: "Failed to compile user report", details: err?.message });
     }
   });
 
@@ -1248,8 +1438,21 @@ ${text || '(Notes provided in the attached document/image)'}`;
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    app.use(express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('sw.js') || filePath.endsWith('manifest.json') || filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+        } else if (filePath.includes('/assets/')) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      }
+    }));
     app.get('*', (req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

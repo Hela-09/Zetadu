@@ -45,9 +45,64 @@
 
     <link rel="manifest" href="/manifest.json" />
     <script>
+      // Self-heal from dynamic chunk loading errors when new versions deploy
+      window.addEventListener('vite:preloadError', function() {
+        console.warn('[Zetadu PWA] Preload error detected. Reloading for latest version...');
+        window.location.reload();
+      });
+
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js');
+        var isRefreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function() {
+          if (isRefreshing) return;
+          isRefreshing = true;
+          window.location.reload();
+        });
+
+        window.addEventListener('load', function() {
+          // updateViaCache: 'none' ensures the browser never caches sw.js
+          navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+            .then(function(registration) {
+              // Proactively check for updates immediately
+              registration.update();
+
+              // When an update is detected and installed
+              registration.addEventListener('updatefound', function() {
+                var newWorker = registration.installing;
+                if (!newWorker) return;
+                newWorker.addEventListener('statechange', function() {
+                  if (newWorker.state === 'installed') {
+                    if (navigator.serviceWorker.controller) {
+                      // New version is ready - activate immediately
+                      newWorker.postMessage({ type: 'SKIP_WAITING' });
+                    }
+                  }
+                });
+              });
+
+              // Proactively check for updates when returning to the PWA on Android / iPhone
+              document.addEventListener('visibilitychange', function() {
+                if (document.visibilityState === 'visible') {
+                  registration.update();
+                }
+              });
+
+              // Check for updates when window gains focus or device reconnects online
+              window.addEventListener('focus', function() {
+                registration.update();
+              });
+              window.addEventListener('online', function() {
+                registration.update();
+              });
+
+              // Periodic update check every 15 minutes
+              setInterval(function() {
+                registration.update();
+              }, 15 * 60 * 1000);
+            })
+            .catch(function(err) {
+              console.warn('[Zetadu PWA] Service worker registration failed:', err);
+            });
         });
       }
     </script>

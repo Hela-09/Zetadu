@@ -14,6 +14,16 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && (request.auth.uid == docId || isSuperAdmin());
     }
+
+    match /disabled_users/{docId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    match /disabled_emails/{docId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
     
     match /settings/{docId} {
       allow read, write: if isAuthenticated() && (request.auth.uid == docId || isSuperAdmin());
@@ -39,7 +49,7 @@ service cloud.firestore {
 
     match /learning_data/{docId} {
       allow get: if isAuthenticated() && (resource.data.uid == request.auth.uid || request.auth.uid == docId || isSuperAdmin());
-      allow list: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow list: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
       allow create: if isAuthenticated() && (request.resource.data.uid == request.auth.uid || isSuperAdmin());
       allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
       allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
@@ -47,7 +57,7 @@ service cloud.firestore {
 
     match /ai_history/{docId} {
       allow get: if isAuthenticated() && (resource.data.uid == request.auth.uid || request.auth.uid == docId || isSuperAdmin());
-      allow list: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow list: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
       allow create: if isAuthenticated() && (request.resource.data.uid == request.auth.uid || isSuperAdmin());
       allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
       allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
@@ -55,7 +65,7 @@ service cloud.firestore {
 
     match /user_progress/{docId} {
       allow get: if isAuthenticated() && (resource.data.uid == request.auth.uid || request.auth.uid == docId || isSuperAdmin());
-      allow list: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow list: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
       allow create: if isAuthenticated() && (request.resource.data.uid == request.auth.uid || request.auth.uid == docId || isSuperAdmin());
       allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || request.auth.uid == docId || isSuperAdmin());
       allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || request.auth.uid == docId || isSuperAdmin());
@@ -63,7 +73,7 @@ service cloud.firestore {
 
     match /tutor_conversations/{docId} {
       allow get: if isAuthenticated() && (resource.data.uid == request.auth.uid || request.auth.uid == docId || isSuperAdmin());
-      allow list: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow list: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
       allow create: if isAuthenticated() && (request.resource.data.uid == request.auth.uid || isSuperAdmin());
       allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
       allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());

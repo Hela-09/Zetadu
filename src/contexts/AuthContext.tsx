@@ -103,6 +103,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const cached = localStorage.getItem(`zetadu_profile_${currentUser.uid}`);
         if (cached) {
           currentLocalProfile = JSON.parse(cached);
+          if (currentLocalProfile.disabled === true || currentLocalProfile.status === 'disabled') {
+            await signOut();
+            setError("This account has been disabled by an administrator. Access is revoked.");
+            setLoading(false);
+            userSetupInProgressRef.current = null;
+            return;
+          }
           setUserProfile(currentLocalProfile);
         }
       } catch (_) {}
@@ -112,6 +119,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const docSnap = await getDoc(userRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
+          // Check if account has been disabled by super admin
+          if (data.disabled === true || data.status === 'disabled') {
+            console.warn("[Auth] Account is disabled by administrator.");
+            await signOut();
+            setError("This account has been disabled by an administrator. Access is revoked.");
+            setLoading(false);
+            userSetupInProgressRef.current = null;
+            return;
+          }
+
           if (isActualSuperAdmin && !data.isSuperAdmin) {
             data.role = 'super_admin';
             data.isSuperAdmin = true;
@@ -122,6 +139,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.setItem(`zetadu_profile_${currentUser.uid}`, JSON.stringify(data));
           } catch (_) {}
         } else {
+          // Check if the email was registered in disabled registry
+          try {
+            const statusRes = await fetch('/api/auth/check-status', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: currentUser.email || '', uid: currentUser.uid })
+            });
+            if (statusRes.ok) {
+              const statusData = await statusRes.json();
+              if (statusData.disabled) {
+                console.warn("[Auth] Blocked disabled email sign-in attempt.");
+                await signOut();
+                setError("This account has been disabled by an administrator. Access is revoked.");
+                setLoading(false);
+                userSetupInProgressRef.current = null;
+                return;
+              }
+            }
+          } catch (_) {}
+
           const generatedUsername = currentUser.email 
             ? currentUser.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '') + Math.floor(Math.random() * 1000) 
             : 'user_' + currentUser.uid.substring(0, 6);
@@ -211,6 +248,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         (snapshot) => {
           if (snapshot.exists()) {
             let data = snapshot.data();
+            if (data.disabled === true || data.status === 'disabled') {
+              console.warn("[Auth] Real-time revocation: Account disabled by administrator.");
+              signOut().then(() => {
+                setError("Your account has been disabled by an administrator. Access is revoked.");
+              });
+              return;
+            }
             if (data.subscriptionStatus === 'active' && data.subscriptionExpires) {
               if (Date.now() > data.subscriptionExpires) {
                 data.subscriptionStatus = 'expired';

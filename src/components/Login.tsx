@@ -11,6 +11,8 @@ type ViewState = 'login' | 'register' | 'forgot-password';
 const translateError = (err: any) => {
   if (!err || !err.code) return err?.message || 'An unexpected error occurred.';
   switch (err.code) {
+    case 'auth/user-disabled':
+      return 'This account has been disabled by an administrator. Access is revoked.';
     case 'auth/invalid-email':
       return 'Please enter a valid email address.';
     case 'auth/user-not-found':
@@ -94,6 +96,24 @@ export default function Login() {
     try {
       clearError();
       setLoading(true);
+
+      // Verify the email is not disabled by an administrator
+      try {
+        const checkRes = await fetch('/api/auth/check-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim().toLowerCase() })
+        });
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          if (checkData.disabled) {
+            setError(checkData.reason || 'This email address has been disabled by an administrator. Account creation is blocked.');
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (_) {}
+
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
       await updateProfile(userCredential.user, {
