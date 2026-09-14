@@ -1,13 +1,13 @@
 {
   "id": "/",
-  "name": "Zetadu",
-  "short_name": "Zetadu",
+  "name": "Learndean",
+  "short_name": "Learndean",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f8fafc",
   "theme_color": "#0f172a",
-  "description": "AI-powered learning, study, practice and trivia platform.",
+  "description": "Learndean - AI-powered learning, study, practice and trivia platform.",
   "icons": [
     {
       "src": "/logo.png",

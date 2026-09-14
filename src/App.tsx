@@ -198,7 +198,7 @@ export default function App() {
                 onClick={() => setIsSearchOpen(true)}
                 className="sm:hidden p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
                 aria-label="Search"
-                title="Search Zetadu"
+                title="Search Learndean"
               >
                 <Search size={18} />
               </button>

@@ -525,7 +525,7 @@ function UsersTab({ activeTab }: { activeTab: string }) {
                       Disabling will take immediate effect:
                     </p>
                     <ul className="list-disc pl-4 space-y-1 text-slate-600 dark:text-slate-400">
-                      <li>The user will immediately lose access to Zetadu.</li>
+                      <li>The user will immediately lose access to Learndean.</li>
                       <li>Active sessions and refresh tokens will be revoked immediately.</li>
                       <li>Google Sign-In and email logins will be blocked.</li>
                       <li>New account creation with this email will be prohibited.</li>

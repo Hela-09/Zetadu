@@ -281,7 +281,7 @@ export default function FlashcardStudyScreen({
         </div>
 
         <div className="w-full max-w-2xl mx-auto text-center py-4 text-xs text-slate-400">
-          EduCore Zetadu Spaced Repetition Engine
+          EduCore Learndean Spaced Repetition Engine
         </div>
       </div>
     );

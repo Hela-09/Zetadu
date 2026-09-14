@@ -1,5 +1,5 @@
-// Zetadu PWA Service Worker
-const CACHE_NAME = 'zetadu-cache-v2';
+// Learndean PWA Service Worker
+const CACHE_NAME = 'learndean-cache-v1';
 
 self.addEventListener('install', (event) => {
   // Take control immediately on install without waiting
@@ -44,7 +44,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = event.request.url || '';
 
-  // Never intercept or cache API requests, Firebase Auth, Google OAuth, Firestore, or dev server assets
+  // Never intercept or cache API requests, Firebase Auth, Google OAuth, Firestore, dev server assets, or sw.js itself
   if (
     url.includes('/api/') ||
     url.includes('/__/auth') ||
@@ -54,7 +54,9 @@ self.addEventListener('fetch', (event) => {
     url.includes('identitytoolkit') ||
     url.includes('firestore.googleapis.com') ||
     url.includes('@vite') ||
-    url.includes('/src/')
+    url.includes('/src/') ||
+    url.endsWith('/sw.js') ||
+    url.includes('/sw.js?')
   ) {
     return;
   }

@@ -51,7 +51,7 @@ export default function AiUsageAdminTab() {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-slate-500 dark:text-slate-400">
         <RefreshCw size={36} className="animate-spin text-blue-600 mb-4" />
-        <p className="font-medium text-sm">Aggregating AI usage analytics across Zetadu...</p>
+        <p className="font-medium text-sm">Aggregating AI usage analytics across Learndean...</p>
       </div>
     );
   }
@@ -371,6 +371,91 @@ export default function AiUsageAdminTab() {
                     </td>
                     <td className="py-3 px-4 text-right text-slate-400 text-[11px]">
                       {user.lastUsedAt ? new Date(user.lastUsedAt).toLocaleDateString() : '—'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Recent AI Activity Log */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Clock size={16} className="text-blue-500" />
+            <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+              Recent AI Activity Log ({stats?.recentLogs?.length || 0})
+            </h4>
+          </div>
+          <span className="text-[11px] text-slate-400 font-mono">
+            Latest actual Gemini API requests
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
+              <tr>
+                <th className="py-3 px-4">Time</th>
+                <th className="py-3 px-4">User</th>
+                <th className="py-3 px-4">Feature</th>
+                <th className="py-3 px-4">Model</th>
+                <th className="py-3 px-4 text-right">Input</th>
+                <th className="py-3 px-4 text-right">Output</th>
+                <th className="py-3 px-4 text-right">Total Tokens</th>
+                <th className="py-3 px-4 text-right">Cost</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
+              {(!stats?.recentLogs || stats.recentLogs.length === 0) ? (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-slate-400">
+                    No recent AI requests logged yet.
+                  </td>
+                </tr>
+              ) : (
+                stats.recentLogs.slice(0, 25).map(log => (
+                  <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors font-mono">
+                    <td className="py-2.5 px-4 text-slate-500 text-[11px] whitespace-nowrap">
+                      {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </td>
+                    <td className="py-2.5 px-4 font-sans">
+                      <div className="font-semibold text-slate-900 dark:text-white text-xs truncate max-w-[150px]">
+                        {log.displayName || log.email || log.uid}
+                      </div>
+                      {log.email && (
+                        <div className="text-[10px] text-slate-400 truncate max-w-[150px]">
+                          {log.email}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-4 font-sans">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                        log.category === 'tutor'
+                          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                          : log.category === 'practice'
+                          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                          : 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                      }`}>
+                        {log.category === 'tutor' ? 'AI Tutor' : log.category === 'practice' ? 'AI Practice' : 'AI Flashcards'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4 text-[11px] text-slate-600 dark:text-slate-300">
+                      {log.model}
+                    </td>
+                    <td className="py-2.5 px-4 text-right text-slate-500 text-[11px]">
+                      {log.inputTokens.toLocaleString()}
+                    </td>
+                    <td className="py-2.5 px-4 text-right text-slate-500 text-[11px]">
+                      {log.outputTokens.toLocaleString()}
+                    </td>
+                    <td className="py-2.5 px-4 text-right font-semibold text-blue-600 dark:text-blue-400 text-[11px]">
+                      {log.totalTokens.toLocaleString()}
+                    </td>
+                    <td className="py-2.5 px-4 text-right font-semibold text-emerald-600 dark:text-emerald-400 text-[11px]">
+                      ${log.estimatedCost.toFixed(5)}
                     </td>
                   </tr>
                 ))

@@ -181,7 +181,7 @@ export default function Login() {
             <Logo variant="icon" className="w-16 h-16 shrink-0" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white text-center mb-2">
-            Welcome to Zetadu
+            Welcome to Learndean
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-center text-sm sm:text-base">
             Your personal AI-powered learning companion.

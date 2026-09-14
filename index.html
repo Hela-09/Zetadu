@@ -4,8 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     
-    <title>Zetadu</title>
-    <meta name="description" content="AI-powered learning, study, practice and trivia platform.">
+    <title>Learndean</title>
+    <meta name="description" content="Learndean - AI-powered learning, study, practice and trivia platform.">
+    <meta property="og:title" content="Learndean" />
+    <meta property="og:description" content="AI-powered adaptive learning, exam preparation, and study platform." />
     <meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/png" href="/logo.png" />
@@ -47,63 +49,102 @@
     <script>
       // Self-heal from dynamic chunk loading errors when new versions deploy
       window.addEventListener('vite:preloadError', function() {
-        console.warn('[Zetadu PWA] Preload error detected. Reloading for latest version...');
+        console.warn('[Learndean PWA] Preload error detected. Reloading for latest version...');
         window.location.reload();
       });
 
       if ('serviceWorker' in navigator) {
-        var isRefreshing = false;
-        navigator.serviceWorker.addEventListener('controllerchange', function() {
-          if (isRefreshing) return;
-          isRefreshing = true;
-          window.location.reload();
-        });
+        var isInsideIframe = false;
+        try {
+          isInsideIframe = window.self !== window.top;
+        } catch (e) {
+          isInsideIframe = true;
+        }
 
-        window.addEventListener('load', function() {
-          // updateViaCache: 'none' ensures the browser never caches sw.js
-          navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
-            .then(function(registration) {
-              // Proactively check for updates immediately
-              registration.update();
+        if (isInsideIframe) {
+          // In AI Studio preview or any embedded iframe, do not register or update service workers.
+          // Unregister any active workers to prevent cross-origin iframe fetch restrictions and stale dev caching.
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for (var i = 0; i < registrations.length; i++) {
+              registrations[i].unregister().catch(function() {});
+            }
+          }).catch(function() {});
+        } else {
+          var hadController = !!navigator.serviceWorker.controller;
+          var isRefreshing = false;
+          navigator.serviceWorker.addEventListener('controllerchange', function() {
+            if (!hadController) {
+              hadController = true;
+              return;
+            }
+            if (isRefreshing) return;
+            isRefreshing = true;
+            window.location.reload();
+          });
 
-              // When an update is detected and installed
-              registration.addEventListener('updatefound', function() {
-                var newWorker = registration.installing;
-                if (!newWorker) return;
-                newWorker.addEventListener('statechange', function() {
-                  if (newWorker.state === 'installed') {
-                    if (navigator.serviceWorker.controller) {
-                      // New version is ready - activate immediately
-                      newWorker.postMessage({ type: 'SKIP_WAITING' });
+          window.addEventListener('load', function() {
+            var safeUpdate = function(reg) {
+              if (reg && typeof reg.update === 'function') {
+                try {
+                  reg.update().catch(function() {
+                    // Silently ignore background network failures or transient disconnects
+                  });
+                } catch (e) {
+                  // Catch any synchronous dispatch failures
+                }
+              }
+            };
+
+            // updateViaCache: 'none' ensures the browser always checks the server for sw.js changes
+            navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+              .then(function(registration) {
+                // If a worker is already waiting, tell it to take over immediately
+                if (registration.waiting) {
+                  registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                }
+
+                // Proactively check for updates immediately
+                safeUpdate(registration);
+
+                // When an update is detected and installed
+                registration.addEventListener('updatefound', function() {
+                  var newWorker = registration.installing;
+                  if (!newWorker) return;
+                  newWorker.addEventListener('statechange', function() {
+                    if (newWorker.state === 'installed') {
+                      if (navigator.serviceWorker.controller) {
+                        // New version is ready - activate immediately
+                        newWorker.postMessage({ type: 'SKIP_WAITING' });
+                      }
                     }
+                  });
+                });
+
+                // Proactively check for updates when returning to the PWA on Android / iPhone
+                document.addEventListener('visibilitychange', function() {
+                  if (document.visibilityState === 'visible') {
+                    safeUpdate(registration);
                   }
                 });
-              });
 
-              // Proactively check for updates when returning to the PWA on Android / iPhone
-              document.addEventListener('visibilitychange', function() {
-                if (document.visibilityState === 'visible') {
-                  registration.update();
-                }
-              });
+                // Check for updates when window gains focus or device reconnects online
+                window.addEventListener('focus', function() {
+                  safeUpdate(registration);
+                });
+                window.addEventListener('online', function() {
+                  safeUpdate(registration);
+                });
 
-              // Check for updates when window gains focus or device reconnects online
-              window.addEventListener('focus', function() {
-                registration.update();
+                // Periodic update check every 15 minutes
+                setInterval(function() {
+                  safeUpdate(registration);
+                }, 15 * 60 * 1000);
+              })
+              .catch(function(err) {
+                console.debug('[Learndean PWA] Service worker registration deferred:', err);
               });
-              window.addEventListener('online', function() {
-                registration.update();
-              });
-
-              // Periodic update check every 15 minutes
-              setInterval(function() {
-                registration.update();
-              }, 15 * 60 * 1000);
-            })
-            .catch(function(err) {
-              console.warn('[Zetadu PWA] Service worker registration failed:', err);
-            });
-        });
+          });
+        }
       }
     </script>
 </head>

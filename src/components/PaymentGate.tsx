@@ -96,7 +96,7 @@ export default function PaymentGate() {
       <div className="max-w-md w-full space-y-8 bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700">
         
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-center text-slate-900 dark:text-white flex-1">Zetadu Premium</h2>
+          <h2 className="text-2xl font-bold text-center text-slate-900 dark:text-white flex-1">Learndean Premium</h2>
           <button onClick={signOut} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors" title="Sign out">
             <LogOut size={20} />
           </button>

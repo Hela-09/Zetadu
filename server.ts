@@ -413,6 +413,7 @@ Always prioritize accuracy, completeness, and clarity. Analyze the entire image 
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
         
+        let usedModel = 'gemini-3.8-flash';
         let resultStream;
         try {
           resultStream = await ai.models.generateContentStream({
@@ -422,7 +423,8 @@ Always prioritize accuracy, completeness, and clarity. Analyze the entire image 
           });
         } catch (err: any) {
           if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
-            console.warn("2.5-flash overloaded, falling back to 1.5-flash");
+            console.warn("gemini-3.8-flash overloaded, falling back to gemini-3.1-flash-lite");
+            usedModel = 'gemini-3.1-flash-lite';
             resultStream = await ai.models.generateContentStream({
               model: 'gemini-3.1-flash-lite',
               contents: contents,
@@ -447,24 +449,26 @@ Always prioritize accuracy, completeness, and clarity. Analyze the entire image 
         res.write('data: [DONE]\n\n');
         res.end();
 
-        // Track usage only upon successful stream completion
+        // Track usage only upon successful stream completion using actual Gemini usage metadata
         const user = (req as any).user;
         const uid = user?.uid || user?.user_id;
         if (uid) {
-          const inputTokens = streamUsage?.promptTokenCount || Math.ceil(JSON.stringify(contents).length / 4);
-          const outputTokens = streamUsage?.candidatesTokenCount || Math.ceil(streamText.length / 4);
-          const totalTokens = streamUsage?.totalTokenCount || (inputTokens + outputTokens);
+          const inputTokens = streamUsage?.promptTokenCount ?? 0;
+          const outputTokens = streamUsage?.candidatesTokenCount ?? 0;
+          const totalTokens = streamUsage?.totalTokenCount ?? (inputTokens + outputTokens);
           recordAiUsage({
             uid,
             email: user?.email,
             displayName: user?.name,
             category: 'tutor',
+            model: usedModel,
             inputTokens,
             outputTokens,
             totalTokens
           });
         }
       } else {
+        let usedModel = 'gemini-3.8-flash';
         let response;
         try {
           response = await ai.models.generateContent({
@@ -474,7 +478,8 @@ Always prioritize accuracy, completeness, and clarity. Analyze the entire image 
           });
         } catch (err: any) {
           if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
-            console.warn("2.5-flash overloaded, falling back to 1.5-flash");
+            console.warn("gemini-3.8-flash overloaded, falling back to gemini-3.1-flash-lite");
+            usedModel = 'gemini-3.1-flash-lite';
             response = await ai.models.generateContent({
               model: 'gemini-3.1-flash-lite',
               contents: contents,
@@ -486,18 +491,19 @@ Always prioritize accuracy, completeness, and clarity. Analyze the entire image 
         }
         res.json({ text: response.text });
 
-        // Track usage only upon successful response
+        // Track usage only upon successful response using actual Gemini usage metadata
         const user = (req as any).user;
         const uid = user?.uid || user?.user_id;
         if (uid) {
-          const inputTokens = response.usageMetadata?.promptTokenCount || Math.ceil(JSON.stringify(contents).length / 4);
-          const outputTokens = response.usageMetadata?.candidatesTokenCount || Math.ceil((response.text || '').length / 4);
-          const totalTokens = response.usageMetadata?.totalTokenCount || (inputTokens + outputTokens);
+          const inputTokens = response.usageMetadata?.promptTokenCount ?? 0;
+          const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
+          const totalTokens = response.usageMetadata?.totalTokenCount ?? (inputTokens + outputTokens);
           recordAiUsage({
             uid,
             email: user?.email,
             displayName: user?.name,
             category: 'tutor',
+            model: usedModel,
             inputTokens,
             outputTokens,
             totalTokens
@@ -565,6 +571,7 @@ Each question must be a multiple choice question with 4 options, one correct ans
         }
       };
 
+      let usedModel = 'gemini-3.8-flash';
       try {
         response = await ai.models.generateContent({
           model: 'gemini-3.8-flash',
@@ -573,7 +580,8 @@ Each question must be a multiple choice question with 4 options, one correct ans
         });
       } catch (err: any) {
         if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
-          console.warn("2.5-flash overloaded, falling back to 1.5-flash");
+          console.warn("gemini-3.8-flash overloaded, falling back to gemini-3.1-flash-lite");
+          usedModel = 'gemini-3.1-flash-lite';
           response = await ai.models.generateContent({
             model: 'gemini-3.1-flash-lite',
             contents: prompt,
@@ -589,18 +597,19 @@ Each question must be a multiple choice question with 4 options, one correct ans
       const questions = JSON.parse(text);
       res.json({ questions });
 
-      // Track usage only upon successful generation
+      // Track usage only upon successful generation using actual Gemini usage metadata
       const user = (req as any).user;
       const uid = user?.uid || user?.user_id;
       if (uid) {
-        const inputTokens = response.usageMetadata?.promptTokenCount || Math.ceil(prompt.length / 4);
-        const outputTokens = response.usageMetadata?.candidatesTokenCount || Math.ceil(text.length / 4);
-        const totalTokens = response.usageMetadata?.totalTokenCount || (inputTokens + outputTokens);
+        const inputTokens = response.usageMetadata?.promptTokenCount ?? 0;
+        const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
+        const totalTokens = response.usageMetadata?.totalTokenCount ?? (inputTokens + outputTokens);
         recordAiUsage({
           uid,
           email: user?.email,
           displayName: user?.name,
           category: 'practice',
+          model: usedModel,
           inputTokens,
           outputTokens,
           totalTokens
@@ -644,13 +653,13 @@ Each question must be a multiple choice question with 4 options, one correct ans
     return result;
   };
 
-  // Helper to execute Gemini content generation with fallback
+  // Helper to execute Gemini content generation with fallback and immediate actual usage recording
   const generateGeminiFlashcards = async (
     ai: any,
     prompt: string,
     schema: any,
     maxTokens: number = 8192,
-    tokenCollector?: { inputTokens: number; outputTokens: number; totalTokens: number }
+    userContext?: { uid?: string; email?: string; displayName?: string }
   ) => {
     const config = {
       responseMimeType: "application/json",
@@ -658,6 +667,7 @@ Each question must be a multiple choice question with 4 options, one correct ans
       maxOutputTokens: maxTokens
     };
 
+    let usedModel = 'gemini-3.8-flash';
     let response;
     try {
       response = await ai.models.generateContent({
@@ -669,6 +679,7 @@ Each question must be a multiple choice question with 4 options, one correct ans
       const isOverloaded = err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503 || err?.status === 429;
       if (isOverloaded) {
         console.warn("gemini-3.8-flash overloaded, falling back to gemini-3.1-flash-lite");
+        usedModel = 'gemini-3.1-flash-lite';
         response = await ai.models.generateContent({
           model: 'gemini-3.1-flash-lite',
           contents: prompt,
@@ -682,12 +693,21 @@ Each question must be a multiple choice question with 4 options, one correct ans
     const text = response.text;
     if (!text) throw new Error("No text response received from AI model");
 
-    if (tokenCollector) {
-      const input = response.usageMetadata?.promptTokenCount || Math.ceil(prompt.length / 4);
-      const output = response.usageMetadata?.candidatesTokenCount || Math.ceil(text.length / 4);
-      tokenCollector.inputTokens += input;
-      tokenCollector.outputTokens += output;
-      tokenCollector.totalTokens += (response.usageMetadata?.totalTokenCount || (input + output));
+    // Record actual Gemini usage immediately for this specific successful request
+    if (userContext?.uid) {
+      const inputTokens = response.usageMetadata?.promptTokenCount ?? 0;
+      const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
+      const totalTokens = response.usageMetadata?.totalTokenCount ?? (inputTokens + outputTokens);
+      recordAiUsage({
+        uid: userContext.uid,
+        email: userContext.email,
+        displayName: userContext.displayName,
+        category: 'flashcards',
+        model: usedModel,
+        inputTokens,
+        outputTokens,
+        totalTokens
+      });
     }
 
     return JSON.parse(text);
@@ -698,7 +718,10 @@ Each question must be a multiple choice question with 4 options, one correct ans
       const { text, count } = req.body;
       const targetCount = Math.min(Math.max(Number(count) || 10, 5), 100);
       const ai = getGeminiClient();
-      const tokenCollector = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+
+      const user = (req as any).user;
+      const uid = user?.uid || user?.user_id;
+      const userContext = uid ? { uid, email: user?.email, displayName: user?.name } : undefined;
 
       const schema = {
         type: Type.ARRAY,
@@ -721,25 +744,9 @@ CRITICAL: Every flashcard must be completely unique with NO duplicate questions 
 Text:
 ${text}`;
 
-        const rawCards = await generateGeminiFlashcards(ai, prompt, schema, 4096, tokenCollector);
+        const rawCards = await generateGeminiFlashcards(ai, prompt, schema, 4096, userContext);
         const uniqueCards = deduplicateFlashcards(Array.isArray(rawCards) ? rawCards : []);
-        res.json({ flashcards: uniqueCards.slice(0, targetCount) });
-
-        // Record usage only on success
-        const user = (req as any).user;
-        const uid = user?.uid || user?.user_id;
-        if (uid) {
-          recordAiUsage({
-            uid,
-            email: user?.email,
-            displayName: user?.name,
-            category: 'flashcards',
-            inputTokens: tokenCollector.inputTokens,
-            outputTokens: tokenCollector.outputTokens,
-            totalTokens: tokenCollector.totalTokens
-          });
-        }
-        return;
+        return res.json({ flashcards: uniqueCards.slice(0, targetCount) });
       }
 
       // For larger counts (30, 50, 75, 100), generate in parallel thematic sections to guarantee diversity and avoid duplicates
@@ -766,7 +773,7 @@ Study Text:
 ${text}`;
 
         try {
-          const cards = await generateGeminiFlashcards(ai, prompt, schema, 4096, tokenCollector);
+          const cards = await generateGeminiFlashcards(ai, prompt, schema, 4096, userContext);
           return Array.isArray(cards) ? cards : [];
         } catch (batchErr) {
           console.warn(`Batch ${index} flashcards generation error:`, batchErr);
@@ -788,7 +795,7 @@ Existing questions already covered (DO NOT DUPLICATE): ${existingSamples}
 Study Text:
 ${text}`;
         try {
-          const supplementCards = await generateGeminiFlashcards(ai, supplementPrompt, schema, 2048, tokenCollector);
+          const supplementCards = await generateGeminiFlashcards(ai, supplementPrompt, schema, 2048, userContext);
           if (Array.isArray(supplementCards)) {
             uniqueCards = deduplicateFlashcards([...uniqueCards, ...supplementCards]);
           }
@@ -796,21 +803,6 @@ ${text}`;
       }
 
       res.json({ flashcards: uniqueCards.slice(0, targetCount) });
-
-      // Record usage only on success
-      const user = (req as any).user;
-      const uid = user?.uid || user?.user_id;
-      if (uid) {
-        recordAiUsage({
-          uid,
-          email: user?.email,
-          displayName: user?.name,
-          category: 'flashcards',
-          inputTokens: tokenCollector.inputTokens,
-          outputTokens: tokenCollector.outputTokens,
-          totalTokens: tokenCollector.totalTokens
-        });
-      }
     } catch (error: any) {
       const isOverloaded = error?.status === 503 || error?.message?.includes("503") || error?.status === "UNAVAILABLE" || error?.error?.code === 503 || error?.status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("resource_exhausted");
       if (isOverloaded) {
@@ -828,7 +820,10 @@ ${text}`;
       const { subject, topic, level, count } = req.body;
       const targetCount = Math.min(Math.max(Number(count) || 10, 5), 100);
       const ai = getGeminiClient();
-      const tokenCollector = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+
+      const user = (req as any).user;
+      const uid = user?.uid || user?.user_id;
+      const userContext = uid ? { uid, email: user?.email, displayName: user?.name } : undefined;
 
       const schema = {
         type: Type.ARRAY,
@@ -852,24 +847,9 @@ Education Level: ${level || 'Secondary / High School'}
 Ensure questions are concise, answers are clear, and provide a short explanation for each answer.
 CRITICAL: Every flashcard must address a distinct concept. Do NOT repeat questions or generate duplicates.`;
 
-        const rawCards = await generateGeminiFlashcards(ai, prompt, schema, 4096, tokenCollector);
+        const rawCards = await generateGeminiFlashcards(ai, prompt, schema, 4096, userContext);
         const uniqueCards = deduplicateFlashcards(Array.isArray(rawCards) ? rawCards : []);
-        res.json({ flashcards: uniqueCards.slice(0, targetCount) });
-
-        const user = (req as any).user;
-        const uid = user?.uid || user?.user_id;
-        if (uid) {
-          recordAiUsage({
-            uid,
-            email: user?.email,
-            displayName: user?.name,
-            category: 'flashcards',
-            inputTokens: tokenCollector.inputTokens,
-            outputTokens: tokenCollector.outputTokens,
-            totalTokens: tokenCollector.totalTokens
-          });
-        }
-        return;
+        return res.json({ flashcards: uniqueCards.slice(0, targetCount) });
       }
 
       // For larger counts (30, 50, 75, 100), generate in parallel thematic sections
@@ -916,7 +896,7 @@ CRITICAL RULES:
 2. Adhere strictly to the assigned pillar to prevent any overlap with other sections.`;
 
         try {
-          const cards = await generateGeminiFlashcards(ai, prompt, schema, 4096, tokenCollector);
+          const cards = await generateGeminiFlashcards(ai, prompt, schema, 4096, userContext);
           return Array.isArray(cards) ? cards : [];
         } catch (batchErr) {
           console.warn(`Batch ${index} structured flashcards generation error:`, batchErr);
@@ -936,7 +916,7 @@ CRITICAL RULES:
 DO NOT duplicate any of these already covered questions: ${existingSamples}`;
 
         try {
-          const supplementCards = await generateGeminiFlashcards(ai, supplementPrompt, schema, 2048, tokenCollector);
+          const supplementCards = await generateGeminiFlashcards(ai, supplementPrompt, schema, 2048, userContext);
           if (Array.isArray(supplementCards)) {
             uniqueCards = deduplicateFlashcards([...uniqueCards, ...supplementCards]);
           }
@@ -944,21 +924,6 @@ DO NOT duplicate any of these already covered questions: ${existingSamples}`;
       }
 
       res.json({ flashcards: uniqueCards.slice(0, targetCount) });
-
-      // Record usage only on success
-      const user = (req as any).user;
-      const uid = user?.uid || user?.user_id;
-      if (uid) {
-        recordAiUsage({
-          uid,
-          email: user?.email,
-          displayName: user?.name,
-          category: 'flashcards',
-          inputTokens: tokenCollector.inputTokens,
-          outputTokens: tokenCollector.outputTokens,
-          totalTokens: tokenCollector.totalTokens
-        });
-      }
     } catch (error: any) {
       console.error("Flashcard Generation Error:", error);
       res.status(500).json({ error: "Failed to generate flashcards" });
@@ -994,6 +959,7 @@ Provide a structured, engaging summary of this topic:
         }
       };
 
+      let usedModel = 'gemini-3.8-flash';
       let response;
       try {
         response = await ai.models.generateContent({
@@ -1004,6 +970,7 @@ Provide a structured, engaging summary of this topic:
       } catch (err: any) {
         if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
           console.warn("Flash overloaded, falling back to flash-lite for topic learning");
+          usedModel = 'gemini-3.1-flash-lite';
           response = await ai.models.generateContent({
             model: 'gemini-3.1-flash-lite',
             contents: prompt,
@@ -1020,18 +987,19 @@ Provide a structured, engaging summary of this topic:
       const learnData = JSON.parse(responseText);
       res.json({ learnData });
 
-      // Track usage only upon successful generation
+      // Track usage only upon successful generation using actual Gemini usage metadata
       const user = (req as any).user;
       const uid = user?.uid || user?.user_id;
       if (uid) {
-        const inputTokens = response.usageMetadata?.promptTokenCount || Math.ceil(prompt.length / 4);
-        const outputTokens = response.usageMetadata?.candidatesTokenCount || Math.ceil(responseText.length / 4);
-        const totalTokens = response.usageMetadata?.totalTokenCount || (inputTokens + outputTokens);
+        const inputTokens = response.usageMetadata?.promptTokenCount ?? 0;
+        const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
+        const totalTokens = response.usageMetadata?.totalTokenCount ?? (inputTokens + outputTokens);
         recordAiUsage({
           uid,
           email: user?.email,
           displayName: user?.name,
           category: 'tutor',
+          model: usedModel,
           inputTokens,
           outputTokens,
           totalTokens
@@ -1068,6 +1036,9 @@ Provide a structured, engaging summary of this topic:
       if ((!text || text.trim() === '') && (!attachments || attachments.length === 0)) {
         return res.status(400).json({ error: "Please provide either notes text or an uploaded file/image." });
       }
+
+      const user = (req as any).user;
+      const uid = user?.uid || user?.user_id;
 
       const ai = getGeminiClient();
 
@@ -1108,6 +1079,7 @@ Formatting & Content Guidelines:
 
         parts.push({ text: prompt });
 
+        let usedModel = 'gemini-3.8-flash';
         let response;
         try {
           response = await ai.models.generateContent({
@@ -1116,6 +1088,7 @@ Formatting & Content Guidelines:
           });
         } catch (err: any) {
           if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
+            usedModel = 'gemini-3.1-flash-lite';
             response = await ai.models.generateContent({
               model: 'gemini-3.1-flash-lite',
               contents: [{ role: 'user', parts }]
@@ -1123,6 +1096,22 @@ Formatting & Content Guidelines:
           } else {
             throw err;
           }
+        }
+
+        if (uid) {
+          const inputTokens = response.usageMetadata?.promptTokenCount ?? 0;
+          const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
+          const totalTokens = response.usageMetadata?.totalTokenCount ?? (inputTokens + outputTokens);
+          recordAiUsage({
+            uid,
+            email: user?.email,
+            displayName: user?.name,
+            category: 'tutor',
+            model: usedModel,
+            inputTokens,
+            outputTokens,
+            totalTokens
+          });
         }
 
         return res.json({ summary: response.text });
@@ -1148,6 +1137,7 @@ Formatting & Content Guidelines:
 
         parts.push({ text: prompt });
 
+        let usedModel = 'gemini-3.8-flash';
         let response;
         try {
           response = await ai.models.generateContent({
@@ -1156,6 +1146,7 @@ Formatting & Content Guidelines:
           });
         } catch (err: any) {
           if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
+            usedModel = 'gemini-3.1-flash-lite';
             response = await ai.models.generateContent({
               model: 'gemini-3.1-flash-lite',
               contents: [{ role: 'user', parts }]
@@ -1163,6 +1154,22 @@ Formatting & Content Guidelines:
           } else {
             throw err;
           }
+        }
+
+        if (uid) {
+          const inputTokens = response.usageMetadata?.promptTokenCount ?? 0;
+          const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
+          const totalTokens = response.usageMetadata?.totalTokenCount ?? (inputTokens + outputTokens);
+          recordAiUsage({
+            uid,
+            email: user?.email,
+            displayName: user?.name,
+            category: 'tutor',
+            model: usedModel,
+            inputTokens,
+            outputTokens,
+            totalTokens
+          });
         }
 
         return res.json({ explanation: response.text });
@@ -1189,6 +1196,7 @@ Formatting & Content Guidelines:
             responseSchema: cardSchema,
             maxOutputTokens: maxTokens
           };
+          let usedModel = 'gemini-3.8-flash';
           let resp;
           try {
             resp = await ai.models.generateContent({
@@ -1200,6 +1208,7 @@ Formatting & Content Guidelines:
             const isOverloaded = err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503 || err?.status === 429;
             if (isOverloaded) {
               console.warn("gemini-3.8-flash overloaded in notes flashcards, falling back to gemini-3.1-flash-lite");
+              usedModel = 'gemini-3.1-flash-lite';
               resp = await ai.models.generateContent({
                 model: 'gemini-3.1-flash-lite',
                 contents: [{ role: 'user', parts: reqParts }],
@@ -1209,6 +1218,23 @@ Formatting & Content Guidelines:
               throw err;
             }
           }
+
+          if (uid) {
+            const inputTokens = resp.usageMetadata?.promptTokenCount ?? 0;
+            const outputTokens = resp.usageMetadata?.candidatesTokenCount ?? 0;
+            const totalTokens = resp.usageMetadata?.totalTokenCount ?? (inputTokens + outputTokens);
+            recordAiUsage({
+              uid,
+              email: user?.email,
+              displayName: user?.name,
+              category: 'flashcards',
+              model: usedModel,
+              inputTokens,
+              outputTokens,
+              totalTokens
+            });
+          }
+
           const txt = resp.text;
           if (!txt) return [];
           try {
@@ -1320,6 +1346,7 @@ ${text || '(Notes provided in the attached document/image)'}`;
             responseSchema: questionSchema,
             maxOutputTokens: maxTokens
           };
+          let usedModel = 'gemini-3.8-flash';
           let resp;
           try {
             resp = await ai.models.generateContent({
@@ -1331,6 +1358,7 @@ ${text || '(Notes provided in the attached document/image)'}`;
             const isOverloaded = err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503 || err?.status === 429;
             if (isOverloaded) {
               console.warn("gemini-3.8-flash overloaded in notes questions, falling back to gemini-3.1-flash-lite");
+              usedModel = 'gemini-3.1-flash-lite';
               resp = await ai.models.generateContent({
                 model: 'gemini-3.1-flash-lite',
                 contents: [{ role: 'user', parts: reqParts }],
@@ -1340,6 +1368,23 @@ ${text || '(Notes provided in the attached document/image)'}`;
               throw err;
             }
           }
+
+          if (uid) {
+            const inputTokens = resp.usageMetadata?.promptTokenCount ?? 0;
+            const outputTokens = resp.usageMetadata?.candidatesTokenCount ?? 0;
+            const totalTokens = resp.usageMetadata?.totalTokenCount ?? (inputTokens + outputTokens);
+            recordAiUsage({
+              uid,
+              email: user?.email,
+              displayName: user?.name,
+              category: 'practice',
+              model: usedModel,
+              inputTokens,
+              outputTokens,
+              totalTokens
+            });
+          }
+
           const txt = resp.text;
           if (!txt) return [];
           try {
@@ -1428,6 +1473,38 @@ ${text || '(Notes provided in the attached document/image)'}`;
 
   app.all('/api/*', (req, res) => {
     res.status(404).json({ error: 'API route not found: ' + req.method + ' ' + req.url });
+  });
+
+  // Explicit PWA Service Worker & Manifest routing with zero-caching headers to guarantee fresh updates
+  app.get('/sw.js', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const swPath = process.env.NODE_ENV === 'production' && fs.existsSync(path.join(process.cwd(), 'dist', 'sw.js'))
+      ? path.join(process.cwd(), 'dist', 'sw.js')
+      : path.join(process.cwd(), 'public', 'sw.js');
+    if (!fs.existsSync(swPath)) {
+      return res.status(404).send('Service Worker not found');
+    }
+    res.sendFile(swPath, (err) => {
+      if (err && !res.headersSent) {
+        res.status(500).end();
+      }
+    });
+  });
+
+  app.get('/manifest.json', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Content-Type', 'application/manifest+json');
+    const manifestPath = process.env.NODE_ENV === 'production' && fs.existsSync(path.join(process.cwd(), 'dist', 'manifest.json'))
+      ? path.join(process.cwd(), 'dist', 'manifest.json')
+      : path.join(process.cwd(), 'public', 'manifest.json');
+    res.sendFile(manifestPath);
   });
 
   if (process.env.NODE_ENV !== "production") {

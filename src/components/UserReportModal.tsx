@@ -203,7 +203,7 @@ export default function UserReportModal({ userId, userInitialData, onClose, onSt
   const handleToggleStatus = async (targetAction: 'disable' | 'enable') => {
     const isDisabling = targetAction === 'disable';
     const confirmText = isDisabling
-      ? "Are you sure you want to disable this user? They will immediately lose access to Zetadu, active sessions will be terminated, and login with this email will be blocked. Account data will remain safe."
+      ? "Are you sure you want to disable this user? They will immediately lose access to Learndean, active sessions will be terminated, and login with this email will be blocked. Account data will remain safe."
       : "Are you sure you want to re-enable this user? Their access will be restored and all previous data remains intact.";
 
     if (!window.confirm(confirmText)) return;
@@ -417,7 +417,7 @@ export default function UserReportModal({ userId, userInitialData, onClose, onSt
                   <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
                     {isUserDisabled
                       ? `This account was disabled${u.disabledAt ? ` on ${new Date(u.disabledAt).toLocaleDateString()}` : ''}${u.disabledBy ? ` by ${u.disabledBy}` : ''}. The user cannot sign in or create a new account with this email.`
-                      : "Active accounts can sign in via Google or password and access all Zetadu features."
+                      : "Active accounts can sign in via Google or password and access all Learndean features."
                     }
                   </p>
                 </div>

@@ -306,7 +306,7 @@ export default function SearchModal({ isOpen, onClose, setView }: SearchModalPro
                 <Sparkles size={24} />
               </div>
               <h3 className="text-base font-extrabold text-slate-900 dark:text-white mb-1">
-                Instant Search across Zetadu
+                Instant Search across Learndean
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mb-5">
                 Type any keyword to instantly find subjects, curriculum topics, flashcards, or practice questions.
@@ -427,7 +427,7 @@ export default function SearchModal({ isOpen, onClose, setView }: SearchModalPro
           </div>
 
           <div>
-            <span>Instant Search across Zetadu</span>
+            <span>Instant Search across Learndean</span>
           </div>
         </div>
       </div>

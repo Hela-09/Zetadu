@@ -1,6 +1,6 @@
 {
-  "name": "Zetadu",
-  "description": "AI-powered adaptive learning and exam preparation platform.",
+  "name": "Learndean",
+  "description": "AI-powered adaptive learning, exam preparation, and study platform.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

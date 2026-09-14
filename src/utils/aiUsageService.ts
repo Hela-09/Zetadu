@@ -47,6 +47,19 @@ export interface AdminAiStatsResponse {
     practice: { requests: number; inputTokens: number; outputTokens: number; totalTokens: number; estimatedCost: number };
     flashcards: { requests: number; inputTokens: number; outputTokens: number; totalTokens: number; estimatedCost: number };
   };
+  recentLogs?: Array<{
+    id: string;
+    timestamp: number;
+    uid: string;
+    email?: string;
+    displayName?: string;
+    category: 'tutor' | 'practice' | 'flashcards';
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    estimatedCost: number;
+  }>;
 }
 
 export async function fetchUserAiUsage(token?: string | null): Promise<UserAiUsageResponse> {

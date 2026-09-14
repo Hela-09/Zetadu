@@ -28,7 +28,7 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
       <div className="p-6 flex items-center space-x-3 shrink-0">
         <Logo variant="icon" className="w-10 h-10 shrink-0" />
         <div>
-          <h2 className="text-lg font-bold text-white leading-tight">Zetadu AI</h2>
+          <h2 className="text-lg font-bold text-white leading-tight">Learndean AI</h2>
           <p className="text-sm text-slate-400 leading-tight">Smart Prep System</p>
         </div>
       </div>
@@ -41,7 +41,7 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
             window.dispatchEvent(event);
           }}
           className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 text-slate-400 hover:text-slate-200 text-xs transition-all cursor-pointer group"
-          title="Search Zetadu (⌘K)"
+          title="Search Learndean (⌘K)"
         >
           <div className="flex items-center gap-2">
             <Search size={16} className="group-hover:text-blue-400 transition-colors" />

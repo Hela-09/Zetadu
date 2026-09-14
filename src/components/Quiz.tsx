@@ -782,7 +782,7 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
             <p className="text-xs font-bold tracking-wider text-blue-600 dark:text-blue-400 uppercase mb-1">
               Setup Practice
             </p>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">Zetadu Practice Session</h2>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">Learndean Practice Session</h2>
           </div>
         </div>
         
