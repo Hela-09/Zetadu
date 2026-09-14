@@ -1,16 +1,17 @@
-import React, { useState, Suspense } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import BottomNav from './components/BottomNav';
-import Login from './components/Login';
 import { ViewType } from './types';
 import { LogOut, Search } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from './contexts/AuthContext';
-import PaymentGate from './components/PaymentGate';
-import SearchModal from './components/SearchModal';
 import { ThemeToggle } from './components/ThemeToggle';
 import { VIEW_TO_PATH } from './utils/navigation';
+
+const Login = lazy(() => import('./components/Login'));
+const PaymentGate = lazy(() => import('./components/PaymentGate'));
+const SearchModal = lazy(() => import('./components/SearchModal'));
 
 const Home = React.lazy(() => import('./components/Home'));
 const Subjects = React.lazy(() => import('./components/Subjects'));
@@ -135,13 +136,29 @@ export default function App() {
   }
 
   if (!user) {
-    return <Login />;
+    return (
+      <Suspense fallback={
+        <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" aria-label="Loading..."></div>
+        </div>
+      }>
+        <Login />
+      </Suspense>
+    );
   }
 
   // Check subscription status
   const isSubscriptionActive = userProfile?.subscriptionStatus === 'active';
   if (user && userProfile && !isSuperAdmin && !userProfile.isSuperAdmin && userProfile.role !== 'super_admin' && !isSubscriptionActive) {
-    return <PaymentGate />;
+    return (
+      <Suspense fallback={
+        <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" aria-label="Loading..."></div>
+        </div>
+      }>
+        <PaymentGate />
+      </Suspense>
+    );
   }
 
   return (
@@ -280,12 +297,16 @@ export default function App() {
         
         {currentView !== 'tutor' && <BottomNav currentView={currentView} setCurrentView={setCurrentView} />}
         
-        {/* Global Search Modal */}
-        <SearchModal 
-          isOpen={isSearchOpen} 
-          onClose={() => setIsSearchOpen(false)} 
-          setView={setCurrentView} 
-        />
+        {/* Global Search Modal - only loaded and mounted when search is activated */}
+        {isSearchOpen && (
+          <Suspense fallback={null}>
+            <SearchModal 
+              isOpen={isSearchOpen} 
+              onClose={() => setIsSearchOpen(false)} 
+              setView={setCurrentView} 
+            />
+          </Suspense>
+        )}
       </div>
     </div>
   );

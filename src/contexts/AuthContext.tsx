@@ -111,6 +111,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
           }
           setUserProfile(currentLocalProfile);
+
+          // Also restore cached settings immediately
+          const cachedSettings = localStorage.getItem(`zetadu_settings_${currentUser.uid}`);
+          if (cachedSettings) {
+            setSettings({ ...defaultSettings, ...JSON.parse(cachedSettings) });
+          }
+
+          // Render home/dashboard immediately without waiting for network requests
+          setUser(currentUser);
+          setLoading(false);
         }
       } catch (_) {}
 

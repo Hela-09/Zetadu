@@ -1,7 +1,6 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, browserLocalPersistence, setPersistence, Auth } from "firebase/auth";
 import { initializeFirestore, memoryLocalCache, setLogLevel, getFirestore, Firestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
 
 // Suppress Firestore internal SDK logs for resource-exhaustion / backoff delays
 try {
@@ -47,14 +46,6 @@ const firebaseConfig = {
 
 export const FIRESTORE_DATABASE_ID = (typeof import.meta !== "undefined" && import.meta.env?.VITE_FIREBASE_DATABASE_ID) || "ai-studio-zetadu-c6308d9c-0c0e-4c1f-8911-aa88c989aa89";
 
-// Clear any stuck IndexedDB queues from prior sessions
-if (typeof window !== "undefined" && window.indexedDB) {
-  try {
-    window.indexedDB.deleteDatabase("firestore/[DEFAULT]/" + firebaseConfig.projectId + "/" + FIRESTORE_DATABASE_ID);
-    window.indexedDB.deleteDatabase("firestore/[DEFAULT]/" + firebaseConfig.projectId);
-  } catch (_) {}
-}
-
 let app: FirebaseApp | undefined;
 let auth: Auth | any = null;
 let db: Firestore | any = null;
@@ -77,8 +68,6 @@ try {
     } catch (_) {
       db = getFirestore(app, FIRESTORE_DATABASE_ID);
     }
-
-    storage = getStorage(app);
   } else {
     console.warn("Firebase configuration is missing.");
   }

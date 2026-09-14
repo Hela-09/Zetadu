@@ -183,7 +183,22 @@ export function buildTasksFromAnalysis(
 /**
  * Fetch or initialize the Daily Study Plan for today
  */
-export async function getDailyStudyPlan(userId: string): Promise<DailyStudyPlan> {
+export function getCachedDailyStudyPlan(userId: string): DailyStudyPlan | null {
+  if (!userId) return null;
+  const todayStr = getTodayDateString();
+  try {
+    const local = localStorage.getItem(`zetadu_daily_plan_${userId}_${todayStr}`);
+    if (local) {
+      const parsed = JSON.parse(local);
+      if (parsed && parsed.date === todayStr) {
+        return parsed;
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
+export async function getDailyStudyPlan(userId: string, existingTopicAnalysis?: StudentTopicAnalysis): Promise<DailyStudyPlan> {
   const todayStr = getTodayDateString();
 
   if (!userId) {
@@ -209,9 +224,9 @@ export async function getDailyStudyPlan(userId: string): Promise<DailyStudyPlan>
     };
   }
 
-  // 1. Fetch real performance diagnostics & today's progress
+  // 1. Fetch real performance diagnostics & today's progress (reuses existingTopicAnalysis if already loaded)
   const [topicAnalysis, realQuestionsToday, realFlashcardsToday] = await Promise.all([
-    fetchStudentTopicAnalysis(userId),
+    existingTopicAnalysis ? Promise.resolve(existingTopicAnalysis) : fetchStudentTopicAnalysis(userId),
     getQuestionsAnsweredToday(userId),
     getFlashcardsStudiedToday(userId)
   ]);

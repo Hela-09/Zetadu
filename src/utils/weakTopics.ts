@@ -67,7 +67,31 @@ export function getSubjectIdFromName(subjectName: string): string {
   return clean.replace(/[^a-z0-9]/g, '-') || 'mathematics';
 }
 
-export async function fetchStudentTopicAnalysis(userId: string): Promise<StudentTopicAnalysis> {
+// In-memory cache to eliminate duplicate Firebase requests across components during startup
+let memoryAnalysisCache: { userId: string; timestamp: number; data: StudentTopicAnalysis } | null = null;
+const ANALYSIS_CACHE_TTL_MS = 45000; // 45 seconds
+
+export function clearStudentTopicAnalysisCache(userId?: string): void {
+  if (!userId || memoryAnalysisCache?.userId === userId) {
+    memoryAnalysisCache = null;
+  }
+}
+
+export function getCachedStudentTopicAnalysis(userId: string): StudentTopicAnalysis | null {
+  if (!userId) return null;
+  if (memoryAnalysisCache && memoryAnalysisCache.userId === userId) {
+    return memoryAnalysisCache.data;
+  }
+  try {
+    const local = localStorage.getItem(`zetadu_weak_topics_${userId}`);
+    if (local) {
+      return JSON.parse(local);
+    }
+  } catch (_) {}
+  return null;
+}
+
+export async function fetchStudentTopicAnalysis(userId: string, forceRefresh = false): Promise<StudentTopicAnalysis> {
   if (!userId) {
     return {
       weakTopics: [],
@@ -79,6 +103,13 @@ export async function fetchStudentTopicAnalysis(userId: string): Promise<Student
       overallAccuracy: 0,
       hasResults: false
     };
+  }
+
+  // Check in-memory cache first to avoid duplicate Firebase round-trips
+  if (!forceRefresh && memoryAnalysisCache && memoryAnalysisCache.userId === userId) {
+    if (Date.now() - memoryAnalysisCache.timestamp < ANALYSIS_CACHE_TTL_MS) {
+      return memoryAnalysisCache.data;
+    }
   }
 
   const topicMap: Record<
@@ -357,7 +388,7 @@ export async function fetchStudentTopicAnalysis(userId: string): Promise<Student
   const overallAccuracy =
     totalQuestionsCount > 0 ? Math.round((totalCorrectCount / totalQuestionsCount) * 100) : 0;
 
-  return {
+  const result: StudentTopicAnalysis = {
     weakTopics,
     averageTopics,
     strongTopics,
@@ -367,4 +398,16 @@ export async function fetchStudentTopicAnalysis(userId: string): Promise<Student
     overallAccuracy,
     hasResults: allSummaries.length > 0
   };
+
+  // Cache to memory and localStorage for fast subsequent and concurrent access
+  memoryAnalysisCache = {
+    userId,
+    timestamp: Date.now(),
+    data: result
+  };
+  try {
+    localStorage.setItem(`zetadu_weak_topics_${userId}`, JSON.stringify(result));
+  } catch (_) {}
+
+  return result;
 }

@@ -1,18 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, lazy, Suspense } from 'react';
 import { motion } from 'motion/react';
 import { Sparkles, ArrowRight, BookOpen, PenTool, MessageSquare, Target, Activity, Search, Bell, Clock, ChevronRight, CheckCircle, BrainCircuit, Zap, Flame, Trophy, Calendar, Play, Settings, Compass, AlertTriangle, Layers, FileUp, GraduationCap } from 'lucide-react';
-import { ViewType,  TutorConversation, SubjectHistory, StudyJourneyState } from '../types';
+import { ViewType, TutorConversation, SubjectHistory, StudyJourneyState } from '../types';
 import { collection, query, where, getDocs, getDoc, doc, orderBy, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { getLevelInfo } from '../lib/achievements';
 import { loadStudyJourney, clearStudyJourney } from '../lib/studyJourneyService';
 import { fetchStudentTopicAnalysis, StudentTopicAnalysis, TopicResultSummary } from '../utils/weakTopics';
-import WeakTopicActionModal from './WeakTopicActionModal';
 import DailyStudyPlanCard from './DailyStudyPlanCard';
-import ReviewMistakesModal from './ReviewMistakesModal';
 import { getDailyStudyPlan, markMistakesReviewed } from '../utils/dailyStudyPlan';
 import { DailyStudyPlan } from '../types';
+
+const WeakTopicActionModal = lazy(() => import('./WeakTopicActionModal'));
+const ReviewMistakesModal = lazy(() => import('./ReviewMistakesModal'));
 
 interface HomeProps {
   setView: (view: ViewType) => void;
@@ -21,27 +22,42 @@ interface HomeProps {
 export default function Home({ setView }: HomeProps) {
   const { user, userProfile } = useAuth();
   
-  // New State metrics
-  const [examReadiness, setExamReadiness] = useState(0);
-  const [streak, setStreak] = useState(userProfile?.streak || 0);
-  const [topicAnalysis, setTopicAnalysis] = useState<StudentTopicAnalysis | null>(null);
+  // Fast hydration from local cache to eliminate blank/spinner startup delays
+  const [cachedHome] = useState(() => {
+    if (!user) return null;
+    try {
+      const saved = localStorage.getItem(`zetadu_home_cache_${user.uid}`);
+      return saved ? JSON.parse(saved) : null;
+    } catch (_) {
+      return null;
+    }
+  });
+
+  const [examReadiness, setExamReadiness] = useState(() => cachedHome?.examReadiness || 0);
+  const [streak, setStreak] = useState(() => userProfile?.streak || cachedHome?.streak || 0);
+  const [topicAnalysis, setTopicAnalysis] = useState<StudentTopicAnalysis | null>(() => cachedHome?.topicAnalysis || null);
   const [selectedWeakTopic, setSelectedWeakTopic] = useState<TopicResultSummary | null>(null);
-  const [activeTab, setActiveTab] = useState<'all' | 'weak' | 'average' | 'strong'>('weak');
-  const [recentPractice, setRecentPractice] = useState<any | null>(null);
-  const [activeJourney, setActiveJourney] = useState<StudyJourneyState | null>(null);
+  const [activeTab, setActiveTab] = useState<'all' | 'weak' | 'average' | 'strong'>(() => {
+    if (cachedHome?.topicAnalysis?.weakTopics?.length > 0) return 'weak';
+    if (cachedHome?.topicAnalysis?.averageTopics?.length > 0) return 'average';
+    return 'all';
+  });
+  const [recentPractice, setRecentPractice] = useState<any | null>(() => cachedHome?.recentPractice || null);
+  const [activeJourney, setActiveJourney] = useState<StudyJourneyState | null>(() => cachedHome?.activeJourney || null);
   
-  // Daily Study Plan State
-  const [dailyPlan, setDailyPlan] = useState<DailyStudyPlan | null>(null);
+  // Daily Study Plan State initialized from cache
+  const [dailyPlan, setDailyPlan] = useState<DailyStudyPlan | null>(() => cachedHome?.dailyPlan || null);
   const [dailyPlanLoading, setDailyPlanLoading] = useState(false);
   const [reviewMistakesTopic, setReviewMistakesTopic] = useState<TopicResultSummary | null>(null);
   
-  const [loading, setLoading] = useState(true);
+  // Start with loading: false if cached data exists or profile is ready so UI displays immediately
+  const [loading, setLoading] = useState(() => !cachedHome);
 
   const refreshDailyPlan = async () => {
     if (!user) return;
     setDailyPlanLoading(true);
     try {
-      const plan = await getDailyStudyPlan(user.uid);
+      const plan = await getDailyStudyPlan(user.uid, topicAnalysis || undefined);
       setDailyPlan(plan);
     } catch (e) {
       console.warn("Failed to refresh daily study plan:", e);
@@ -75,64 +91,91 @@ export default function Home({ setView }: HomeProps) {
   const handleCompleteMistakesReview = async () => {
     if (user) {
       await markMistakesReviewed(user.uid);
-      const updated = await getDailyStudyPlan(user.uid);
+      const updated = await getDailyStudyPlan(user.uid, topicAnalysis || undefined);
       setDailyPlan(updated);
     }
   };
 
   useEffect(() => {
+    let isCancelled = false;
     const fetchStats = async () => {
       if (!user) return;
       try {
-        // Fetch active study journey
-        try {
-          const journeyData = await loadStudyJourney(user.uid);
-          if (journeyData && journeyData.status === 'in_progress') {
-            setActiveJourney(journeyData);
+        // Fetch all primary dashboard stats in parallel without blocking sequential waterfalls
+        const [journeyRes, analysisRes, practiceRes] = await Promise.allSettled([
+          loadStudyJourney(user.uid),
+          fetchStudentTopicAnalysis(user.uid),
+          getDoc(doc(db, 'practice_sessions', user.uid))
+        ]);
+
+        if (isCancelled) return;
+
+        let journeyData: StudyJourneyState | null = null;
+        if (journeyRes.status === 'fulfilled' && journeyRes.value && journeyRes.value.status === 'in_progress') {
+          journeyData = journeyRes.value;
+          setActiveJourney(journeyData);
+        }
+
+        let analysisData: StudentTopicAnalysis | null = null;
+        if (analysisRes.status === 'fulfilled' && analysisRes.value) {
+          analysisData = analysisRes.value;
+          setTopicAnalysis(analysisData);
+          setExamReadiness(analysisData.overallAccuracy || 0);
+
+          if (analysisData.weakTopics.length > 0) {
+            setActiveTab('weak');
+          } else if (analysisData.averageTopics.length > 0) {
+            setActiveTab('average');
+          } else {
+            setActiveTab('all');
           }
-        } catch (e) {
-          console.warn('Failed to load study journey in Home:', e);
         }
 
-        // Fetch comprehensive real student practice results
-        const analysisData = await fetchStudentTopicAnalysis(user.uid);
-        setTopicAnalysis(analysisData);
-        setExamReadiness(analysisData.overallAccuracy || 0);
-
-        if (analysisData.weakTopics.length > 0) {
-          setActiveTab('weak');
-        } else if (analysisData.averageTopics.length > 0) {
-          setActiveTab('average');
-        } else {
-          setActiveTab('all');
+        let practiceData: any = null;
+        if (practiceRes.status === 'fulfilled' && practiceRes.value.exists()) {
+          practiceData = { id: practiceRes.value.id, ...practiceRes.value.data() };
+          setRecentPractice(practiceData);
         }
-        
-        // Fetch Daily Study Plan
+
+        // Fetch Daily Study Plan passing the already retrieved analysisData (avoids duplicate query!)
+        let planData: DailyStudyPlan | null = null;
         try {
-          const plan = await getDailyStudyPlan(user.uid);
-          setDailyPlan(plan);
+          planData = await getDailyStudyPlan(user.uid, analysisData || undefined);
+          if (!isCancelled && planData) {
+            setDailyPlan(planData);
+          }
         } catch (planErr) {
           console.warn('Failed to load daily study plan in fetchStats:', planErr);
         }
 
-        // Fetch Last Practice
-        const pracSnap = await getDoc(doc(db, 'practice_sessions', user.uid));
-        if (pracSnap.exists()) {
-           setRecentPractice({ id: pracSnap.id, ...pracSnap.data() });
-        }
+        // Cache combined results for instant subsequent loads
+        try {
+          localStorage.setItem(
+            `zetadu_home_cache_${user.uid}`,
+            JSON.stringify({
+              topicAnalysis: analysisData,
+              examReadiness: analysisData?.overallAccuracy || 0,
+              recentPractice: practiceData,
+              activeJourney: journeyData,
+              dailyPlan: planData,
+              updatedAt: Date.now()
+            })
+          );
+        } catch (_) {}
         
       } catch (err: any) {
-        if (err?.message?.includes("not found") || err?.code === 'unavailable') {
-            console.warn("Firestore is currently unavailable or database missing.");
-        } else {
-            console.warn("Stats fetch warning:", err);
-        }
+        console.warn("Stats fetch warning:", err);
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     };
     
     fetchStats();
+    return () => {
+      isCancelled = true;
+    };
   }, [user]);
 
   const userName = user?.displayName ? user.displayName.split(' ')[0] : 'Student';
@@ -499,19 +542,27 @@ export default function Home({ setView }: HomeProps) {
           </div>
 
           {/* Action Modal for Weak Topics */}
-          <WeakTopicActionModal
-            topic={selectedWeakTopic}
-            onClose={() => setSelectedWeakTopic(null)}
-            setView={setView}
-          />
+          {selectedWeakTopic && (
+            <Suspense fallback={null}>
+              <WeakTopicActionModal
+                topic={selectedWeakTopic}
+                onClose={() => setSelectedWeakTopic(null)}
+                setView={setView}
+              />
+            </Suspense>
+          )}
 
           {/* Review Mistakes Modal for Daily Study Plan */}
-          <ReviewMistakesModal
-            topicSummary={reviewMistakesTopic}
-            onClose={() => setReviewMistakesTopic(null)}
-            onCompleteReview={handleCompleteMistakesReview}
-            setView={setView}
-          />
+          {reviewMistakesTopic && (
+            <Suspense fallback={null}>
+              <ReviewMistakesModal
+                topicSummary={reviewMistakesTopic}
+                onClose={() => setReviewMistakesTopic(null)}
+                onCompleteReview={handleCompleteMistakesReview}
+                setView={setView}
+              />
+            </Suspense>
+          )}
           
           {/* Quick Actions */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
