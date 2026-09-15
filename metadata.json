@@ -1,6 +1,6 @@
 {
   "name": "Learndean",
-  "description": "AI-powered adaptive learning, exam preparation, and study platform.",
+  "description": "Adaptive learning, exam preparation, and study platform.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

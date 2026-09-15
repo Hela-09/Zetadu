@@ -2,7 +2,7 @@ import React from 'react';
 import { ViewType } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import Logo from './Logo';
-import { Home, BookOpen, MessageSquare, User, Download, Briefcase, Layers, Compass, Search, FileUp, GraduationCap } from 'lucide-react';
+import { Home, BookOpen, MessageSquare, User, Download, Layers, Compass, Search, FileUp, GraduationCap } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface SidebarProps {
@@ -14,12 +14,11 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
   const { isInstallable, triggerInstall } = usePWAInstall();
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
-    { id: 'school_updates', label: 'School Updates', icon: GraduationCap },
+    { id: 'jamb', label: 'JAMB CBT Prep', icon: GraduationCap },
     { id: 'upload_notes', label: 'Upload Notes', icon: FileUp },
     { id: 'journey', label: 'Study Journey', icon: Compass },
     { id: 'subjects', label: 'Learn', icon: BookOpen },
     { id: 'flashcards', label: 'Flashcards', icon: Layers },
-    { id: 'opportunities', label: 'Opportunities', icon: Briefcase },
     { id: 'profile', label: 'Profile', icon: User },
   ];
 
@@ -28,7 +27,7 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
       <div className="p-6 flex items-center space-x-3 shrink-0">
         <Logo variant="icon" className="w-10 h-10 shrink-0" />
         <div>
-          <h2 className="text-lg font-bold text-white leading-tight">Learndean AI</h2>
+          <h2 className="text-lg font-bold text-white leading-tight">Learndean</h2>
           <p className="text-sm text-slate-400 leading-tight">Smart Prep System</p>
         </div>
       </div>

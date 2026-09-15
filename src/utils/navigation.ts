@@ -7,13 +7,12 @@ export const VIEW_TO_PATH: Record<ViewType, string> = {
   tutor: '/ai-tutor',
   profile: '/profile',
   admin: '/admin',
-  opportunities: '/opportunities',
   daily_challenge: '/daily-challenge',
   flashcards: '/flashcards',
   journey: '/study-journey',
   weak_topics: '/weak-topics',
   upload_notes: '/upload-notes',
-  school_updates: '/school-updates',
+  jamb: '/jamb',
 };
 
 export const PATH_TO_VIEW: Record<string, ViewType> = {
@@ -29,8 +28,8 @@ export const PATH_TO_VIEW: Record<string, ViewType> = {
   '/profile': 'profile',
   '/settings': 'profile',
   '/admin': 'admin',
-  '/opportunities': 'opportunities',
-  '/explore': 'opportunities',
+  '/opportunities': 'home',
+  '/explore': 'home',
   '/daily-challenge': 'daily_challenge',
   '/daily_challenge': 'daily_challenge',
   '/study-journey': 'journey',
@@ -39,8 +38,11 @@ export const PATH_TO_VIEW: Record<string, ViewType> = {
   '/weak_topics': 'weak_topics',
   '/upload-notes': 'upload_notes',
   '/upload_notes': 'upload_notes',
-  '/school-updates': 'school_updates',
-  '/school_updates': 'school_updates',
+  '/jamb': 'jamb',
+  '/jamb-prep': 'jamb',
+  '/jamb-cbt': 'jamb',
+  '/school-updates': 'home',
+  '/school_updates': 'home',
 };
 
 export interface ZetaduHistoryState {

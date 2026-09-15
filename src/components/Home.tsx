@@ -1,6 +1,6 @@
 import React, { useEffect, useState, lazy, Suspense } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, ArrowRight, BookOpen, PenTool, MessageSquare, Target, Activity, Search, Bell, Clock, ChevronRight, CheckCircle, BrainCircuit, Zap, Flame, Trophy, Calendar, Play, Settings, Compass, AlertTriangle, Layers, FileUp, GraduationCap } from 'lucide-react';
+import { Sparkles, ArrowRight, BookOpen, PenTool, MessageSquare, Target, Activity, Search, Bell, Clock, ChevronRight, CheckCircle, BrainCircuit, Zap, Flame, Trophy, Calendar, Play, Settings, Compass, AlertTriangle, Layers, FileUp, GraduationCap, Calculator } from 'lucide-react';
 import { ViewType, TutorConversation, SubjectHistory, StudyJourneyState } from '../types';
 import { collection, query, where, getDocs, getDoc, doc, orderBy, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -293,6 +293,51 @@ export default function Home({ setView }: HomeProps) {
             onPlanUpdated={(updated) => setDailyPlan(updated)}
           />
           
+          {/* JAMB CBT Prep Banner Card */}
+          <div 
+            id="jamb-prep-home-card"
+            onClick={() => setView('jamb')}
+            className="bg-gradient-to-r from-blue-700 via-indigo-700 to-slate-900 rounded-3xl p-6 md:p-8 text-white cursor-pointer hover:shadow-xl hover:shadow-blue-600/25 transition-all group relative overflow-hidden border border-blue-500/30"
+          >
+            <div className="absolute top-0 right-0 p-8 opacity-10 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform">
+              <GraduationCap size={130} />
+            </div>
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-500/40 text-blue-200 border border-blue-400/40 uppercase tracking-wider">
+                    UTME 2025 / 2026
+                  </span>
+                  <span className="text-xs text-blue-200 flex items-center gap-1 font-semibold">
+                    <Calculator size={13} className="text-amber-300" /> Maths Calculator Included
+                  </span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                  JAMB CBT Exam Prep
+                </h2>
+                <p className="text-blue-100/90 text-sm max-w-lg leading-relaxed">
+                  Practice past questions organized by year for English, Mathematics, Physics, Chemistry & Biology with real exam timer and in-question scientific calculator.
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {['English', 'Mathematics', 'Physics', 'Chemistry', 'Biology'].map((subj) => (
+                    <span key={subj} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 backdrop-blur-xs text-white">
+                      {subj}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="shrink-0 flex sm:flex-col items-start sm:items-end justify-between gap-3">
+                <button 
+                  type="button"
+                  className="bg-white text-blue-800 px-6 py-3 rounded-2xl font-bold text-sm shadow-md group-hover:bg-blue-50 transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <span>Practice CBT</span>
+                  <ArrowRight size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Daily Challenge */}
           <div 
             onClick={() => setView('daily_challenge')}
@@ -665,29 +710,6 @@ export default function Home({ setView }: HomeProps) {
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Ask questions or review a topic</p>
               </div>
             )}
-          </div>
-
-          {/* School Updates Card */}
-          <div className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-3xl p-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                <GraduationCap size={18} className="text-blue-600 dark:text-blue-400" />
-                <span>School Updates</span>
-              </h3>
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300">
-                Post-UTME
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
-              Stay ahead of Post-UTME screening, cut-off marks, and admission deadlines for your followed schools.
-            </p>
-            <button
-              onClick={() => setView('school_updates')}
-              className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-            >
-              <span>View School Updates</span>
-              <ArrowRight size={14} />
-            </button>
           </div>
         </div>
       </div>

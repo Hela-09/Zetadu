@@ -130,13 +130,16 @@ export default function SearchModal({ isOpen, onClose, setView }: SearchModalPro
     } else if (item.type === 'action') {
       if (item.id === 'action-upload-notes') {
         setView('upload_notes');
-      } else if (item.id === 'action-school-updates') {
-        setView('school_updates');
+      } else if (item.id === 'action-jamb-prep') {
+        setView('jamb');
       }
     }
   };
 
   const getItemIcon = (type: string, id?: string) => {
+    if (id === 'action-jamb-prep') {
+      return <GraduationCap size={18} className="text-blue-600 dark:text-blue-400" />;
+    }
     switch (type) {
       case 'subject':
         return <BookOpen size={18} className="text-blue-600 dark:text-blue-400" />;
@@ -147,9 +150,6 @@ export default function SearchModal({ isOpen, onClose, setView }: SearchModalPro
       case 'question':
         return <PenTool size={18} className="text-amber-600 dark:text-amber-400" />;
       case 'action':
-        if (id === 'action-school-updates') {
-          return <GraduationCap size={18} className="text-blue-600 dark:text-blue-400" />;
-        }
         return <FileUp size={18} className="text-blue-600 dark:text-blue-400" />;
       default:
         return <Search size={18} className="text-slate-400" />;

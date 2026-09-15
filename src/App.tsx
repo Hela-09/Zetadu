@@ -20,25 +20,23 @@ const Tutor = React.lazy(() => import('./components/Tutor'));
 const Profile = React.lazy(() => import('./components/Profile'));
 const Admin = React.lazy(() => import('./components/Admin'));
 const DailyChallenge = React.lazy(() => import('./components/DailyChallenge'));
-const Opportunities = React.lazy(() => import('./components/Opportunities'));
 const Flashcards = React.lazy(() => import('./components/Flashcards'));
 const StudyJourney = React.lazy(() => import('./components/StudyJourney'));
 const WeakTopics = React.lazy(() => import('./components/WeakTopics'));
 const UploadNotes = React.lazy(() => import('./components/UploadNotes'));
-const SchoolUpdates = React.lazy(() => import('./components/SchoolUpdates'));
+const JambPrep = React.lazy(() => import('./components/jamb/JambPrep'));
 
 function getEffectiveView(pathname: string): ViewType {
   if (pathname === '/ai-tutor' || pathname === '/tutor') return 'tutor';
   if (pathname === '/learn' || pathname === '/subjects') return 'subjects';
+  if (pathname.startsWith('/jamb')) return 'jamb';
   if (pathname.startsWith('/practice')) return 'practice';
   if (pathname.startsWith('/flashcards')) return 'flashcards';
   if (pathname.startsWith('/profile') || pathname.startsWith('/settings')) return 'profile';
-  if (pathname.startsWith('/opportunities') || pathname.startsWith('/explore')) return 'opportunities';
   if (pathname.startsWith('/daily-challenge')) return 'daily_challenge';
   if (pathname.startsWith('/study-journey') || pathname.startsWith('/journey')) return 'journey';
   if (pathname.startsWith('/weak-topics')) return 'weak_topics';
   if (pathname.startsWith('/upload-notes')) return 'upload_notes';
-  if (pathname.startsWith('/school-updates')) return 'school_updates';
   if (pathname.startsWith('/admin')) return 'admin';
   return 'home';
 }
@@ -266,17 +264,17 @@ export default function App() {
                     <Route path="/learn" element={<Subjects setView={setCurrentView} />} />
                     <Route path="/subjects" element={<Navigate to="/learn" replace />} />
                     <Route path="/practice" element={<Practice setView={setCurrentView} />} />
+                    <Route path="/jamb" element={<JambPrep setView={setCurrentView} />} />
+                    <Route path="/jamb-prep" element={<Navigate to="/jamb" replace />} />
+                    <Route path="/jamb-cbt" element={<Navigate to="/jamb" replace />} />
                     <Route path="/flashcards" element={<Flashcards setView={setCurrentView} />} />
                     <Route path="/profile" element={<Profile setView={setCurrentView} />} />
                     <Route path="/settings" element={<Profile setView={setCurrentView} />} />
-                    <Route path="/opportunities" element={<Opportunities />} />
-                    <Route path="/explore" element={<Navigate to="/opportunities" replace />} />
                     <Route path="/daily-challenge" element={<DailyChallenge setView={setCurrentView} />} />
                     <Route path="/study-journey" element={<StudyJourney setView={setCurrentView} />} />
                     <Route path="/journey" element={<Navigate to="/study-journey" replace />} />
                     <Route path="/weak-topics" element={<WeakTopics setView={setCurrentView} />} />
                     <Route path="/upload-notes" element={<UploadNotes setView={setCurrentView} />} />
-                    <Route path="/school-updates" element={<SchoolUpdates setView={setCurrentView} />} />
                     <Route path="/admin" element={<Admin />} />
                     <Route path="*" element={<Navigate to="/home" replace />} />
                   </Routes>

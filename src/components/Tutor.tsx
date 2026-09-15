@@ -614,7 +614,7 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
               <span>Back</span>
             </button>
           )}
-          <h2 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white hidden sm:block">Learndean AI Tutor</h2>
+          <h2 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white hidden sm:block">Learndean Tutor</h2>
         </div>
         
         <div className="flex items-center gap-2">

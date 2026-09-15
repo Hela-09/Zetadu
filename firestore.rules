@@ -126,5 +126,21 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
       allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
     }
+
+    match /jamb_history/{docId} {
+      allow get: if isAuthenticated() && (resource.data.uid == request.auth.uid || request.auth.uid == docId || isSuperAdmin());
+      allow list: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
+      allow create: if isAuthenticated() && (request.resource.data.uid == request.auth.uid || isSuperAdmin());
+      allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
+      allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
+    }
+
+    match /jamb_bookmarks/{docId} {
+      allow get: if isAuthenticated() && (resource.data.uid == request.auth.uid || request.auth.uid == docId || isSuperAdmin());
+      allow list: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
+      allow create: if isAuthenticated() && (request.resource.data.uid == request.auth.uid || isSuperAdmin());
+      allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
+      allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
+    }
   }
 }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ViewType } from '../types';
-import { Home, BookOpen, MessageSquare, User, Briefcase, Layers } from "lucide-react";
+import { Home, BookOpen, MessageSquare, User, Layers, GraduationCap } from "lucide-react";
 import { motion } from 'motion/react';
 
 interface BottomNavProps {
@@ -11,9 +11,9 @@ interface BottomNavProps {
 export default function BottomNav({ currentView, setCurrentView }: BottomNavProps) {
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
+    { id: 'jamb', label: 'JAMB', icon: GraduationCap },
     { id: 'subjects', label: 'Learn', icon: BookOpen },
     { id: 'flashcards', label: 'Cards', icon: Layers },
-    { id: 'opportunities', label: 'Explore', icon: Briefcase },
     { id: 'profile', label: 'Profile', icon: User },
   ];
 

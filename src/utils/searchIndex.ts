@@ -302,18 +302,18 @@ export function searchZetaduSync(searchTerm: string, activeFilter: SearchCategor
     }
   });
 
-  // 5. Special Feature & Tool Actions (e.g. Upload Notes, School Updates)
-  const schoolTerms = ['school', 'university', 'unilag', 'post-utme', 'post utme', 'utme', 'admission', 'cut-off', 'admissions', 'ui', 'oau', 'uniben', 'futa', 'abu', 'unn', 'deadline', 'caps'];
-  const isSchoolMatch = schoolTerms.some(term => clean.includes(term) || term.includes(clean));
-  if (isSchoolMatch && (activeFilter === 'all')) {
+  // 5. Special Feature & Tool Actions (e.g. JAMB CBT & Upload Notes)
+  const jambTerms = ['jamb', 'utme', 'cbt', 'past question', 'calculator', 'jamb prep', 'exam prep', 'past questions'];
+  const isJambMatch = jambTerms.some(term => clean.includes(term) || term.includes(clean));
+  if (isJambMatch && (activeFilter === 'all')) {
     counts.all++;
     results.unshift({
-      id: 'action-school-updates',
+      id: 'action-jamb-prep',
       type: 'action',
-      title: 'School Updates & Post-UTME Tracker',
-      subtitle: 'Track admissions, Post-UTME screening, cut-off marks, and deadlines for your schools',
-      badge: 'Feature',
-      score: 125
+      title: 'JAMB CBT Exam Prep Portal',
+      subtitle: 'Past questions by year (English, Maths, Physics, Chem, Bio) with calculator & timer',
+      badge: 'CBT Exam',
+      score: 135
     });
   }
 

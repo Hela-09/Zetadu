@@ -1,4 +1,4 @@
-export type ViewType = 'home' | 'subjects' | 'practice' | 'tutor' | 'profile' | 'admin' | 'opportunities' | 'daily_challenge' | 'flashcards' | 'journey' | 'weak_topics' | 'upload_notes' | 'school_updates';
+export type ViewType = 'home' | 'subjects' | 'practice' | 'tutor' | 'profile' | 'admin' | 'daily_challenge' | 'flashcards' | 'journey' | 'weak_topics' | 'upload_notes' | 'jamb';
 
 export interface StudyJourneyLearnData {
   mainConcept: string;
