@@ -1,4 +1,4 @@
-export type ViewType = 'home' | 'subjects' | 'practice' | 'tutor' | 'profile' | 'admin' | 'daily_challenge' | 'flashcards' | 'journey' | 'weak_topics' | 'upload_notes' | 'jamb';
+export type ViewType = 'home' | 'subjects' | 'practice' | 'tutor' | 'profile' | 'admin' | 'daily_challenge' | 'flashcards' | 'journey' | 'weak_topics' | 'upload_notes' | 'jamb' | 'novels';
 
 export interface StudyJourneyLearnData {
   mainConcept: string;
@@ -213,22 +213,171 @@ export interface School {
   website: string;
 }
 
-export interface SchoolUpdate {
+export interface NovelPracticeQuestion {
   id: string;
-  schoolId: string;
-  schoolShortName: string;
-  schoolFullName: string;
-  category: SchoolUpdateCategory;
-  title: string;
-  summary: string;
-  details?: string;
-  date: string;
-  timestamp: number;
-  deadlineDate?: string;
-  isUrgent?: boolean;
-  portalUrl?: string;
-  tags?: string[];
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  explanation: string;
+  topic?: string;
+  year?: string;
 }
+
+export interface NovelCharacter {
+  name: string;
+  role: string;
+  description: string;
+  traits?: string[];
+}
+
+export interface NovelStudyMaterial {
+  id: string;
+  title: string;
+  type: 'summary' | 'themes' | 'characters' | 'literary_devices' | 'chapter_analysis' | 'key_quotes';
+  content: string;
+}
+
+export interface NovelChapterCharacter {
+  name: string;
+  role: string;
+  significance: string;
+  traits?: string[];
+}
+
+export interface NovelChapterVocabulary {
+  term: string;
+  definition: string;
+  contextInChapter?: string;
+}
+
+export interface NovelChapterQuestion {
+  id: string;
+  novelId: string;
+  chapterIndex: number;
+  chapterNumber: number;
+  chapterTitle: string;
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  explanation: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  topic?: string;
+  year?: string;
+}
+
+export interface NovelChapter {
+  id: string;
+  chapterNumber: number;
+  title: string;
+  wordCount: number;
+  estimatedMinutes: number;
+  hasFullTextPermission?: boolean; // True ONLY if LearnDean has permission to distribute the full book text
+  content: string; // Full formatted text (if permitted) or comprehensive syllabus chapter analysis & guide
+  summary: string;
+  importantCharacters?: NovelChapterCharacter[];
+  importantEvents?: string[];
+  themes?: string[];
+  importantVocabulary?: NovelChapterVocabulary[];
+  keyPoints: string[];
+  questions?: NovelChapterQuestion[];
+}
+
+export interface Novel {
+  id: string;
+  title: string;
+  author: string;
+  year: number | string;
+  genre: string;
+  subject: 'JAMB Use of English' | 'JAMB Literature-in-English';
+  category: 'Current JAMB Novel' | 'Drama' | 'Prose' | 'Poetry' | 'Recommended Textbooks';
+  subCategory?: 'African Drama' | 'Non-African Drama' | 'African Prose' | 'Non-African Prose' | 'African Poetry' | 'Non-African Poetry' | 'General Principles' | 'Grammar & Lexis' | 'Literary Appreciation';
+  coverImage?: string;
+  coverGradient: string;
+  description: string;
+  syllabusRelevance?: string;
+  themes: string[];
+  characters?: NovelCharacter[];
+  literaryDevices?: { device: string; explanation: string; example: string }[];
+  studyNotes?: NovelStudyMaterial[];
+  practiceQuestions?: NovelPracticeQuestion[];
+  totalChapters: number;
+  estimatedReadingTime: string;
+  chapters: NovelChapter[];
+  isFullTextIncluded?: boolean;
+}
+
+export interface NovelReadingProgress {
+  id?: string;
+  uid: string;
+  novelId: string;
+  novelTitle: string;
+  currentChapterIndex: number;
+  currentChapterTitle: string;
+  scrollPercentage: number;
+  completedChapters: number[];
+  totalChapters: number;
+  percentage: number;
+  quizScore?: { correct: number; total: number; percentage: number };
+  lastReadAt: number;
+  updatedAt: number;
+  syncStatus?: 'synced' | 'pending';
+}
+
+export interface NovelBookmark {
+  id: string;
+  uid: string;
+  novelId: string;
+  novelTitle: string;
+  chapterIndex: number;
+  chapterTitle: string;
+  paragraphText: string;
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+  syncStatus?: 'synced' | 'pending';
+}
+
+export interface NovelQuestionBookmark {
+  id: string;
+  uid: string;
+  novelId: string;
+  novelTitle: string;
+  chapterIndex: number;
+  chapterTitle: string;
+  questionId: string;
+  question: NovelChapterQuestion;
+  userNote?: string;
+  createdAt: number;
+  updatedAt: number;
+  syncStatus?: 'synced' | 'pending';
+}
+
+export interface ChapterPerformanceSummary {
+  chapterIndex: number;
+  chapterTitle: string;
+  totalInChapter: number;
+  correctInChapter: number;
+  accuracy: number;
+}
+
+export interface NovelPracticeAttempt {
+  id: string;
+  uid: string;
+  novelId: string;
+  novelTitle: string;
+  mode: 'sequential' | 'random' | 'timed' | 'untimed' | 'cbt';
+  scope: 'chapter' | 'multi_chapter' | 'all_chapters';
+  selectedChapterIndices: number[];
+  totalQuestions: number;
+  correctAnswers: number;
+  scorePercentage: number;
+  timeSpentSeconds: number;
+  weakChapters: ChapterPerformanceSummary[];
+  completedChapterIndices: number[];
+  timestamp: number;
+  syncStatus?: 'synced' | 'pending';
+}
+
 
 
 

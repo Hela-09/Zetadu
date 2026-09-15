@@ -22,7 +22,7 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
       <div className="flex items-center justify-around px-2 py-2">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = currentView === item.id || (item.id === 'subjects' && currentView === 'practice');
+          const isActive = currentView === item.id || (item.id === 'subjects' && (currentView === 'practice' || currentView === 'novels'));
           return (
             <button
               key={item.id}

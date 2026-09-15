@@ -13,6 +13,7 @@ export const VIEW_TO_PATH: Record<ViewType, string> = {
   weak_topics: '/weak-topics',
   upload_notes: '/upload-notes',
   jamb: '/jamb',
+  novels: '/novels',
 };
 
 export const PATH_TO_VIEW: Record<string, ViewType> = {
@@ -23,6 +24,8 @@ export const PATH_TO_VIEW: Record<string, ViewType> = {
   '/tutor': 'tutor',
   '/learn': 'subjects',
   '/subjects': 'subjects',
+  '/novels': 'novels',
+  '/learn/novels': 'novels',
   '/practice': 'practice',
   '/flashcards': 'flashcards',
   '/profile': 'profile',

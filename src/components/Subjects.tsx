@@ -6,9 +6,26 @@ import { collection, getDocs, query, where, addDoc, updateDoc } from 'firebase/f
 import { ViewType } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { ALL_SUBJECTS } from '../data/subjects';
+import NovelsLibrary from './novels/NovelsLibrary';
 
-export default function Subjects({ setView }: { setView?: (view: ViewType) => void }) {
+export default function Subjects({ setView, initialSection }: { setView?: (view: ViewType) => void; initialSection?: 'curriculum' | 'novels' }) {
   const { user } = useAuth();
+  const [activeLearnSection, setActiveLearnSection] = useState<'curriculum' | 'novels'>(() => {
+    if (initialSection) return initialSection;
+    if (typeof window !== 'undefined') {
+      if (window.location.pathname.includes('/novels')) return 'novels';
+      const savedTab = localStorage.getItem('zetadu_learn_tab');
+      if (savedTab === 'novels') return 'novels';
+    }
+    return 'curriculum';
+  });
+
+  useEffect(() => {
+    if (initialSection) {
+      setActiveLearnSection(initialSection);
+    }
+  }, [initialSection]);
+
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<any>(null);
@@ -236,25 +253,62 @@ export default function Subjects({ setView }: { setView?: (view: ViewType) => vo
 
   return (
     <div className="w-full max-w-7xl mx-auto pb-28 sm:pb-32 flex flex-col">
-      <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 shrink-0">
-        <div>
-          <p className="text-sm font-bold tracking-widest text-blue-600 dark:text-blue-400 uppercase mb-2">
-            Curriculum
-          </p>
-          <h2 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">Library</h2>
-        </div>
-        
-        <div className="relative w-full md:w-96">
-          <input 
-            type="text" 
-            placeholder="Search subjects..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm no-spinners"
-          />
-          <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-        </div>
+      {/* Learn Section Switcher Tabs */}
+      <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl w-fit mb-8 border border-slate-200 dark:border-slate-700/60 shadow-xs">
+        <button
+          onClick={() => {
+            setActiveLearnSection('curriculum');
+            localStorage.setItem('zetadu_learn_tab', 'curriculum');
+          }}
+          className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-2 ${
+            activeLearnSection === 'curriculum'
+              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <BookOpen size={16} />
+          <span>Curriculum Subjects</span>
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveLearnSection('novels');
+            localStorage.setItem('zetadu_learn_tab', 'novels');
+          }}
+          className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-2 ${
+            activeLearnSection === 'novels'
+              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <BookMarked size={16} className="text-amber-500" />
+          <span>Novels & Literature</span>
+        </button>
       </div>
+
+      {activeLearnSection === 'novels' ? (
+        <NovelsLibrary />
+      ) : (
+        <>
+          <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 shrink-0">
+            <div>
+              <p className="text-sm font-bold tracking-widest text-blue-600 dark:text-blue-400 uppercase mb-2">
+                Curriculum
+              </p>
+              <h2 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">Library</h2>
+            </div>
+            
+            <div className="relative w-full md:w-96">
+              <input 
+                type="text" 
+                placeholder="Search subjects..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm no-spinners"
+              />
+              <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            </div>
+          </div>
 
       <div className="flex gap-2 overflow-x-auto pb-4 mb-6 no-scrollbar shrink-0 snap-x">
         {categories.map((category) => (
@@ -332,6 +386,8 @@ export default function Subjects({ setView }: { setView?: (view: ViewType) => vo
           </div>
         )}
       </div>
+        </>
+      )}
 
       {/* Mobile Clearance Spacer */}
       <div className="md:hidden h-20 sm:h-24 w-full shrink-0 pointer-events-none" aria-hidden="true" />

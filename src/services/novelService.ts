@@ -1,0 +1,424 @@
+import { db } from '../lib/firebase';
+import { doc, getDoc, setDoc, getDocs, collection, query, where, deleteDoc } from 'firebase/firestore';
+import {
+  Novel,
+  NovelChapter,
+  NovelReadingProgress,
+  NovelBookmark,
+  NovelQuestionBookmark,
+  NovelPracticeAttempt,
+  NovelChapterQuestion
+} from '../types';
+import { NOVELS_COLLECTION } from '../data/novels';
+import {
+  saveNovelForOffline,
+  deleteOfflineNovel,
+  isNovelDownloadedOffline,
+  getDownloadedNovelsList,
+  getOfflineChapter,
+  saveOfflineReadingProgress,
+  getOfflineReadingProgress,
+  getAllOfflineReadingProgressForUser,
+  getPendingOfflineReadingProgress,
+  markReadingProgressSynced,
+  saveOfflineNovelBookmark,
+  deleteOfflineNovelBookmark,
+  getOfflineBookmarksForUser,
+  getPendingOfflineBookmarks,
+  markBookmarkSynced,
+  saveOfflineQuestionBookmark,
+  deleteOfflineQuestionBookmark,
+  getOfflineQuestionBookmarksForUser,
+  getPendingOfflineQuestionBookmarks,
+  markQuestionBookmarkSynced,
+  saveOfflinePracticeAttempt,
+  getOfflinePracticeHistoryForUser,
+  getPendingOfflinePracticeAttempts,
+  markPracticeAttemptSynced,
+} from './novelOfflineDb';
+
+let isSyncing = false;
+
+// Helper to check network connectivity
+export function isOnline(): boolean {
+  return typeof navigator !== 'undefined' ? navigator.onLine : true;
+}
+
+// -------------------------------------------------------------
+// NOVELS CATALOG
+// -------------------------------------------------------------
+
+export function getAllNovels(): Novel[] {
+  return NOVELS_COLLECTION;
+}
+
+export function getNovelById(novelId: string): Novel | undefined {
+  return NOVELS_COLLECTION.find((n) => n.id === novelId);
+}
+
+export async function getChapterContent(novelId: string, chapterIndex: number): Promise<NovelChapter | null> {
+  // Check offline store first if offline or downloaded
+  const offlineChap = await getOfflineChapter(novelId, chapterIndex);
+  if (offlineChap) {
+    return {
+      id: offlineChap.id,
+      chapterNumber: offlineChap.chapterNumber,
+      title: offlineChap.title,
+      wordCount: offlineChap.wordCount,
+      estimatedMinutes: offlineChap.estimatedMinutes,
+      content: offlineChap.content,
+      hasFullTextPermission: offlineChap.hasFullTextPermission,
+      summary: offlineChap.summary || '',
+      importantCharacters: offlineChap.importantCharacters || [],
+      importantEvents: offlineChap.importantEvents || [],
+      themes: offlineChap.themes || [],
+      importantVocabulary: offlineChap.importantVocabulary || [],
+      keyPoints: offlineChap.keyPoints || [],
+      questions: offlineChap.questions || [],
+    };
+  }
+
+  // Fallback to in-memory bundle
+  const novel = getNovelById(novelId);
+  if (novel && novel.chapters[chapterIndex]) {
+    return novel.chapters[chapterIndex];
+  }
+
+  return null;
+}
+
+// -------------------------------------------------------------
+// OFFLINE DOWNLOAD MANAGEMENT
+// -------------------------------------------------------------
+
+export async function downloadNovel(
+  novelId: string,
+  onProgress?: (percent: number, currentChapter: number, totalChapters: number) => void
+): Promise<boolean> {
+  const novel = getNovelById(novelId);
+  if (!novel) return false;
+
+  try {
+    await saveNovelForOffline(novel, onProgress);
+    return true;
+  } catch (err) {
+    console.error('Failed to download novel for offline:', err);
+    return false;
+  }
+}
+
+export async function removeDownloadedNovel(novelId: string): Promise<boolean> {
+  try {
+    await deleteOfflineNovel(novelId);
+    return true;
+  } catch (err) {
+    console.error('Failed to remove offline novel:', err);
+    return false;
+  }
+}
+
+export async function checkIsNovelOffline(novelId: string): Promise<boolean> {
+  return isNovelDownloadedOffline(novelId);
+}
+
+export async function listAllDownloadedNovels() {
+  return getDownloadedNovelsList();
+}
+
+// -------------------------------------------------------------
+// READING PROGRESS (ONLINE + OFFLINE + AUTOMATIC SYNC)
+// -------------------------------------------------------------
+
+interface ProgressCacheRecord {
+  chapterIndex: number;
+  scrollPercentage: number;
+  completedChaptersHash: string;
+  percentage: number;
+  savedAt: number;
+}
+const progressWriteCache = new Map<string, ProgressCacheRecord>();
+
+export async function saveReadingProgress(progress: NovelReadingProgress, force = false): Promise<void> {
+  if (!progress.uid || !progress.novelId) return;
+
+  const cacheKey = `${progress.uid}_${progress.novelId}`;
+  const now = Date.now();
+  const completedHash = (progress.completedChapters || []).slice().sort().join(',');
+
+  // Prevent duplicate writes unless explicitly forced
+  if (!force) {
+    const cached = progressWriteCache.get(cacheKey);
+    if (cached) {
+      const isSameChapter = cached.chapterIndex === progress.currentChapterIndex;
+      const isSameCompleted = cached.completedChaptersHash === completedHash;
+      const isSamePercentage = cached.percentage === progress.percentage;
+      const isScrollClose = Math.abs(cached.scrollPercentage - progress.scrollPercentage) < 4;
+      const isRecent = (now - cached.savedAt) < 5000;
+
+      if (isSameChapter && isSameCompleted && isSamePercentage && isScrollClose && isRecent) {
+        // Skip write because state is essentially identical and recent
+        return;
+      }
+    }
+  }
+
+  const online = isOnline();
+  const progressToStore: NovelReadingProgress = {
+    ...progress,
+    updatedAt: now,
+    syncStatus: online ? 'synced' : 'pending',
+  };
+
+  // 1. Always save to local IndexedDB (reliable offline-first fallback)
+  await saveOfflineReadingProgress(progressToStore);
+
+  // 2. If online and logged in, sync immediately to Firestore
+  if (online && progress.uid && db) {
+    try {
+      const docRef = doc(db, 'user_reading_progress', `${progress.uid}_${progress.novelId}`);
+      await setDoc(docRef, {
+        uid: progress.uid,
+        novelId: progress.novelId,
+        novelTitle: progress.novelTitle,
+        currentChapterIndex: progress.currentChapterIndex,
+        currentChapterTitle: progress.currentChapterTitle,
+        scrollPercentage: progress.scrollPercentage,
+        completedChapters: progress.completedChapters,
+        totalChapters: progress.totalChapters,
+        percentage: progress.percentage,
+        lastReadAt: progress.lastReadAt || now,
+        updatedAt: now,
+      }, { merge: true });
+
+      // Update write cache on successful write
+      progressWriteCache.set(cacheKey, {
+        chapterIndex: progress.currentChapterIndex,
+        scrollPercentage: progress.scrollPercentage,
+        completedChaptersHash: completedHash,
+        percentage: progress.percentage,
+        savedAt: now,
+      });
+    } catch (err: any) {
+      console.warn('Firestore reading progress save failed (saved locally):', err?.message || err);
+      // Mark as pending in local db
+      await saveOfflineReadingProgress({ ...progressToStore, syncStatus: 'pending' });
+    }
+  }
+}
+
+export async function getNovelReadingProgress(uid: string, novelId: string): Promise<NovelReadingProgress | null> {
+  // Check local first
+  const localProg = await getOfflineReadingProgress(uid, novelId);
+
+  // If online, check remote
+  if (isOnline() && uid && db) {
+    try {
+      const docRef = doc(db, 'user_reading_progress', `${uid}_${novelId}`);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const remoteData = snap.data() as NovelReadingProgress;
+        // Return whichever is newer
+        if (!localProg || (remoteData.updatedAt && remoteData.updatedAt >= (localProg.updatedAt || 0))) {
+          // Update local with remote
+          await saveOfflineReadingProgress({ ...remoteData, syncStatus: 'synced' });
+          return remoteData;
+        }
+      }
+    } catch (err) {
+      console.warn('Firestore reading progress fetch failed, falling back to offline:', err);
+    }
+  }
+
+  return localProg;
+}
+
+export async function getAllUserReadingProgress(uid: string): Promise<Record<string, NovelReadingProgress>> {
+  const result: Record<string, NovelReadingProgress> = {};
+
+  // Load from local storage
+  const localList = await getAllOfflineReadingProgressForUser(uid);
+  localList.forEach((p) => {
+    result[p.novelId] = p;
+  });
+
+  // If online, fetch all from Firestore and merge
+  if (isOnline() && uid && db) {
+    try {
+      const q = query(collection(db, 'user_reading_progress'), where('uid', '==', uid));
+      const snap = await getDocs(q);
+      snap.forEach((d) => {
+        const remote = d.data() as NovelReadingProgress;
+        const currentLocal = result[remote.novelId];
+        if (!currentLocal || (remote.updatedAt && remote.updatedAt >= (currentLocal.updatedAt || 0))) {
+          result[remote.novelId] = remote;
+          // save into local db
+          saveOfflineReadingProgress({ ...remote, syncStatus: 'synced' }).catch(() => {});
+        }
+      });
+    } catch (err) {
+      console.warn('Failed to load reading progress from Firestore, using offline cache:', err);
+    }
+  }
+
+  return result;
+}
+
+// -------------------------------------------------------------
+// BOOKMARKS (ONLINE + OFFLINE + SYNC)
+// -------------------------------------------------------------
+
+export async function saveBookmark(bookmark: NovelBookmark): Promise<void> {
+  const online = isOnline();
+  const bookmarkToStore: NovelBookmark = {
+    ...bookmark,
+    updatedAt: Date.now(),
+    syncStatus: online ? 'synced' : 'pending',
+  };
+
+  // 1. Save to local IndexedDB
+  await saveOfflineNovelBookmark(bookmarkToStore);
+
+  // 2. If online and logged in, sync to Firestore
+  if (online && bookmark.uid && db) {
+    try {
+      const docRef = doc(db, 'novel_bookmarks', bookmark.id);
+      await setDoc(docRef, {
+        id: bookmark.id,
+        uid: bookmark.uid,
+        novelId: bookmark.novelId,
+        novelTitle: bookmark.novelTitle,
+        chapterIndex: bookmark.chapterIndex,
+        chapterTitle: bookmark.chapterTitle,
+        paragraphText: bookmark.paragraphText,
+        note: bookmark.note || '',
+        createdAt: bookmark.createdAt,
+        updatedAt: Date.now(),
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Firestore bookmark save failed (stored locally):', err);
+      await saveOfflineNovelBookmark({ ...bookmarkToStore, syncStatus: 'pending' });
+    }
+  }
+}
+
+export async function deleteBookmark(bookmarkId: string, uid?: string): Promise<void> {
+  await deleteOfflineNovelBookmark(bookmarkId);
+
+  if (isOnline() && uid && db) {
+    try {
+      const docRef = doc(db, 'novel_bookmarks', bookmarkId);
+      await deleteDoc(docRef);
+    } catch (err) {
+      console.warn('Firestore bookmark deletion failed:', err);
+    }
+  }
+}
+
+export async function getUserBookmarks(uid: string, novelId?: string): Promise<NovelBookmark[]> {
+  const localList = await getOfflineBookmarksForUser(uid, novelId);
+  const bookmarkMap = new Map<string, NovelBookmark>();
+
+  localList.forEach((bm) => bookmarkMap.set(bm.id, bm));
+
+  if (isOnline() && uid && db) {
+    try {
+      let q = query(collection(db, 'novel_bookmarks'), where('uid', '==', uid));
+      if (novelId) {
+        q = query(collection(db, 'novel_bookmarks'), where('uid', '==', uid), where('novelId', '==', novelId));
+      }
+      const snap = await getDocs(q);
+      snap.forEach((d) => {
+        const remote = d.data() as NovelBookmark;
+        bookmarkMap.set(remote.id, remote);
+        saveOfflineNovelBookmark({ ...remote, syncStatus: 'synced' }).catch(() => {});
+      });
+    } catch (err) {
+      console.warn('Failed to load bookmarks from Firestore, using offline cache:', err);
+    }
+  }
+
+  const merged = Array.from(bookmarkMap.values());
+  merged.sort((a, b) => b.createdAt - a.createdAt);
+  return merged;
+}
+
+// -------------------------------------------------------------
+// AUTOMATIC SYNC MANAGER
+// -------------------------------------------------------------
+
+export async function syncPendingNovelData(uid: string): Promise<{ syncedProgress: number; syncedBookmarks: number }> {
+  if (isSyncing || !isOnline() || !uid || !db) {
+    return { syncedProgress: 0, syncedBookmarks: 0 };
+  }
+
+  isSyncing = true;
+  let syncedProgress = 0;
+  let syncedBookmarks = 0;
+
+  try {
+    // 1. Sync pending reading progress
+    const pendingProg = await getPendingOfflineReadingProgress(uid);
+    for (const prog of pendingProg) {
+      try {
+        const docRef = doc(db, 'user_reading_progress', `${prog.uid}_${prog.novelId}`);
+        await setDoc(docRef, {
+          uid: prog.uid,
+          novelId: prog.novelId,
+          novelTitle: prog.novelTitle,
+          currentChapterIndex: prog.currentChapterIndex,
+          currentChapterTitle: prog.currentChapterTitle,
+          scrollPercentage: prog.scrollPercentage,
+          completedChapters: prog.completedChapters,
+          totalChapters: prog.totalChapters,
+          percentage: prog.percentage,
+          lastReadAt: prog.lastReadAt,
+          updatedAt: prog.updatedAt || Date.now(),
+        }, { merge: true });
+
+        await markReadingProgressSynced(prog.uid, prog.novelId);
+        syncedProgress++;
+      } catch (err) {
+        console.warn(`Failed syncing reading progress for ${prog.novelId}:`, err);
+      }
+    }
+
+    // 2. Sync pending bookmarks
+    const pendingBM = await getPendingOfflineBookmarks(uid);
+    for (const bm of pendingBM) {
+      try {
+        const docRef = doc(db, 'novel_bookmarks', bm.id);
+        await setDoc(docRef, {
+          id: bm.id,
+          uid: bm.uid,
+          novelId: bm.novelId,
+          novelTitle: bm.novelTitle,
+          chapterIndex: bm.chapterIndex,
+          chapterTitle: bm.chapterTitle,
+          paragraphText: bm.paragraphText,
+          note: bm.note || '',
+          createdAt: bm.createdAt,
+          updatedAt: bm.updatedAt || Date.now(),
+        }, { merge: true });
+
+        await markBookmarkSynced(bm.id);
+        syncedBookmarks++;
+      } catch (err) {
+        console.warn(`Failed syncing bookmark ${bm.id}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error('Error during offline novel data sync:', err);
+  } finally {
+    isSyncing = false;
+  }
+
+  return { syncedProgress, syncedBookmarks };
+}
+
+// Attach auto-sync listener when browser transitions to online
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    // Trigger custom event so any active component can notify user or refresh
+    window.dispatchEvent(new CustomEvent('learndean-novel-online-sync'));
+  });
+}

@@ -25,10 +25,12 @@ const StudyJourney = React.lazy(() => import('./components/StudyJourney'));
 const WeakTopics = React.lazy(() => import('./components/WeakTopics'));
 const UploadNotes = React.lazy(() => import('./components/UploadNotes'));
 const JambPrep = React.lazy(() => import('./components/jamb/JambPrep'));
+const NovelsLibrary = React.lazy(() => import('./components/novels/NovelsLibrary'));
 
 function getEffectiveView(pathname: string): ViewType {
   if (pathname === '/ai-tutor' || pathname === '/tutor') return 'tutor';
   if (pathname === '/learn' || pathname === '/subjects') return 'subjects';
+  if (pathname.startsWith('/novels') || pathname === '/learn/novels') return 'novels';
   if (pathname.startsWith('/jamb')) return 'jamb';
   if (pathname.startsWith('/practice')) return 'practice';
   if (pathname.startsWith('/flashcards')) return 'flashcards';
@@ -263,6 +265,8 @@ export default function App() {
                     <Route path="/tutor" element={<Navigate to="/ai-tutor" replace />} />
                     <Route path="/learn" element={<Subjects setView={setCurrentView} />} />
                     <Route path="/subjects" element={<Navigate to="/learn" replace />} />
+                    <Route path="/novels" element={<NovelsLibrary />} />
+                    <Route path="/learn/novels" element={<Subjects setView={setCurrentView} initialSection="novels" />} />
                     <Route path="/practice" element={<Practice setView={setCurrentView} />} />
                     <Route path="/jamb" element={<JambPrep setView={setCurrentView} />} />
                     <Route path="/jamb-prep" element={<Navigate to="/jamb" replace />} />

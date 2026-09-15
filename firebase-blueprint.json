@@ -115,9 +115,147 @@
         "updatedAt": { "type": "number" }
       },
       "required": ["uid", "followedSchoolIds"]
+    },
+    "JambExamAttempt": {
+      "title": "JambExamAttempt",
+      "description": "Stores user completed JAMB CBT exam attempts and offline synced scores",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "subject": { "type": "string" },
+        "subjectName": { "type": "string" },
+        "year": { "type": "string" },
+        "score": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "percentage": { "type": "number" },
+        "timeSpentSeconds": { "type": "number" },
+        "completedAt": { "type": "number" },
+        "answers": { "type": "object" },
+        "questions": { "type": "array" },
+        "syncStatus": { "type": "string" },
+        "syncedAt": { "type": "number" }
+      },
+      "required": ["id", "uid", "subject", "score", "totalQuestions", "completedAt"]
+    },
+    "JambBookmark": {
+      "title": "JambBookmark",
+      "description": "Stores bookmarked JAMB questions for revision",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "questionId": { "type": "string" },
+        "subject": { "type": "string" },
+        "savedAt": { "type": "number" },
+        "question": { "type": "object" },
+        "syncStatus": { "type": "string" }
+      },
+      "required": ["uid", "questionId", "subject", "savedAt"]
+    },
+    "UserReadingProgress": {
+      "title": "UserReadingProgress",
+      "description": "Stores user reading progress for JAMB novels and texts",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "novelId": { "type": "string" },
+        "novelTitle": { "type": "string" },
+        "currentChapterIndex": { "type": "number" },
+        "currentChapterTitle": { "type": "string" },
+        "scrollPercentage": { "type": "number" },
+        "completedChapters": { "type": "array" },
+        "totalChapters": { "type": "number" },
+        "percentage": { "type": "number" },
+        "lastReadAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["uid", "novelId", "currentChapterIndex", "percentage"]
+    },
+    "NovelBookmark": {
+      "title": "NovelBookmark",
+      "description": "Stores user bookmarks with annotations for JAMB texts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "novelId": { "type": "string" },
+        "novelTitle": { "type": "string" },
+        "chapterIndex": { "type": "number" },
+        "chapterTitle": { "type": "string" },
+        "paragraphText": { "type": "string" },
+        "note": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "uid", "novelId", "chapterIndex", "createdAt"]
+    },
+    "NovelQuestionBookmark": {
+      "title": "NovelQuestionBookmark",
+      "description": "Stores user bookmarks for specific chapter questions in JAMB novels",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "novelId": { "type": "string" },
+        "novelTitle": { "type": "string" },
+        "chapterIndex": { "type": "number" },
+        "chapterTitle": { "type": "string" },
+        "questionId": { "type": "string" },
+        "question": { "type": "object" },
+        "userNote": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "uid", "novelId", "questionId", "createdAt"]
+    },
+    "NovelPracticeAttempt": {
+      "title": "NovelPracticeAttempt",
+      "description": "Stores student practice session attempts, scores, weak chapters, and completion for JAMB novels",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "novelId": { "type": "string" },
+        "novelTitle": { "type": "string" },
+        "mode": { "type": "string" },
+        "scope": { "type": "string" },
+        "selectedChapterIndices": { "type": "array" },
+        "totalQuestions": { "type": "number" },
+        "correctAnswers": { "type": "number" },
+        "scorePercentage": { "type": "number" },
+        "timeSpentSeconds": { "type": "number" },
+        "weakChapters": { "type": "array" },
+        "completedChapterIndices": { "type": "array" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "uid", "novelId", "totalQuestions", "correctAnswers", "scorePercentage", "timestamp"]
     }
   },
   "firestore": {
+    "user_reading_progress/{docId}": {
+      "schema": { "$ref": "#/entities/UserReadingProgress" },
+      "description": "User reading progress for prescribed JAMB novels and literature texts."
+    },
+    "novel_bookmarks/{docId}": {
+      "schema": { "$ref": "#/entities/NovelBookmark" },
+      "description": "User bookmarks with excerpts and study notes for JAMB novels."
+    },
+    "novel_question_bookmarks/{docId}": {
+      "schema": { "$ref": "#/entities/NovelQuestionBookmark" },
+      "description": "Bookmarked practice questions from novel chapters."
+    },
+    "novel_practice_history/{docId}": {
+      "schema": { "$ref": "#/entities/NovelPracticeAttempt" },
+      "description": "Exam and chapter practice attempts and weak chapter analysis for JAMB novels."
+    },
+    "jamb_history/{docId}": {
+      "schema": { "$ref": "#/entities/JambExamAttempt" },
+      "description": "JAMB CBT exam attempt results and answers."
+    },
+    "jamb_bookmarks/{docId}": {
+      "schema": { "$ref": "#/entities/JambBookmark" },
+      "description": "Bookmarked questions for JAMB revision."
+    },
     "user_followed_schools/{docId}": {
       "schema": { "$ref": "#/entities/UserFollowedSchools" },
       "description": "Followed schools preferences for a user."

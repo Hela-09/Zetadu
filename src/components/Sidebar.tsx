@@ -2,7 +2,7 @@ import React from 'react';
 import { ViewType } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import Logo from './Logo';
-import { Home, BookOpen, MessageSquare, User, Download, Layers, Compass, Search, FileUp, GraduationCap } from 'lucide-react';
+import { Home, BookOpen, MessageSquare, User, Download, Layers, Compass, Search, FileUp, GraduationCap, BookMarked } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface SidebarProps {
@@ -18,6 +18,7 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
     { id: 'upload_notes', label: 'Upload Notes', icon: FileUp },
     { id: 'journey', label: 'Study Journey', icon: Compass },
     { id: 'subjects', label: 'Learn', icon: BookOpen },
+    { id: 'novels', label: 'Novels', icon: BookMarked },
     { id: 'flashcards', label: 'Flashcards', icon: Layers },
     { id: 'profile', label: 'Profile', icon: User },
   ];
