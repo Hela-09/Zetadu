@@ -32,25 +32,11 @@ if (typeof window !== "undefined") {
   };
 }
 
-const getEffectiveAuthDomain = (): string => {
-  if (typeof window !== "undefined" && window.location) {
-    const { hostname, host, protocol } = window.location;
-    // When served over HTTPS on mobile browsers, PWAs, or custom domains:
-    // Using current host routes auth handlers and iframe through the server's /__/auth/ reverse proxy.
-    // This provides a first-party, same-origin auth experience that is immune to
-    // Safari ITP and Android Chrome third-party storage partitioning.
-    if (protocol === "https:" && hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
-      return host;
-    }
-  }
-  return "educore-66491.firebaseapp.com";
-};
-
 const firebaseConfig = {
   // HARDCODED to guarantee ALL domains use the exact same Zetadu Firebase project
-  // and auth handler (educore-66491). Dynamic authDomain enables same-origin reverse proxying on HTTPS.
+  // and auth handler (educore-66491). Bypasses any conflicting environment variables.
   apiKey: "AIzaSyBzS_kYtaSYSAx39DBhNAP6l6IGsIUHTqs",
-  authDomain: getEffectiveAuthDomain(),
+  authDomain: "educore-66491.firebaseapp.com",
   projectId: "educore-66491",
   storageBucket: "educore-66491.firebasestorage.app",
   messagingSenderId: "1042086916215",

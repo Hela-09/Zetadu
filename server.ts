@@ -4,7 +4,6 @@ dotenv.config();
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { createProxyMiddleware } from "http-proxy-middleware";
 import { GoogleGenAI, Type } from "@google/genai";
 import { initializeApp } from "firebase-admin/app";
 import { getStorage } from "firebase-admin/storage";
@@ -37,19 +36,6 @@ try {
 async function startServer() {
   const app = express();
   const PORT = 3000;
-
-  // Reverse proxy for Firebase Authentication /__/auth/* endpoints
-  // Transparently forwards OAuth redirect handler and iframe requests to Firebase
-  // Eliminating third-party cookie/storage blocking on mobile Safari (ITP), Android Chrome, and PWAs
-  app.use(
-    '/__/auth',
-    createProxyMiddleware({
-      target: 'https://educore-66491.firebaseapp.com/__/auth',
-      changeOrigin: true,
-      secure: true,
-      xfwd: true,
-    })
-  );
 
   app.use(express.json());
 

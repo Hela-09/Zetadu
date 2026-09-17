@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { User, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut as firebaseSignOut, onAuthStateChanged, getIdToken } from 'firebase/auth';
+import { User, signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut, onAuthStateChanged, getIdToken } from 'firebase/auth';
 import { auth, googleProvider, db, isFirestoreQuotaExhausted } from '../lib/firebase';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
@@ -34,47 +34,6 @@ const defaultSettings: UserSettings = {
   defaultPracticeDifficulty: 'Medium',
   aiTutorTone: 'Friendly'
 };
-
-// Module-level initial redirect promise to ensure getRedirectResult is called once when app starts
-let redirectResultPromise: Promise<{ user: User; credential: any } | null> | null = null;
-let initialRedirectError: any = null;
-
-function handleRedirectOnAppStart(): Promise<{ user: User; credential: any } | null> {
-  if (!redirectResultPromise && typeof window !== 'undefined' && auth) {
-    redirectResultPromise = (async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        
-        // Always clean up redirect markers once getRedirectResult resolves
-        try {
-          sessionStorage.removeItem('zetadu_auth_redirect_in_progress');
-          localStorage.removeItem('zetadu_auth_redirect_in_progress');
-          localStorage.removeItem('zetadu_auth_redirect_time');
-        } catch (_) {}
-
-        if (result && result.user) {
-          console.log("[Auth] Firebase Google redirect sign-in succeeded for:", result.user.email);
-          const credential = GoogleAuthProvider.credentialFromResult(result);
-          return { user: result.user, credential };
-        }
-        return null;
-      } catch (err: any) {
-        console.error("Firebase Google Redirect Auth Error [CRITICAL]:", err?.code, err?.message, err);
-        initialRedirectError = err;
-        try {
-          sessionStorage.removeItem('zetadu_auth_redirect_in_progress');
-          localStorage.removeItem('zetadu_auth_redirect_in_progress');
-          localStorage.removeItem('zetadu_auth_redirect_time');
-        } catch (_) {}
-        return null;
-      }
-    })();
-  }
-  return redirectResultPromise || Promise.resolve(null);
-}
-
-// Immediately trigger getRedirectResult when the module executes
-handleRedirectOnAppStart();
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
@@ -359,37 +318,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Listen for auth state changes to restore the logged-in user
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       try {
-        // App waits for getRedirectResult to finish before deciding on authentication state
-        const redirectData = await handleRedirectOnAppStart();
-
-        if (initialRedirectError && !currentUser) {
-          const errCode = initialRedirectError?.code || '';
-          if (errCode === 'auth/unauthorized-domain') {
-            setError(`This domain (${typeof window !== 'undefined' ? window.location.hostname : 'current'}) is not authorized for Google Sign-In. Please add it to Authorized Domains in Firebase Console.`);
-          } else if (errCode === 'auth/popup-closed-by-user' || errCode === 'auth/cancelled-popup-request') {
-            setError("Sign-in was cancelled.");
-          } else if (errCode === 'auth/network-request-failed') {
-            setError("Network connection failed. Please check your internet connection.");
-          } else if (initialRedirectError?.message) {
-            setError(initialRedirectError.message);
-          }
-          initialRedirectError = null;
-        }
-
-        if (redirectData?.credential?.accessToken) {
-          setOauthToken(redirectData.credential.accessToken);
-        }
-
-        const effectiveUser = redirectData?.user || currentUser || auth.currentUser;
-
-        if (effectiveUser) {
-          await setupUserProfile(effectiveUser);
+        if (currentUser) {
+          await setupUserProfile(currentUser);
           if (isSubscribed) {
-            setUser(effectiveUser);
+            setUser(currentUser);
             setLoading(false);
           }
         } else {
-          // Both getRedirectResult and onAuthStateChanged confirmed no active user
+          // No active user
           if (isSubscribed) {
             if (profileUnsubRef.current) {
               profileUnsubRef.current();
@@ -407,7 +343,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } catch (err: any) {
-        console.error("Firebase Auth State Resolution Error [CRITICAL]:", err?.code, err?.message, err);
+        console.error("Firebase Auth State Resolution Error:", err?.code, err?.message, err);
         if (isSubscribed) {
           setLoading(false);
         }
@@ -461,65 +397,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setError(null);
     try {
-      // Check if environment is mobile device or installed standalone PWA
-      const isStandalone = 
-        (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches) ||
-        (typeof window !== 'undefined' && (window.navigator as any).standalone === true) ||
-        (typeof document !== 'undefined' && document.referrer.includes('android-app://'));
-
-      const isMobileDevice = 
-        typeof navigator !== 'undefined' && (
-          /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-          (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent))
-        );
-
-      const shouldUseRedirect = isStandalone || isMobileDevice;
-
-      if (shouldUseRedirect) {
-        // Record redirect pending state across storage
-        try {
-          sessionStorage.setItem('zetadu_auth_redirect_in_progress', 'true');
-          localStorage.setItem('zetadu_auth_redirect_in_progress', 'true');
-          localStorage.setItem('zetadu_auth_redirect_time', Date.now().toString());
-        } catch (_) {}
-
-        // Trigger Firebase Google Authentication with redirect
-        await signInWithRedirect(auth, googleProvider);
-      } else {
-        // Desktop: keep existing popup flow working
-        try {
-          const result = await signInWithPopup(auth, googleProvider);
-          if (result && result.user) {
-            const credential = GoogleAuthProvider.credentialFromResult(result);
-            if (credential?.accessToken) {
-              setOauthToken(credential.accessToken);
-            }
-            await setupUserProfile(result.user);
-            setUser(result.user);
-            setLoading(false);
-          }
-        } catch (err: any) {
-          if (err.code === "auth/popup-blocked") {
-            // Popup blocked on desktop, fallback to redirect
-            try {
-              sessionStorage.setItem('zetadu_auth_redirect_in_progress', 'true');
-              localStorage.setItem('zetadu_auth_redirect_in_progress', 'true');
-              localStorage.setItem('zetadu_auth_redirect_time', Date.now().toString());
-            } catch (_) {}
-            await signInWithRedirect(auth, googleProvider);
-            return;
-          }
-          throw err;
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result && result.user) {
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        if (credential?.accessToken) {
+          setOauthToken(credential.accessToken);
         }
+        await setupUserProfile(result.user);
+        setUser(result.user);
+        setLoading(false);
       }
     } catch (err: any) {
-      console.error("Firebase Google Sign-In Error [CRITICAL]:", err?.code, err?.message, err);
-      try {
-        sessionStorage.removeItem('zetadu_auth_redirect_in_progress');
-        localStorage.removeItem('zetadu_auth_redirect_in_progress');
-        localStorage.removeItem('zetadu_auth_redirect_time');
-      } catch (_) {}
-
+      console.error("Firebase Google Sign-In Error:", err?.code, err?.message, err);
       if (err.code === 'auth/popup-blocked') {
         setError("Popup blocked by browser. Please allow popups or try again.");
       } else if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
@@ -542,9 +431,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem("practice_session");
       localStorage.removeItem("tutor_session");
       localStorage.removeItem("zetadu_current_view");
-      sessionStorage.removeItem("zetadu_auth_redirect_in_progress");
-      localStorage.removeItem("zetadu_auth_redirect_in_progress");
-      localStorage.removeItem("zetadu_auth_redirect_time");
       
       if (profileUnsubRef.current) {
         profileUnsubRef.current();
