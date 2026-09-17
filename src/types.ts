@@ -278,7 +278,7 @@ export interface NovelChapter {
   importantEvents?: string[];
   themes?: string[];
   importantVocabulary?: NovelChapterVocabulary[];
-  keyPoints: string[];
+  keyPoints?: string[];
   questions?: NovelChapterQuestion[];
 }
 

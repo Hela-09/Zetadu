@@ -37,12 +37,21 @@ const defaultSettings: UserSettings = {
 
 // Module-level initial redirect promise to ensure getRedirectResult is called once when app starts
 let redirectResultPromise: Promise<{ user: User; credential: any } | null> | null = null;
+let initialRedirectError: any = null;
 
 function handleRedirectOnAppStart(): Promise<{ user: User; credential: any } | null> {
   if (!redirectResultPromise && typeof window !== 'undefined' && auth) {
     redirectResultPromise = (async () => {
       try {
         const result = await getRedirectResult(auth);
+        
+        // Always clean up redirect markers once getRedirectResult resolves
+        try {
+          sessionStorage.removeItem('zetadu_auth_redirect_in_progress');
+          localStorage.removeItem('zetadu_auth_redirect_in_progress');
+          localStorage.removeItem('zetadu_auth_redirect_time');
+        } catch (_) {}
+
         if (result && result.user) {
           console.log("[Auth] Firebase Google redirect sign-in succeeded for:", result.user.email);
           const credential = GoogleAuthProvider.credentialFromResult(result);
@@ -50,8 +59,13 @@ function handleRedirectOnAppStart(): Promise<{ user: User; credential: any } | n
         }
         return null;
       } catch (err: any) {
-        // Critical error logging as requested
         console.error("Firebase Google Redirect Auth Error [CRITICAL]:", err?.code, err?.message, err);
+        initialRedirectError = err;
+        try {
+          sessionStorage.removeItem('zetadu_auth_redirect_in_progress');
+          localStorage.removeItem('zetadu_auth_redirect_in_progress');
+          localStorage.removeItem('zetadu_auth_redirect_time');
+        } catch (_) {}
         return null;
       }
     })();
@@ -139,11 +153,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
           }
 
+          // Ensure profile has the latest info from Google auth
+          const updates: any = {};
+          if (currentUser.email && (!data.email || data.email !== currentUser.email)) {
+            updates.email = currentUser.email;
+            data.email = currentUser.email;
+          }
+          if (currentUser.displayName && (!data.displayName || !data.name)) {
+            updates.displayName = currentUser.displayName;
+            updates.name = currentUser.displayName;
+            data.displayName = currentUser.displayName;
+            data.name = currentUser.displayName;
+          }
+          if (currentUser.photoURL && (!data.photoURL || data.photoURL !== currentUser.photoURL)) {
+            updates.photoURL = currentUser.photoURL;
+            data.photoURL = currentUser.photoURL;
+          }
           if (isActualSuperAdmin && !data.isSuperAdmin) {
+            updates.role = 'super_admin';
+            updates.isSuperAdmin = true;
             data.role = 'super_admin';
             data.isSuperAdmin = true;
-            setDoc(userRef, { role: 'super_admin', isSuperAdmin: true }, { merge: true }).catch(() => {});
           }
+          if (Object.keys(updates).length > 0 && !isFirestoreQuotaExhausted()) {
+            setDoc(userRef, updates, { merge: true }).catch(() => {});
+          }
+
           setUserProfile(data);
           try {
             localStorage.setItem(`zetadu_profile_${currentUser.uid}`, JSON.stringify(data));
@@ -326,6 +361,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         // App waits for getRedirectResult to finish before deciding on authentication state
         const redirectData = await handleRedirectOnAppStart();
+
+        if (initialRedirectError && !currentUser) {
+          const errCode = initialRedirectError?.code || '';
+          if (errCode === 'auth/unauthorized-domain') {
+            setError(`This domain (${typeof window !== 'undefined' ? window.location.hostname : 'current'}) is not authorized for Google Sign-In. Please add it to Authorized Domains in Firebase Console.`);
+          } else if (errCode === 'auth/popup-closed-by-user' || errCode === 'auth/cancelled-popup-request') {
+            setError("Sign-in was cancelled.");
+          } else if (errCode === 'auth/network-request-failed') {
+            setError("Network connection failed. Please check your internet connection.");
+          } else if (initialRedirectError?.message) {
+            setError(initialRedirectError.message);
+          }
+          initialRedirectError = null;
+        }
 
         if (redirectData?.credential?.accessToken) {
           setOauthToken(redirectData.credential.accessToken);

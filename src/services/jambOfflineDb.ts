@@ -21,8 +21,34 @@ export interface StoredOfflineBookmark extends BookmarkedJambQuestion {
   syncedAt?: number | null;
 }
 
+export interface OfflinePracticeOptions {
+  subjects?: string[]; // for multi-subject CBT
+  subject?: string;
+  topic?: string;
+  year?: number | 'all';
+  count?: number;
+  order?: 'random' | 'sequential';
+}
+
+export interface OfflinePracticeResult {
+  questions: JambQuestion[];
+  totalAvailable: number;
+  unansweredCount: number;
+  isPoolLow: boolean;
+  isOfflineSource: boolean;
+}
+
 const DB_NAME = 'LearnDean_JAMB_OfflineDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
+
+export function normalizeQuestionText(text: string): string {
+  if (!text) return '';
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 class JambOfflineDatabase {
   private dbPromise: Promise<IDBDatabase> | null = null;
@@ -52,11 +78,18 @@ class JambOfflineDatabase {
         }
 
         // 2. Offline questions store (contains questions, options, answers, explanations)
+        let qStore: IDBObjectStore;
         if (!db.objectStoreNames.contains('offline_questions')) {
-          const qStore = db.createObjectStore('offline_questions', { keyPath: 'id' });
+          qStore = db.createObjectStore('offline_questions', { keyPath: 'id' });
           qStore.createIndex('by_subject', 'subject', { unique: false });
           qStore.createIndex('by_year', 'year', { unique: false });
           qStore.createIndex('by_subject_year', ['subject', 'year'], { unique: false });
+          qStore.createIndex('by_topic', 'topic', { unique: false });
+        } else {
+          qStore = (event.target as IDBOpenDBRequest).transaction!.objectStore('offline_questions');
+          if (!qStore.indexNames.contains('by_topic')) {
+            qStore.createIndex('by_topic', 'topic', { unique: false });
+          }
         }
 
         // 3. Offline exam attempts store
@@ -73,6 +106,19 @@ class JambOfflineDatabase {
           bStore.createIndex('by_syncStatus', 'syncStatus', { unique: false });
           bStore.createIndex('by_subject', 'subject', { unique: false });
         }
+
+        // 5. Unfinished practice sessions store
+        if (!db.objectStoreNames.contains('offline_sessions')) {
+          const sStore = db.createObjectStore('offline_sessions', { keyPath: 'id' });
+          sStore.createIndex('by_updatedAt', 'updatedAt', { unique: false });
+        }
+
+        // 6. Answered questions store for tracking history & prioritizing unanswered
+        if (!db.objectStoreNames.contains('answered_questions')) {
+          const ansStore = db.createObjectStore('answered_questions', { keyPath: 'questionId' });
+          ansStore.createIndex('by_subject', 'subject', { unique: false });
+          ansStore.createIndex('by_answeredAt', 'answeredAt', { unique: false });
+        }
       };
 
       request.onsuccess = () => {
@@ -88,7 +134,7 @@ class JambOfflineDatabase {
   }
 
   // -------------------------------------------------------------
-  // SUBJECT DOWNLOAD MANAGEMENT
+  // SUBJECT DOWNLOAD & OFFLINE QUESTION BANK MANAGEMENT
   // -------------------------------------------------------------
 
   /**
@@ -97,11 +143,29 @@ class JambOfflineDatabase {
   async isSubjectDownloaded(subjectId: string): Promise<boolean> {
     try {
       const db = await this.getDb();
+      const normId = subjectId.toLowerCase().trim();
       return new Promise((resolve) => {
         const tx = db.transaction('downloaded_subjects', 'readonly');
         const store = tx.objectStore('downloaded_subjects');
-        const req = store.get(subjectId);
-        req.onsuccess = () => resolve(Boolean(req.result));
+        const req = store.get(normId);
+        req.onsuccess = () => {
+          if (req.result) {
+            resolve(true);
+          } else {
+            // Check by name
+            const allReq = store.getAll();
+            allReq.onsuccess = () => {
+              const list = allReq.result || [];
+              const found = list.some(s => 
+                s.subjectId.toLowerCase() === normId || 
+                s.name.toLowerCase() === normId ||
+                s.code.toLowerCase() === normId
+              );
+              resolve(found);
+            };
+            allReq.onerror = () => resolve(false);
+          }
+        };
         req.onerror = () => resolve(false);
       });
     } catch {
@@ -128,37 +192,52 @@ class JambOfflineDatabase {
   }
 
   /**
-   * Download a subject's questions, answers, and explanations into IndexedDB
-   * Provides real-time step progress callback.
+   * Download a subject's questions, answers, and explanations into IndexedDB.
+   * Merges bundled questions without wiping newly generated ones.
    */
   async downloadSubject(
     subjectId: string,
     onProgress?: (percent: number, current: number, total: number) => void
   ): Promise<{ success: boolean; count: number }> {
-    const questions = JAMB_QUESTIONS.filter(q => q.subject === subjectId);
+    const normSubId = subjectId.toLowerCase().trim();
+    const questions = JAMB_QUESTIONS.filter(q => 
+      q.subject.toLowerCase() === normSubId ||
+      q.subjectName.toLowerCase() === normSubId ||
+      q.id.toLowerCase().includes(normSubId)
+    );
+
     if (questions.length === 0) {
       throw new Error(`No questions available to download for subject: ${subjectId}`);
     }
 
-    const subjectMeta = JAMB_SUBJECTS.find(s => s.id === subjectId);
+    const subjectMeta = JAMB_SUBJECTS.find(s => 
+      s.id.toLowerCase() === normSubId || 
+      s.name.toLowerCase() === normSubId
+    );
+
     const db = await this.getDb();
 
-    // Calculate years available
-    const yearsSet = new Set<number>();
-    questions.forEach(q => yearsSet.add(q.year));
-    const years = Array.from(yearsSet).sort();
+    // 1. Fetch existing questions to prevent duplicates and preserve AI generated questions
+    const existingList: JambQuestion[] = await new Promise((resolve) => {
+      const tx = db.transaction('offline_questions', 'readonly');
+      const store = tx.objectStore('offline_questions');
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
 
-    // Approximate size in KB (JSON stringified)
-    const rawJson = JSON.stringify(questions);
-    const sizeKb = Math.round(new Blob([rawJson]).size / 1024);
+    const existingIds = new Set<string>();
+    const existingTexts = new Set<string>();
+    existingList.forEach(q => {
+      existingIds.add(q.id);
+      existingTexts.add(normalizeQuestionText(q.question));
+    });
 
     const total = questions.length;
     let storedCount = 0;
 
-    // Report initial progress
     if (onProgress) onProgress(5, 0, total);
 
-    // Save in batches or one transaction while tracking progress
     const tx = db.transaction(['offline_questions', 'downloaded_subjects'], 'readwrite');
     const qStore = tx.objectStore('offline_questions');
     const subStore = tx.objectStore('downloaded_subjects');
@@ -167,10 +246,17 @@ class JambOfflineDatabase {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error || new Error('Download transaction failed'));
 
-      // Put questions
       for (let i = 0; i < questions.length; i++) {
         const q = questions[i];
-        qStore.put(q);
+        const textKey = normalizeQuestionText(q.question);
+        if (!existingIds.has(q.id) && !existingTexts.has(textKey)) {
+          qStore.put(q);
+          existingIds.add(q.id);
+          existingTexts.add(textKey);
+        } else {
+          // Update existing with complete question data
+          qStore.put(q);
+        }
         storedCount++;
         const pct = Math.min(95, Math.round(10 + (storedCount / total) * 85));
         if (onProgress) {
@@ -178,15 +264,28 @@ class JambOfflineDatabase {
         }
       }
 
-      // Put subject metadata
+      // Calculate all years and count for this subject
+      const allSubjectQuestions = existingList.filter(q => 
+        q.subject.toLowerCase() === normSubId ||
+        q.subjectName.toLowerCase() === normSubId
+      );
+      const combinedCount = Math.max(total, allSubjectQuestions.length);
+      const yearsSet = new Set<number>();
+      questions.forEach(q => yearsSet.add(q.year));
+      allSubjectQuestions.forEach(q => yearsSet.add(q.year));
+      const years = Array.from(yearsSet).sort();
+
+      const rawJson = JSON.stringify(questions);
+      const sizeKb = Math.max(16, Math.round(new Blob([rawJson]).size / 1024));
+
       const meta: DownloadedSubjectMeta = {
-        subjectId,
+        subjectId: normSubId,
         name: subjectMeta?.name || subjectId,
         code: subjectMeta?.code || subjectId.toUpperCase().slice(0, 3),
-        questionCount: total,
+        questionCount: combinedCount,
         years,
         downloadedAt: Date.now(),
-        sizeKb: Math.max(12, sizeKb)
+        sizeKb
       };
       subStore.put(meta);
     });
@@ -197,9 +296,132 @@ class JambOfflineDatabase {
   }
 
   /**
+   * Adds newly generated questions to the offline question bank.
+   * Strictly prevents duplicate questions by checking both normalized question text and IDs.
+   */
+  async addQuestionsToOfflineBank(
+    subjectId: string,
+    newQuestions: JambQuestion[]
+  ): Promise<{ addedCount: number; duplicatesSkipped: number; totalOfflineCount: number }> {
+    if (!newQuestions || newQuestions.length === 0) {
+      return { addedCount: 0, duplicatesSkipped: 0, totalOfflineCount: 0 };
+    }
+
+    const normSubId = subjectId.toLowerCase().trim();
+    const db = await this.getDb();
+
+    // 1. Fetch all existing questions in IndexedDB
+    const existing: JambQuestion[] = await new Promise((resolve) => {
+      const tx = db.transaction('offline_questions', 'readonly');
+      const store = tx.objectStore('offline_questions');
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+
+    const existingSignatures = new Set<string>();
+    existing.forEach(q => {
+      if (q.id) existingSignatures.add(q.id);
+      const textSig = normalizeQuestionText(q.question);
+      if (textSig) existingSignatures.add(textSig);
+    });
+
+    // Also include bundled questions in duplicate signature check
+    JAMB_QUESTIONS.forEach(q => {
+      if (q.id) existingSignatures.add(q.id);
+      const textSig = normalizeQuestionText(q.question);
+      if (textSig) existingSignatures.add(textSig);
+    });
+
+    const uniqueToAdd: JambQuestion[] = [];
+    let duplicatesSkipped = 0;
+
+    for (const q of newQuestions) {
+      const textSig = normalizeQuestionText(q.question);
+      if (!textSig || existingSignatures.has(textSig) || (q.id && existingSignatures.has(q.id))) {
+        duplicatesSkipped++;
+        continue;
+      }
+
+      existingSignatures.add(textSig);
+      const uniqueId = q.id && !existingSignatures.has(q.id)
+        ? q.id
+        : `jamb_${normSubId}_ai_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      
+      existingSignatures.add(uniqueId);
+
+      uniqueToAdd.push({
+        ...q,
+        id: uniqueId,
+        subject: normSubId,
+        subjectName: q.subjectName || subjectId
+      });
+    }
+
+    if (uniqueToAdd.length === 0) {
+      const currentSubjectQuestions = existing.filter(q => 
+        q.subject.toLowerCase() === normSubId || 
+        q.subjectName?.toLowerCase() === normSubId
+      );
+      return { 
+        addedCount: 0, 
+        duplicatesSkipped, 
+        totalOfflineCount: currentSubjectQuestions.length 
+      };
+    }
+
+    // 2. Put unique questions into IndexedDB and update subject metadata
+    const tx = db.transaction(['offline_questions', 'downloaded_subjects'], 'readwrite');
+    const qStore = tx.objectStore('offline_questions');
+    const subStore = tx.objectStore('downloaded_subjects');
+
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+
+      uniqueToAdd.forEach(q => qStore.put(q));
+
+      // Get or create downloaded_subjects record
+      const metaReq = subStore.get(normSubId);
+      metaReq.onsuccess = () => {
+        const existingMeta = metaReq.result as DownloadedSubjectMeta | undefined;
+        const subjectMeta = JAMB_SUBJECTS.find(s => 
+          s.id.toLowerCase() === normSubId || 
+          s.name.toLowerCase() === normSubId
+        );
+        const prevCount = existingMeta ? existingMeta.questionCount : 0;
+        const newTotal = prevCount + uniqueToAdd.length;
+
+        const updatedMeta: DownloadedSubjectMeta = {
+          subjectId: normSubId,
+          name: existingMeta?.name || subjectMeta?.name || subjectId,
+          code: existingMeta?.code || subjectMeta?.code || normSubId.slice(0, 3).toUpperCase(),
+          questionCount: newTotal,
+          years: existingMeta?.years || [2024],
+          downloadedAt: Date.now(),
+          sizeKb: (existingMeta?.sizeKb || 20) + Math.max(4, Math.round(uniqueToAdd.length * 0.8))
+        };
+        subStore.put(updatedMeta);
+      };
+    });
+
+    const totalOfflineCount = existing.filter(q => 
+      q.subject.toLowerCase() === normSubId || 
+      q.subjectName?.toLowerCase() === normSubId
+    ).length + uniqueToAdd.length;
+
+    return {
+      addedCount: uniqueToAdd.length,
+      duplicatesSkipped,
+      totalOfflineCount
+    };
+  }
+
+  /**
    * Delete a downloaded subject from IndexedDB to free space
    */
   async deleteDownloadedSubject(subjectId: string): Promise<void> {
+    const normId = subjectId.toLowerCase().trim();
     const db = await this.getDb();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(['offline_questions', 'downloaded_subjects'], 'readwrite');
@@ -207,12 +429,12 @@ class JambOfflineDatabase {
       const subStore = tx.objectStore('downloaded_subjects');
 
       const index = qStore.index('by_subject');
-      const req = index.getAllKeys(subjectId);
+      const req = index.getAllKeys(normId);
 
       req.onsuccess = () => {
         const keys = req.result;
         keys.forEach(key => qStore.delete(key));
-        subStore.delete(subjectId);
+        subStore.delete(normId);
       };
 
       tx.oncomplete = () => resolve();
@@ -220,54 +442,387 @@ class JambOfflineDatabase {
     });
   }
 
+  // -------------------------------------------------------------
+  // ANSWERED QUESTIONS TRACKING
+  // -------------------------------------------------------------
+
+  async markQuestionsAnswered(questionIds: string[], subject?: string): Promise<void> {
+    if (!questionIds || questionIds.length === 0) return;
+    try {
+      const db = await this.getDb();
+      const tx = db.transaction('answered_questions', 'readwrite');
+      const store = tx.objectStore('answered_questions');
+      const now = Date.now();
+      for (const qid of questionIds) {
+        if (qid) {
+          store.put({ questionId: qid, subject: subject || 'general', answeredAt: now });
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to mark questions as answered in IndexedDB:', e);
+    }
+  }
+
+  async getAnsweredQuestionIds(): Promise<Set<string>> {
+    const set = new Set<string>();
+    try {
+      const db = await this.getDb();
+      const tx = db.transaction('answered_questions', 'readonly');
+      const store = tx.objectStore('answered_questions');
+      const req = store.getAllKeys();
+      await new Promise<void>((resolve) => {
+        req.onsuccess = () => {
+          (req.result || []).forEach(k => set.add(String(k)));
+          resolve();
+        };
+        req.onerror = () => resolve();
+      });
+    } catch {}
+
+    // Also include answered question IDs from recorded offline attempts
+    try {
+      const attempts = await this.getAllAttempts();
+      for (const att of attempts) {
+        if (att.answers) {
+          Object.keys(att.answers).forEach(qid => set.add(qid));
+        }
+        if (Array.isArray(att.questions)) {
+          att.questions.forEach(q => {
+            if (att.answers && att.answers[q.id] !== undefined) {
+              set.add(q.id);
+              set.add(normalizeQuestionText(q.question));
+            }
+          });
+        }
+      }
+    } catch {}
+
+    // Also check localStorage
+    try {
+      const raw = localStorage.getItem('learndean_jamb_history');
+      if (raw) {
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          for (const item of list) {
+            if (item.answers) {
+              Object.keys(item.answers).forEach(qid => set.add(qid));
+            }
+          }
+        }
+      }
+    } catch {}
+
+    return set;
+  }
+
+  // -------------------------------------------------------------
+  // PRACTICE QUESTION RETRIEVAL (OFFLINE-FIRST, STRICT DEDUP, UNANSWERED FIRST)
+  // -------------------------------------------------------------
+
   /**
-   * Get offline questions for CBT practice
+   * Retrieves questions for practice.
+   * Guarantees:
+   * 1. Never shows the same question twice in a session.
+   * 2. Uses unanswered downloaded questions first.
+   * 3. Pulls from IndexedDB offline questions and bundled questions so nothing is lost.
+   * 4. Detects when the question pool is low to prompt the user to connect online.
+   */
+  async getOfflinePracticeQuestions(options: OfflinePracticeOptions): Promise<OfflinePracticeResult> {
+    const { subjects, subject, topic, year, count = 20, order = 'random' } = options;
+    const db = await this.getDb();
+
+    // 1. Fetch all questions from IndexedDB
+    const allDbQuestions: JambQuestion[] = await new Promise((resolve) => {
+      const tx = db.transaction('offline_questions', 'readonly');
+      const store = tx.objectStore('offline_questions');
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+
+    // 2. Fetch answered question IDs
+    const answeredIds = await this.getAnsweredQuestionIds();
+
+    // Multi-subject CBT Mode (e.g. 4 subjects)
+    if (subjects && subjects.length > 0) {
+      const perSubjectCount = Math.max(1, Math.floor(count / subjects.length));
+      const combinedSelected: JambQuestion[] = [];
+      let totalPoolAvailable = 0;
+      let totalUnansweredCount = 0;
+      let anyPoolLow = false;
+
+      for (const sub of subjects) {
+        const normSub = sub.toLowerCase().trim();
+        
+        // Gather candidates from DB and bundled questions
+        const candidateMap = new Map<string, JambQuestion>();
+
+        // IndexedDB questions
+        allDbQuestions.forEach(q => {
+          if (
+            q.subject.toLowerCase() === normSub ||
+            q.subjectName?.toLowerCase() === normSub ||
+            q.id.toLowerCase().includes(normSub)
+          ) {
+            const sig = normalizeQuestionText(q.question);
+            if (!candidateMap.has(sig)) candidateMap.set(sig, q);
+          }
+        });
+
+        // Bundled questions
+        JAMB_QUESTIONS.forEach(q => {
+          if (
+            q.subject.toLowerCase() === normSub ||
+            q.subjectName.toLowerCase() === normSub ||
+            q.id.toLowerCase().includes(normSub)
+          ) {
+            const sig = normalizeQuestionText(q.question);
+            if (!candidateMap.has(sig)) candidateMap.set(sig, q);
+          }
+        });
+
+        let candidates = Array.from(candidateMap.values());
+
+        // Apply year filter if specified
+        if (year && year !== 'all') {
+          const yf = candidates.filter(q => q.year === year);
+          if (yf.length > 0) candidates = yf;
+        }
+
+        totalPoolAvailable += candidates.length;
+
+        // Partition into unanswered and answered
+        const unanswered: JambQuestion[] = [];
+        const answered: JambQuestion[] = [];
+
+        for (const q of candidates) {
+          const sig = normalizeQuestionText(q.question);
+          if (answeredIds.has(q.id) || answeredIds.has(sig)) {
+            answered.push(q);
+          } else {
+            unanswered.push(q);
+          }
+        }
+
+        totalUnansweredCount += unanswered.length;
+
+        if (candidates.length < perSubjectCount || unanswered.length < Math.min(perSubjectCount, 5)) {
+          anyPoolLow = true;
+        }
+
+        // Apply ordering
+        if (order === 'random') {
+          unanswered.sort(() => 0.5 - Math.random());
+          answered.sort(() => 0.5 - Math.random());
+        } else {
+          unanswered.sort((a, b) => (a.questionNumber || 0) - (b.questionNumber || 0));
+          answered.sort((a, b) => (a.questionNumber || 0) - (b.questionNumber || 0));
+        }
+
+        // Select: unanswered first, then answered to fill up to perSubjectCount
+        // NEVER REPLICATE OR DUPLICATE A QUESTION
+        const subSelected: JambQuestion[] = [];
+        for (const q of unanswered) {
+          if (subSelected.length >= perSubjectCount) break;
+          subSelected.push(q);
+        }
+        if (subSelected.length < perSubjectCount) {
+          for (const q of answered) {
+            if (subSelected.length >= perSubjectCount) break;
+            subSelected.push(q);
+          }
+        }
+
+        combinedSelected.push(...subSelected);
+      }
+
+      return {
+        questions: combinedSelected,
+        totalAvailable: totalPoolAvailable,
+        unansweredCount: totalUnansweredCount,
+        isPoolLow: anyPoolLow || totalPoolAvailable < count,
+        isOfflineSource: true
+      };
+    }
+
+    // Single Subject Practice Mode
+    const targetSubject = (subject || 'english').toLowerCase().trim();
+    const candidateMap = new Map<string, JambQuestion>();
+
+    // 1. IndexedDB questions
+    allDbQuestions.forEach(q => {
+      if (
+        q.subject.toLowerCase() === targetSubject ||
+        q.subjectName?.toLowerCase() === targetSubject ||
+        q.id.toLowerCase().includes(targetSubject)
+      ) {
+        const sig = normalizeQuestionText(q.question);
+        if (!candidateMap.has(sig)) candidateMap.set(sig, q);
+      }
+    });
+
+    // 2. Bundled questions
+    JAMB_QUESTIONS.forEach(q => {
+      if (
+        q.subject.toLowerCase() === targetSubject ||
+        q.subjectName.toLowerCase() === targetSubject ||
+        q.id.toLowerCase().includes(targetSubject)
+      ) {
+        const sig = normalizeQuestionText(q.question);
+        if (!candidateMap.has(sig)) candidateMap.set(sig, q);
+      }
+    });
+
+    let candidates = Array.from(candidateMap.values());
+
+    // Filter by topic if specified
+    if (topic && topic !== 'All Topics' && topic !== 'General') {
+      const normTopic = topic.toLowerCase();
+      const topicMatches = candidates.filter(q => q.topic.toLowerCase().includes(normTopic));
+      if (topicMatches.length > 0) {
+        candidates = topicMatches;
+      }
+    }
+
+    // Filter by year if specified
+    if (year && year !== 'all') {
+      const yearMatches = candidates.filter(q => q.year === year);
+      if (yearMatches.length > 0) {
+        candidates = yearMatches;
+      }
+    }
+
+    const totalAvailable = candidates.length;
+
+    // Partition into unanswered and answered
+    const unanswered: JambQuestion[] = [];
+    const answered: JambQuestion[] = [];
+
+    for (const q of candidates) {
+      const sig = normalizeQuestionText(q.question);
+      if (answeredIds.has(q.id) || answeredIds.has(sig)) {
+        answered.push(q);
+      } else {
+        unanswered.push(q);
+      }
+    }
+
+    const unansweredCount = unanswered.length;
+    const isPoolLow = totalAvailable < 15 || unansweredCount === 0 || totalAvailable < count;
+
+    // Apply ordering
+    if (order === 'random') {
+      unanswered.sort(() => 0.5 - Math.random());
+      answered.sort(() => 0.5 - Math.random());
+    } else {
+      unanswered.sort((a, b) => (a.questionNumber || 0) - (b.questionNumber || 0));
+      answered.sort((a, b) => (a.questionNumber || 0) - (b.questionNumber || 0));
+    }
+
+    // Select: Unanswered first, then fill from answered
+    // NEVER duplicate any question in the session
+    const selected: JambQuestion[] = [];
+    for (const q of unanswered) {
+      if (selected.length >= count) break;
+      selected.push(q);
+    }
+    if (selected.length < count) {
+      for (const q of answered) {
+        if (selected.length >= count) break;
+        selected.push(q);
+      }
+    }
+
+    return {
+      questions: selected,
+      totalAvailable,
+      unansweredCount,
+      isPoolLow,
+      isOfflineSource: true
+    };
+  }
+
+  /**
+   * Compatibility wrapper for legacy calls
    */
   async getOfflineQuestions(
     subjectId: string,
     year?: number | 'all',
     count: number = 20
   ): Promise<JambQuestion[]> {
-    const db = await this.getDb();
-
-    const questions: JambQuestion[] = await new Promise((resolve) => {
-      const tx = db.transaction('offline_questions', 'readonly');
-      const store = tx.objectStore('offline_questions');
-      const index = store.index('by_subject');
-      const req = index.getAll(subjectId);
-
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => resolve([]);
+    const res = await this.getOfflinePracticeQuestions({
+      subject: subjectId,
+      year,
+      count,
+      order: 'random'
     });
+    return res.questions;
+  }
 
-    if (questions.length === 0) {
-      return [];
+  // -------------------------------------------------------------
+  // UNFINISHED SESSIONS MANAGEMENT (LOCAL + INDEXEDDB)
+  // -------------------------------------------------------------
+
+  async saveActiveSession(session: any): Promise<void> {
+    if (!session) return;
+    try {
+      const db = await this.getDb();
+      const tx = db.transaction('offline_sessions', 'readwrite');
+      const store = tx.objectStore('offline_sessions');
+      store.put({
+        id: 'active_jamb_session',
+        ...session,
+        updatedAt: Date.now()
+      });
+    } catch (e) {
+      console.warn('IndexedDB save session error:', e);
     }
 
-    let filtered = questions;
-    if (year && year !== 'all') {
-      const yearFiltered = filtered.filter(q => q.year === year);
-      if (yearFiltered.length > 0) {
-        filtered = yearFiltered;
+    try {
+      localStorage.setItem('practice_session', JSON.stringify(session));
+    } catch {}
+  }
+
+  async getActiveSession(): Promise<any | null> {
+    try {
+      const db = await this.getDb();
+      const fromDb = await new Promise<any>((resolve) => {
+        const tx = db.transaction('offline_sessions', 'readonly');
+        const store = tx.objectStore('offline_sessions');
+        const req = store.get('active_jamb_session');
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      });
+
+      if (fromDb && !fromDb.isSubmitted && Array.isArray(fromDb.questions) && fromDb.questions.length > 0) {
+        return fromDb;
       }
-    }
+    } catch {}
 
-    // Shuffle
-    const shuffled = [...filtered].sort(() => 0.5 - Math.random());
-
-    // If count exceeds existing questions for that specific year, supplement from the subject pool
-    if (shuffled.length < count) {
-      const extraPool = [...questions];
-      while (shuffled.length < count && extraPool.length > 0) {
-        const pick = extraPool[Math.floor(Math.random() * extraPool.length)];
-        shuffled.push({
-          ...pick,
-          id: `${pick.id}-offline-var-${shuffled.length + 1}`
-        });
+    try {
+      const raw = localStorage.getItem('practice_session');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && !parsed.isSubmitted && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+          return parsed;
+        }
       }
-    }
+    } catch {}
 
-    return shuffled.slice(0, count);
+    return null;
+  }
+
+  async clearActiveSession(): Promise<void> {
+    try {
+      const db = await this.getDb();
+      const tx = db.transaction('offline_sessions', 'readwrite');
+      const store = tx.objectStore('offline_sessions');
+      store.delete('active_jamb_session');
+    } catch {}
+
+    try {
+      localStorage.removeItem('practice_session');
+    } catch {}
   }
 
   // -------------------------------------------------------------
@@ -276,6 +831,19 @@ class JambOfflineDatabase {
 
   async saveAttempt(attempt: JambExamAttempt, syncStatus: 'pending' | 'synced' = 'pending'): Promise<void> {
     const db = await this.getDb();
+    
+    // 1. Mark questions in this attempt as answered
+    if (Array.isArray(attempt.questions)) {
+      const qIds = attempt.questions.map(q => q.id).filter(Boolean);
+      await this.markQuestionsAnswered(qIds, attempt.subject);
+    } else if (attempt.answers) {
+      await this.markQuestionsAnswered(Object.keys(attempt.answers), attempt.subject);
+    }
+
+    // 2. Clear unfinished session
+    await this.clearActiveSession();
+
+    // 3. Save attempt record
     return new Promise((resolve, reject) => {
       const tx = db.transaction('offline_attempts', 'readwrite');
       const store = tx.objectStore('offline_attempts');
@@ -300,7 +868,6 @@ class JambOfflineDatabase {
         const req = index.getAll();
         req.onsuccess = () => {
           const list = (req.result || []) as StoredOfflineAttempt[];
-          // Sort descending by completion time
           resolve(list.sort((a, b) => b.completedAt - a.completedAt));
         };
         req.onerror = () => resolve([]);

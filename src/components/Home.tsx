@@ -1,6 +1,6 @@
 import React, { useEffect, useState, lazy, Suspense } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, ArrowRight, BookOpen, PenTool, MessageSquare, Target, Activity, Search, Bell, Clock, ChevronRight, CheckCircle, BrainCircuit, Zap, Flame, Trophy, Calendar, Play, Settings, Compass, AlertTriangle, Layers, FileUp, GraduationCap, Calculator } from 'lucide-react';
+import { Sparkles, ArrowRight, BookOpen, PenTool, MessageSquare, Target, Activity, Search, Bell, Clock, ChevronRight, CheckCircle, BrainCircuit, Zap, Flame, Trophy, Calendar, Play, Settings, Compass, AlertTriangle, Layers, FileUp, GraduationCap, Calculator, Download, WifiOff, Wifi } from 'lucide-react';
 import { ViewType, TutorConversation, SubjectHistory, StudyJourneyState } from '../types';
 import { collection, query, where, getDocs, getDoc, doc, orderBy, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -11,6 +11,8 @@ import { fetchStudentTopicAnalysis, StudentTopicAnalysis, TopicResultSummary } f
 import DailyStudyPlanCard from './DailyStudyPlanCard';
 import { getDailyStudyPlan, markMistakesReviewed } from '../utils/dailyStudyPlan';
 import { DailyStudyPlan } from '../types';
+import OfflineLearningHub from './offline/OfflineLearningHub';
+import PrepareForOfflineModal from './offline/PrepareForOfflineModal';
 
 const WeakTopicActionModal = lazy(() => import('./WeakTopicActionModal'));
 const ReviewMistakesModal = lazy(() => import('./ReviewMistakesModal'));
@@ -49,6 +51,39 @@ export default function Home({ setView }: HomeProps) {
   const [dailyPlan, setDailyPlan] = useState<DailyStudyPlan | null>(() => cachedHome?.dailyPlan || null);
   const [dailyPlanLoading, setDailyPlanLoading] = useState(false);
   const [reviewMistakesTopic, setReviewMistakesTopic] = useState<TopicResultSummary | null>(null);
+
+  // Offline Learning Hub states
+  const [isOffline, setIsOffline] = useState<boolean>(() => typeof navigator !== 'undefined' ? !navigator.onLine : false);
+  const [showOfflineHubPreview, setShowOfflineHubPreview] = useState<boolean>(false);
+  const [isPrepareModalOpen, setIsPrepareModalOpen] = useState<boolean>(false);
+  const [onlineNotification, setOnlineNotification] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      setShowOfflineHubPreview(false);
+      setOnlineNotification("Connection restored. Automatically returned to live Home dashboard.");
+      setTimeout(() => {
+        setOnlineNotification(null);
+      }, 4000);
+    };
+
+    const handleOffline = () => {
+      setIsOffline(true);
+      setOnlineNotification("Offline mode detected. LearnDean Offline Learning Hub is active.");
+      setTimeout(() => {
+        setOnlineNotification(null);
+      }, 4000);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
   
   // Start with loading: false if cached data exists or profile is ready so UI displays immediately
   const [loading, setLoading] = useState(() => !cachedHome);
@@ -180,6 +215,53 @@ export default function Home({ setView }: HomeProps) {
 
   const userName = user?.displayName ? user.displayName.split(' ')[0] : 'Student';
 
+  // If user is offline or previewing the offline hub, show OfflineLearningHub immediately
+  if (isOffline || showOfflineHubPreview) {
+    return (
+      <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 pb-28 sm:pb-32">
+        {onlineNotification && (
+          <div className="p-3.5 rounded-xl bg-amber-500 text-white text-xs sm:text-sm font-semibold flex items-center justify-between shadow-xs">
+            <span>{onlineNotification}</span>
+            <button
+              onClick={() => setOnlineNotification(null)}
+              className="text-white/80 hover:text-white ml-2 text-xs uppercase font-bold cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {showOfflineHubPreview && !isOffline && (
+          <div className="p-3 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-xl flex items-center justify-between text-xs text-blue-800 dark:text-blue-200">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>
+                <strong>Preview Mode:</strong> You are testing the Offline Learning Hub while online.
+              </span>
+            </div>
+            <button
+              onClick={() => setShowOfflineHubPreview(false)}
+              className="font-bold underline text-blue-600 dark:text-blue-400 hover:text-blue-800 cursor-pointer"
+            >
+              Return to Live Home
+            </button>
+          </div>
+        )}
+
+        <OfflineLearningHub
+          setView={setView}
+          onRetryConnection={() => {
+            if (typeof navigator !== 'undefined' && navigator.onLine) {
+              setIsOffline(false);
+              setShowOfflineHubPreview(false);
+            }
+          }}
+          isOnlineActual={!isOffline}
+        />
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="w-full h-full flex items-center justify-center min-h-[400px]">
@@ -201,6 +283,19 @@ export default function Home({ setView }: HomeProps) {
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-8 pb-28 sm:pb-32">
+      {/* Online Notification Banner */}
+      {onlineNotification && (
+        <div className="p-3.5 rounded-xl bg-emerald-600 text-white text-xs sm:text-sm font-semibold flex items-center justify-between shadow-xs">
+          <span>{onlineNotification}</span>
+          <button
+            onClick={() => setOnlineNotification(null)}
+            className="text-white/80 hover:text-white ml-2 text-xs uppercase font-bold cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -212,8 +307,31 @@ export default function Home({ setView }: HomeProps) {
           </p>
         </div>
         
-        {/* Phase 4: Level & XP Stats */}
-        {(() => {
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Prepare for Offline Button */}
+          <button
+            id="home-prepare-offline-btn"
+            onClick={() => setIsPrepareModalOpen(true)}
+            className="px-3.5 py-2.5 rounded-2xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80 text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer shadow-2xs"
+            title="Download JAMB content and novels for offline study"
+          >
+            <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span>Prepare for Offline</span>
+          </button>
+
+          {/* Offline Hub Preview Button */}
+          <button
+            id="home-offline-hub-preview-btn"
+            onClick={() => setShowOfflineHubPreview(true)}
+            className="px-3 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+            title="Preview Offline Learning Hub"
+          >
+            <WifiOff className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+            <span>Offline Hub</span>
+          </button>
+
+          {/* Phase 4: Level & XP Stats */}
+          {(() => {
            const xp = userProfile?.xp || 0;
            const levelInfo = getLevelInfo(xp);
            const prevLevelXp = levelInfo.level === 1 ? 0 : getLevelInfo(xp - (xp % 100 === 0 ? 1 : xp % 100) - 100).nextXp || 0; // Simplified
@@ -243,6 +361,7 @@ export default function Home({ setView }: HomeProps) {
              </div>
            );
         })()}
+        </div>
       </div>
 
       {/* Quick Search Bar Banner on Home */}
@@ -716,6 +835,12 @@ export default function Home({ setView }: HomeProps) {
 
       {/* Mobile Clearance Spacer */}
       <div className="md:hidden h-20 sm:h-24 w-full shrink-0 pointer-events-none" aria-hidden="true" />
+
+      {/* Prepare for Offline Modal */}
+      <PrepareForOfflineModal
+        isOpen={isPrepareModalOpen}
+        onClose={() => setIsPrepareModalOpen(false)}
+      />
     </div>
   );
 }

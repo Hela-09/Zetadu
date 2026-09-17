@@ -143,6 +143,14 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
     }
 
+    match /user_jamb_profile/{docId} {
+      allow get: if isAuthenticated() && (request.auth.uid == docId || isSuperAdmin());
+      allow list: if isAuthenticated() && (request.auth.uid == docId || isSuperAdmin());
+      allow create: if isAuthenticated() && (request.auth.uid == docId || isSuperAdmin()) && (request.resource.data.uid == request.auth.uid || isSuperAdmin());
+      allow update: if isAuthenticated() && (request.auth.uid == docId || isSuperAdmin()) && (request.resource.data.uid == request.auth.uid || isSuperAdmin());
+      allow delete: if isAuthenticated() && (request.auth.uid == docId || isSuperAdmin());
+    }
+
     match /user_reading_progress/{docId} {
       allow get: if isAuthenticated() && (
         (resource != null && resource.data.uid == request.auth.uid) ||

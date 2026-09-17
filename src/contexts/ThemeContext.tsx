@@ -1,39 +1,54 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 
-type Theme = 'light' | 'dark' | 'system';
+export type Theme = 'light' | 'dark' | 'system';
 
-interface ThemeContextType {
+export interface ThemeContextType {
   theme: Theme;
   resolvedTheme: 'light' | 'dark';
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
 }
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const defaultThemeContextValue: ThemeContextType = {
+  theme: 'system',
+  resolvedTheme: 'light',
+  setTheme: () => {},
+  toggleTheme: () => {},
+};
+
+const ThemeContext = createContext<ThemeContextType>(defaultThemeContextValue);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('zetadu_theme') as Theme | null;
-      if (stored === 'light' || stored === 'dark' || stored === 'system') {
-        return stored;
-      }
+      try {
+        const stored = localStorage.getItem('zetadu_theme') as Theme | null;
+        if (stored === 'light' || stored === 'dark' || stored === 'system') {
+          return stored;
+        }
+      } catch (_) {}
     }
     return 'system';
   });
 
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('zetadu_theme');
-      if (stored === 'light' || stored === 'dark') return stored;
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      try {
+        const stored = localStorage.getItem('zetadu_theme');
+        if (stored === 'light' || stored === 'dark') return stored;
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          return 'dark';
+        }
+      } catch (_) {}
     }
     return 'light';
   });
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const root = document.documentElement;
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const mediaQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
     const applyTheme = () => {
       let isDark = false;
@@ -42,7 +57,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       } else if (theme === 'light') {
         isDark = false;
       } else {
-        isDark = mediaQuery.matches;
+        isDark = mediaQuery ? mediaQuery.matches : false;
       }
 
       setResolvedTheme(isDark ? 'dark' : 'light');
@@ -58,6 +73,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     applyTheme();
 
+    if (!mediaQuery) return;
+
     const handleChange = () => {
       if (theme === 'system') {
         applyTheme();
@@ -68,28 +85,39 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, [theme]);
 
-  const setTheme = (newTheme: Theme) => {
+  const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme);
     try {
-      localStorage.setItem('zetadu_theme', newTheme);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('zetadu_theme', newTheme);
+      }
     } catch (_) {}
-  };
+  }, []);
 
-  const toggleTheme = () => {
+  const toggleTheme = useCallback(() => {
     setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
-  };
+  }, [resolvedTheme, setTheme]);
+
+  const contextValue = useMemo<ThemeContextType>(() => ({
+    theme,
+    resolvedTheme,
+    setTheme,
+    toggleTheme,
+  }), [theme, resolvedTheme, setTheme, toggleTheme]);
 
   return (
-    <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={contextValue}>
       {children}
     </ThemeContext.Provider>
   );
 }
 
-export function useTheme() {
+export function useTheme(): ThemeContextType {
   const context = useContext(ThemeContext);
   if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
+    return defaultThemeContextValue;
   }
   return context;
 }
+
+export default ThemeProvider;

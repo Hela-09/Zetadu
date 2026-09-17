@@ -1,5 +1,5 @@
 import Logo from './Logo';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, ArrowLeft, Eye, EyeOff } from 'lucide-react';
@@ -46,6 +46,11 @@ export default function Login() {
   
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  useEffect(() => {
+    // If the Login screen is displayed to the user, ensure Google button is ready
+    setGoogleLoading(false);
+  }, []);
 
   const changeView = (newView: ViewState) => {
     setView(newView);

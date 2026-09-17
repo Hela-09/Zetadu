@@ -32,11 +32,25 @@ if (typeof window !== "undefined") {
   };
 }
 
+const getEffectiveAuthDomain = (): string => {
+  if (typeof window !== "undefined" && window.location) {
+    const { hostname, host, protocol } = window.location;
+    // When served over HTTPS on mobile browsers, PWAs, or custom domains:
+    // Using current host routes auth handlers and iframe through the server's /__/auth/ reverse proxy.
+    // This provides a first-party, same-origin auth experience that is immune to
+    // Safari ITP and Android Chrome third-party storage partitioning.
+    if (protocol === "https:" && hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
+      return host;
+    }
+  }
+  return "educore-66491.firebaseapp.com";
+};
+
 const firebaseConfig = {
   // HARDCODED to guarantee ALL domains use the exact same Zetadu Firebase project
-  // and auth handler (educore-66491). Bypasses any conflicting environment variables.
+  // and auth handler (educore-66491). Dynamic authDomain enables same-origin reverse proxying on HTTPS.
   apiKey: "AIzaSyBzS_kYtaSYSAx39DBhNAP6l6IGsIUHTqs",
-  authDomain: "educore-66491.firebaseapp.com",
+  authDomain: getEffectiveAuthDomain(),
   projectId: "educore-66491",
   storageBucket: "educore-66491.firebasestorage.app",
   messagingSenderId: "1042086916215",
@@ -51,6 +65,8 @@ let auth: Auth | any = null;
 let db: Firestore | any = null;
 let storage: any = null;
 const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope('email');
+googleProvider.addScope('profile');
 googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
@@ -59,6 +75,13 @@ try {
   if (firebaseConfig.apiKey) {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
     auth = getAuth(app);
+
+    // Set local persistence explicitly for reliable refresh/redirect persistence across mobile browsers
+    if (typeof window !== "undefined") {
+      setPersistence(auth, browserLocalPersistence).catch((err) => {
+        console.warn("[Auth] Failed to set browserLocalPersistence:", err);
+      });
+    }
     
     // Explicitly connect to the named database with memoryLocalCache to prevent endless IndexedDB backoff retries
     try {

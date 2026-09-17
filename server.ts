@@ -4,6 +4,7 @@ dotenv.config();
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+import { createProxyMiddleware } from "http-proxy-middleware";
 import { GoogleGenAI, Type } from "@google/genai";
 import { initializeApp } from "firebase-admin/app";
 import { getStorage } from "firebase-admin/storage";
@@ -36,6 +37,19 @@ try {
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Reverse proxy for Firebase Authentication /__/auth/* endpoints
+  // Transparently forwards OAuth redirect handler and iframe requests to Firebase
+  // Eliminating third-party cookie/storage blocking on mobile Safari (ITP), Android Chrome, and PWAs
+  app.use(
+    '/__/auth',
+    createProxyMiddleware({
+      target: 'https://educore-66491.firebaseapp.com/__/auth',
+      changeOrigin: true,
+      secure: true,
+      xfwd: true,
+    })
+  );
 
   app.use(express.json());
 
@@ -531,13 +545,50 @@ Always prioritize accuracy, completeness, and clarity. Analyze the entire image 
     }
   });
 
-  app.post("/api/generate-questions", requireAuth, async (req, res) => {
+  // Optional Authentication Middleware (allows guest practice while enforcing security for authenticated users)
+  const optionalAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return next();
+    }
+    const idToken = authHeader.substring(7).trim();
+    if (!idToken) return next();
+    
     try {
-      const { subject, topic, difficulty, amount, educationLevel, country, practiceMode } = req.body;
+      let decodedToken: any = null;
+      try {
+        decodedToken = await getAuth().verifyIdToken(idToken, true);
+      } catch (verifyErr: any) {
+        if (verifyErr?.code === 'auth/id-token-revoked' || verifyErr?.code === 'auth/user-disabled') {
+          return res.status(403).json({ error: "Account disabled or session revoked", disabled: true });
+        }
+        decodedToken = await getAuth().verifyIdToken(idToken);
+      }
+
+      const uid = decodedToken.uid || decodedToken.user_id || decodedToken.sub;
+      const email = decodedToken.email;
+
+      const disabledCheck = isUserDisabled(uid, email);
+      if (disabledCheck.disabled) {
+        return res.status(403).json({ error: disabledCheck.reason || "Your account has been disabled by an administrator.", disabled: true });
+      }
+
+      (req as any).user = decodedToken;
+    } catch {
+      // Continue as guest if token is invalid or expired
+    }
+    next();
+  };
+
+  app.post("/api/generate-questions", optionalAuth, async (req, res) => {
+    try {
+      const { subject, topic, difficulty, amount, educationLevel, country, practiceMode, examType } = req.body;
       const ai = getGeminiClient();
       
       let modeInstruction = "";
-      if (practiceMode === 'Exam Simulation') modeInstruction = "Make the questions strictly formatted and styled like a real exam. Focus on testing deep understanding.";
+      if (examType === 'JAMB' || practiceMode?.includes('JAMB')) {
+        modeInstruction = "These questions MUST strictly adhere to the official JAMB UTME syllabus and Nigerian university entrance examination standards. Every question must be a high-quality, authentic multiple choice question testing comprehension, analysis, or syllabus concepts. Options must consist of exactly 4 plausible choices (A, B, C, D) with exactly one correct answer and a complete, clear pedagogical explanation.";
+      } else if (practiceMode === 'Exam Simulation') modeInstruction = "Make the questions strictly formatted and styled like a real exam. Focus on testing deep understanding.";
       else if (practiceMode === 'Mistake Practice') modeInstruction = "Focus heavily on common misconceptions and tricky edge cases where students frequently make mistakes.";
       else if (practiceMode === 'Random Practice') modeInstruction = "Mix topics across the entire subject randomly, ensuring a wide breadth of concepts.";
       else if (practiceMode === 'Topic Practice') modeInstruction = `Focus exclusively on the specific topic: ${topic}.`;

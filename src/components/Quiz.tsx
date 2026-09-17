@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   CheckCircle2, 
@@ -22,26 +22,62 @@ import {
   HelpCircle,
   Eye,
   Check,
-  ChevronRight
+  ChevronRight,
+  Calculator,
+  Bookmark,
+  BookmarkCheck,
+  CheckSquare,
+  Wifi,
+  WifiOff,
+  Download
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { SUBJECT_DATA, ALL_SUBJECTS } from '../data/subjects';
+import JambCalculator from './jamb/JambCalculator';
+import { jambService } from '../services/jambService';
+import { jambOfflineDb } from '../services/jambOfflineDb';
+import { getUnifiedQuestionsForPractice } from '../data/jambQuestions';
 
-interface Question {
+export interface Question {
+  id?: string;
   question: string;
+  passage?: string;
   options: string[];
   correctAnswerIndex?: number;
   correctAnswer?: any;
   explanation: string;
   difficulty: string;
   topic: string;
+  subject?: string;
+  subjectId?: string;
+  year?: number | string;
+  questionNumber?: number;
+}
+
+export interface QuizProps {
+  onBack?: () => void;
+  setView?: (v: any) => void;
+  initialMode?: 'standard' | 'jamb-cbt' | 'jamb-practice' | 'topic-practice';
+  initialConfig?: {
+    subject?: string;
+    subjectId?: string;
+    subjects?: string[];
+    topic?: string;
+    year?: number | 'all';
+    amount?: number;
+    ordering?: 'random' | 'sequential';
+    timerDuration?: number; // in minutes, 0 for untimed
+    isUntimed?: boolean;
+    questions?: Question[];
+    examType?: 'JAMB' | 'WAEC' | 'General';
+  };
 }
 
 let cachedInternalSession: any = null;
 
-export default function Quiz({ onBack, setView }: { onBack?: () => void, setView?: (v: any) => void }) {
+export default function Quiz({ onBack, setView, initialMode, initialConfig }: QuizProps) {
   const { user, getToken, settings, userProfile } = useAuth();
 
   const getNormalizedCorrectIndex = (question: any): number => {
@@ -96,14 +132,55 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
   // CBT State
   const [answers, setAnswers] = useState<Record<number, number>>(cachedInternalSession ? cachedInternalSession.answers : {});
   const [markedForReview, setMarkedForReview] = useState<Record<number, boolean>>(cachedInternalSession ? cachedInternalSession.markedForReview : {});
-  const [timerDuration, setTimerDuration] = useState<number>(cachedInternalSession ? cachedInternalSession.timerDuration : 30); // in minutes
+  const [timerDuration, setTimerDuration] = useState<number>(() => {
+    if (initialConfig?.timerDuration !== undefined) return initialConfig.timerDuration;
+    return cachedInternalSession ? cachedInternalSession.timerDuration : 30;
+  }); // in minutes
   const [timerRemaining, setTimerRemaining] = useState<number>(cachedInternalSession ? cachedInternalSession.timerRemaining : 1800); // in seconds
+  const [isUntimed, setIsUntimed] = useState<boolean>(() => {
+    if (initialConfig?.isUntimed !== undefined) return initialConfig.isUntimed;
+    if (initialConfig?.timerDuration === 0) return true;
+    return false;
+  });
+  const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
   const [isSubmitted, setIsSubmitted] = useState(cachedInternalSession ? cachedInternalSession.isSubmitted : false);
   const [score, setScore] = useState(cachedInternalSession ? cachedInternalSession.score : 0);
   const [timeUsedSeconds, setTimeUsedSeconds] = useState<number>(() => {
     if (cachedInternalSession?.timeUsedSeconds) return cachedInternalSession.timeUsedSeconds;
     return 0;
   });
+
+  // Offline & sync state
+  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [isPoolLow, setIsPoolLow] = useState<boolean>(false);
+  const [unansweredPoolCount, setUnansweredPoolCount] = useState<number>(0);
+  const [isDownloadingMore, setIsDownloadingMore] = useState<boolean>(false);
+  const [downloadFeedback, setDownloadFeedback] = useState<string | null>(null);
+
+  // Monitor online status and auto-sync pending offline data
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      jambService.syncPendingData().catch(() => {});
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Load user's bookmarks from jambService on mount
+  useEffect(() => {
+    jambService.getBookmarks().then(bm => {
+      setBookmarkedIds(new Set(bm.map(b => b.questionId)));
+    }).catch(() => {});
+  }, []);
 
   // Form state
   const [level, setLevel] = useState<string>(() => {
@@ -117,6 +194,7 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
     return '100 Level';
   });
   const [subjectId, setSubjectId] = useState<string>(() => {
+    if (initialConfig?.subjectId) return initialConfig.subjectId;
     if (cachedInternalSession?.subjectId) return cachedInternalSession.subjectId;
     const targetId = localStorage.getItem('zetadu_target_subject_id');
     if (targetId) return targetId;
@@ -124,6 +202,7 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
   });
   
   const [subject, setSubject] = useState(() => {
+    if (initialConfig?.subject) return initialConfig.subject;
     if (cachedInternalSession?.subject) return cachedInternalSession.subject;
     const targetId = localStorage.getItem('zetadu_target_subject_id');
     if (targetId) {
@@ -134,11 +213,12 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
     return target || 'Mathematics';
   });
   const [topic, setTopic] = useState(() => {
+    if (initialConfig?.topic) return initialConfig.topic;
     if (cachedInternalSession?.topic) return cachedInternalSession.topic;
     return localStorage.getItem('zetadu_target_topic') || '';
   });
   const [difficulty, setDifficulty] = useState(cachedInternalSession ? cachedInternalSession.difficulty : (settings?.defaultPracticeDifficulty || 'Medium'));
-  const [amount, setAmount] = useState(cachedInternalSession ? cachedInternalSession.amount : 60);
+  const [amount, setAmount] = useState(initialConfig?.amount || (cachedInternalSession ? cachedInternalSession.amount : 60));
   const [practiceMode, setPracticeMode] = useState(cachedInternalSession ? cachedInternalSession.practiceMode || 'Custom Practice' : 'Custom Practice');
 
   const [hasRestored, setHasRestored] = useState(!!cachedInternalSession);
@@ -149,6 +229,81 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedTimerRef = useRef<number>(timerRemaining);
   const questionCardRef = useRef<HTMLDivElement | null>(null);
+
+  // Directly initialize when initialConfig prop is passed (e.g. launched from JAMB Prep Hub)
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadConfiguredQuestions() {
+      if (!initialConfig) return;
+
+      let loadedQ: Question[] = [];
+      let poolLow = false;
+      let unanswered = 0;
+
+      if (initialConfig.questions && initialConfig.questions.length > 0) {
+        loadedQ = initialConfig.questions;
+      } else {
+        try {
+          // Use offline-first jambService to retrieve questions, respecting ordering and prioritizing unanswered
+          const res = await jambService.getPracticeQuestions({
+            subjects: initialConfig.subjects,
+            subject: initialConfig.subjectId || initialConfig.subject,
+            topic: initialConfig.topic,
+            year: initialConfig.year,
+            count: initialConfig.amount || 20,
+            order: initialConfig.ordering || 'random'
+          });
+          loadedQ = res.questions;
+          poolLow = res.isPoolLow;
+          unanswered = res.unansweredCount;
+        } catch (err) {
+          console.warn('Failed to load questions via jambService, falling back:', err);
+          loadedQ = getUnifiedQuestionsForPractice({
+            subjects: initialConfig.subjects,
+            subject: initialConfig.subjectId || initialConfig.subject,
+            topic: initialConfig.topic,
+            year: initialConfig.year,
+            count: initialConfig.amount || 20,
+            order: initialConfig.ordering || 'random'
+          });
+        }
+      }
+
+      if (isCancelled) return;
+
+      setIsPoolLow(poolLow || loadedQ.length < (initialConfig.amount || 20));
+      setUnansweredPoolCount(unanswered);
+
+      if (loadedQ.length > 0) {
+        setQuestions(loadedQ);
+        setSetupMode(false);
+        setIsSubmitted(false);
+        setViewMode('practice');
+        setCurrentQIndex(0);
+        setAnswers({});
+        setMarkedForReview({});
+        const dur = initialConfig.timerDuration !== undefined ? initialConfig.timerDuration : 30;
+        setTimerDuration(dur);
+        const untimed = initialConfig.isUntimed || dur === 0;
+        setIsUntimed(untimed);
+        setTimerRemaining(dur * 60);
+        setTimeUsedSeconds(0);
+        if (initialConfig.subject) setSubject(initialConfig.subject);
+        if (initialConfig.subjectId) setSubjectId(initialConfig.subjectId);
+        if (initialConfig.topic) setTopic(initialConfig.topic);
+        setHasRestored(true);
+      } else {
+        setIsPoolLow(true);
+      }
+    }
+
+    loadConfiguredQuestions();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [initialConfig]);
 
   // Restore session data helper
   const restoreSessionData = useCallback((data: any) => {
@@ -176,7 +331,7 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
     setSetupMode(false);
   }, []);
 
-  // Load session on mount (memory -> localStorage -> Firestore)
+  // Load session on mount (memory -> IndexedDB -> localStorage -> Firestore)
   useEffect(() => {
     const loadSession = async () => {
       if (cachedInternalSession && !cachedInternalSession.setupMode && cachedInternalSession.questions?.length > 0) {
@@ -185,23 +340,40 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
       }
 
       let foundSession = false;
-      const localData = localStorage.getItem('practice_session');
-      
-      if (localData) {
-        try {
-          const parsed = JSON.parse(localData);
-          if (parsed && !parsed.setupMode && parsed.questions && parsed.questions.length > 0) {
-            if (!parsed.uid || !user || parsed.uid === user.uid) {
-              restoreSessionData(parsed);
-              foundSession = true;
-            }
+
+      // 1. Check IndexedDB for offline saved active session
+      try {
+        const idbSession = await jambOfflineDb.getActiveSession();
+        if (idbSession && !idbSession.setupMode && idbSession.questions && idbSession.questions.length > 0) {
+          if (!idbSession.uid || !user || idbSession.uid === user.uid) {
+            restoreSessionData(idbSession);
+            foundSession = true;
           }
-        } catch (e) {
-          console.warn("Failed to parse local session", e);
+        }
+      } catch (e) {
+        console.warn("Failed to check IndexedDB session:", e);
+      }
+
+      // 2. Check localStorage fallback
+      if (!foundSession) {
+        const localData = localStorage.getItem('practice_session');
+        if (localData) {
+          try {
+            const parsed = JSON.parse(localData);
+            if (parsed && !parsed.setupMode && parsed.questions && parsed.questions.length > 0) {
+              if (!parsed.uid || !user || parsed.uid === user.uid) {
+                restoreSessionData(parsed);
+                foundSession = true;
+              }
+            }
+          } catch (e) {
+            console.warn("Failed to parse local session", e);
+          }
         }
       }
       
-      if (!foundSession && user) {
+      // 3. Check Firestore only if online
+      if (!foundSession && user && typeof navigator !== 'undefined' && navigator.onLine) {
         try {
           const docRef = doc(db, 'practice_sessions', user.uid);
           const docSnap = await getDoc(docRef);
@@ -282,7 +454,7 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
     }
   }, []);
 
-  // Persist session state helper (saves to memory, localStorage, and Firestore)
+  // Persist session state helper (saves to memory, IndexedDB, localStorage, and Firestore)
   const persistSessionToFirebase = useCallback(async (overrides?: Partial<any>) => {
     if (setupMode || questions.length === 0 || isSubmitted) return;
 
@@ -309,13 +481,21 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
     };
 
     cachedInternalSession = sessionData;
+    
+    // Save to IndexedDB (offline database)
+    try {
+      await jambOfflineDb.saveActiveSession(sessionData);
+    } catch (idbErr) {
+      console.warn("IndexedDB session save warning", idbErr);
+    }
+
     try {
       localStorage.setItem('practice_session', JSON.stringify(sessionData));
     } catch (e) {
       console.warn("Local storage write error", e);
     }
 
-    if (user && !isSubmitted) {
+    if (user && !isSubmitted && typeof navigator !== 'undefined' && navigator.onLine) {
       try {
         await setDoc(doc(db, 'practice_sessions', user.uid), {
           ...sessionData,
@@ -339,6 +519,15 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
     if (setupMode || isSubmitted || questions.length === 0 || viewMode !== 'practice') {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
+    }
+
+    if (isUntimed) {
+      timerRef.current = setInterval(() => {
+        setTimeUsedSeconds(prev => prev + 1);
+      }, 1000);
+      return () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+      };
     }
 
     timerRef.current = setInterval(() => {
@@ -367,15 +556,18 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [setupMode, isSubmitted, questions.length, viewMode, user]);
+  }, [setupMode, isSubmitted, questions.length, viewMode, isUntimed, user]);
 
   const clearSession = async () => {
     cachedInternalSession = null;
+    try {
+      await jambOfflineDb.clearActiveSession();
+    } catch (e) {}
     localStorage.removeItem('practice_session');
     localStorage.removeItem('zetadu_target_subject_id');
     localStorage.removeItem('zetadu_target_subject');
     localStorage.removeItem('zetadu_target_topic');
-    if (user) {
+    if (user && typeof navigator !== 'undefined' && navigator.onLine) {
       try {
         await deleteDoc(doc(db, 'practice_sessions', user.uid));
       } catch(e) {
@@ -390,6 +582,9 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
     setSetupMode(true);
     setViewMode('practice');
     setIsSubmitted(false);
+    if (onBack) {
+      onBack();
+    }
   };
 
   const handleStartNew = async () => {
@@ -409,6 +604,7 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
     setCurrentQIndex(0);
     setScore(0);
     setTimerRemaining(timerDuration * 60);
+    setTimeUsedSeconds(0);
     setIsSubmitted(false);
     setViewMode('practice');
     // Save fresh retake session
@@ -423,53 +619,109 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
     persistSessionToFirebase(resetData);
   };
 
+  const handleDownloadMoreQuestions = async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setDownloadFeedback("Connect to the internet to get more questions.");
+      return;
+    }
+    setIsDownloadingMore(true);
+    setDownloadFeedback(null);
+    try {
+      const activeSubjId = subjectId || (questions[currentQIndex]?.subjectId) || 'english';
+      const res = await jambService.generateAndDownloadMoreQuestions(activeSubjId, topic || 'General', 5);
+      setDownloadFeedback(`Added ${res.addedCount} new questions to offline question bank (${res.totalOfflineCount} total available).`);
+      setIsPoolLow(false);
+      setUnansweredPoolCount(prev => prev + res.addedCount);
+    } catch (e: any) {
+      setDownloadFeedback(e?.message || "Connect to the internet to get more questions.");
+    } finally {
+      setIsDownloadingMore(false);
+    }
+  };
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
 
     setLoading(true);
     try {
-      const token = await getToken();
-      
-      const response = await fetch('/api/generate-questions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          subject: subject,
-          topic: topic || 'General',
-          difficulty: difficulty,
-          amount: amount,
-          educationLevel: level,
-          country: userProfile?.country || 'Nigeria',
-          practiceMode: practiceMode
-        })
-      });
+      let loadedQuestions: Question[] = [];
+      let poolIsLow = false;
+      let unanswered = 0;
 
-      if (!response.ok) {
-        if (response.status === 401) throw new Error("Authentication required");
-        throw new Error("Failed to generate questions.");
-      }
-      
-      const contentType = response.headers.get("content-type");
-      if (!contentType || contentType.indexOf("application/json") === -1) {
-        throw new Error('Generation returned non-JSON response');
+      // 1. First retrieve questions from offline/unified bank via jambService
+      try {
+        const res = await jambService.getPracticeQuestions({
+          subject: subjectId || subject.toLowerCase(),
+          topic: topic || undefined,
+          count: amount,
+          order: 'random'
+        });
+        loadedQuestions = res.questions;
+        poolIsLow = res.isPoolLow;
+        unanswered = res.unansweredCount;
+      } catch (err) {
+        console.warn("Failed to get practice questions from jambService, falling back:", err);
+        loadedQuestions = getUnifiedQuestionsForPractice({
+          subject: subjectId || subject.toLowerCase(),
+          topic: topic || undefined,
+          count: amount,
+          order: 'random'
+        });
       }
 
-      const data = await response.json();
+      // 2. If pool is low and user is online, attempt AI generation to supplement
+      if (loadedQuestions.length < Math.min(amount, 5) && typeof navigator !== 'undefined' && navigator.onLine) {
+        try {
+          const token = await getToken();
+          
+          const response = await fetch('/api/generate-questions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({
+              subject: subject,
+              topic: topic || 'General',
+              difficulty: difficulty,
+              amount: amount,
+              educationLevel: level,
+              country: userProfile?.country || 'Nigeria',
+              practiceMode: practiceMode,
+              examType: 'JAMB'
+            })
+          });
 
-      if (!data.questions || data.questions.length === 0) {
+          if (response.ok) {
+            const data = await response.json();
+            if (data.questions && data.questions.length > 0) {
+              await jambOfflineDb.addQuestionsToOfflineBank(data.questions, subjectId || subject.toLowerCase());
+              loadedQuestions = [...loadedQuestions, ...data.questions];
+              poolIsLow = false;
+            }
+          }
+        } catch (apiErr) {
+          console.warn("API question generation error, falling back to local curriculum question bank:", apiErr);
+        }
+      }
+
+      if (loadedQuestions.length === 0) {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          throw new Error("Connect to the internet to get more questions.");
+        }
         throw new Error("No questions are currently available for this subject.");
       }
 
-      setQuestions(data.questions);
+      setIsPoolLow(poolIsLow || loadedQuestions.length < amount);
+      setUnansweredPoolCount(unanswered);
+      setQuestions(loadedQuestions);
       setScore(0);
       setCurrentQIndex(0);
       setAnswers({});
       setMarkedForReview({});
       setTimerRemaining(timerDuration * 60);
+      setTimeUsedSeconds(0);
       setSetupMode(false);
       setIsSubmitted(false);
       setViewMode('practice');
@@ -488,7 +740,7 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
         practiceMode,
         timerDuration,
         timerRemaining: timerDuration * 60,
-        questions: data.questions,
+        questions: loadedQuestions,
         currentQIndex: 0,
         answers: {},
         markedForReview: {},
@@ -515,13 +767,13 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
           await addDoc(collection(db, 'ai_history'), {
             uid: user.uid,
             type: 'question_generation',
-            content: `Generated ${data.questions.length} questions for ${subject}${topic ? ' - ' + topic : ''}`,
+            content: `Generated ${loadedQuestions.length} questions for ${subject}${topic ? ' - ' + topic : ''}`,
             metadata: {
               subject,
               topic,
               difficulty,
-              amount: data.questions.length,
-              questions: data.questions
+              amount: loadedQuestions.length,
+              questions: loadedQuestions
             },
             createdAt: serverTimestamp()
           });
@@ -582,7 +834,7 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
     }
   };
 
-  const calculateScore = () => {
+  const calculateScore = useCallback(() => {
     let s = 0;
     questions.forEach((q, i) => {
       if (answers[i] !== undefined && isOptionCorrect(q, answers[i])) {
@@ -590,12 +842,12 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
       }
     });
     return s;
-  };
+  }, [questions, answers]);
 
   const confirmSubmit = async () => {
     setShowSubmitPrompt(false);
     const finalScore = calculateScore();
-    const usedSeconds = Math.max(0, (timerDuration * 60) - timerRemaining);
+    const usedSeconds = isUntimed ? timeUsedSeconds : Math.max(0, (timerDuration * 60) - timerRemaining);
     setScore(finalScore);
     setTimeUsedSeconds(usedSeconds);
     setIsSubmitted(true);
@@ -627,6 +879,25 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
         console.warn("Silent save learning data warning:", err);
       }
     }
+
+    if (initialMode?.startsWith('jamb') || initialConfig?.examType === 'JAMB') {
+      try {
+        await jambService.saveAttempt({
+          subject: subjectId || subject,
+          subjectName: subject,
+          year: typeof initialConfig?.year === 'number' ? initialConfig.year : 2024,
+          score: finalScore,
+          totalQuestions: questions.length,
+          percentage: Math.round((finalScore / questions.length) * 100),
+          timeSpentSeconds: usedSeconds,
+          answers,
+          questions: questions as any
+        });
+      } catch (err) {
+        console.warn("Silent save jamb attempt warning:", err);
+      }
+    }
+
     await clearSession();
   };
 
@@ -661,6 +932,88 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
       return `${h}h ${remM}m ${s}s`;
     }
     return `${m}m ${s}s`;
+  };
+
+  // Group questions by subject for multi-subject CBT
+  const subjectTabs = useMemo(() => {
+    if (!questions || questions.length === 0) return [];
+    
+    const map = new Map<string, { name: string; startIndex: number; endIndex: number; count: number }>();
+    
+    questions.forEach((q, idx) => {
+      const subName = q.subject || subject || 'General';
+      if (!map.has(subName)) {
+        map.set(subName, { name: subName, startIndex: idx, endIndex: idx, count: 1 });
+      } else {
+        const item = map.get(subName)!;
+        item.endIndex = idx;
+        item.count += 1;
+      }
+    });
+
+    if (map.size <= 1) return [];
+
+    return Array.from(map.values()).map(tab => {
+      let answeredInTab = 0;
+      let correctInTab = 0;
+      for (let i = tab.startIndex; i <= tab.endIndex; i++) {
+        if (answers[i] !== undefined) {
+          answeredInTab++;
+          if (isOptionCorrect(questions[i], answers[i])) {
+            correctInTab++;
+          }
+        }
+      }
+      return {
+        ...tab,
+        answeredCount: answeredInTab,
+        correctCount: correctInTab
+      };
+    });
+  }, [questions, answers, subject]);
+
+  const currentSubjectTab = useMemo(() => {
+    if (subjectTabs.length === 0) return null;
+    const currentTab = subjectTabs.find(t => currentQIndex >= t.startIndex && currentQIndex <= t.endIndex);
+    return currentTab || subjectTabs[0];
+  }, [subjectTabs, currentQIndex]);
+
+  // Current Question and derived statistics
+  const question = questions[currentQIndex] || questions[0];
+  const answeredCount = Object.keys(answers).length;
+  const unansweredCount = Math.max(0, questions.length - answeredCount);
+  const correctCount = calculateScore();
+  const incorrectCount = Math.max(0, questions.length - correctCount);
+  const percentage = questions.length > 0 ? Math.round((correctCount / questions.length) * 100) : 0;
+
+  const toggleBookmarkCurrent = async () => {
+    if (!question) return;
+    const qId = question.id || `q-${currentQIndex}`;
+    const nowBookmarked = !bookmarkedIds.has(qId);
+    
+    setBookmarkedIds(prev => {
+      const next = new Set(prev);
+      if (nowBookmarked) next.add(qId);
+      else next.delete(qId);
+      return next;
+    });
+
+    try {
+      await jambService.toggleBookmark({
+        id: qId,
+        subject: question.subjectId || subjectId || 'english',
+        subjectName: question.subject || subject || 'General',
+        year: typeof question.year === 'number' ? question.year : 2024,
+        questionNumber: question.questionNumber || (currentQIndex + 1),
+        topic: question.topic || 'General',
+        question: question.question,
+        options: question.options,
+        correctAnswer: getNormalizedCorrectIndex(question),
+        explanation: question.explanation
+      });
+    } catch (err) {
+      console.warn("Bookmark toggle error:", err);
+    }
   };
 
   // Determine subjects based on level
@@ -921,16 +1274,11 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
     );
   }
 
-  // Current Question
-  const question = questions[currentQIndex] || questions[0];
-  const answeredCount = Object.keys(answers).length;
-  const unansweredCount = Math.max(0, questions.length - answeredCount);
-  const correctCount = calculateScore();
-  const incorrectCount = questions.length - correctCount;
-  const percentage = Math.round((correctCount / questions.length) * 100) || 0;
-
   // Render 2: Dedicated Results Page (Requirement 11)
   if (viewMode === 'results') {
+    const isJambCbt = subjectTabs.length > 1 || initialMode === 'jamb-cbt';
+    const aggregateJambScore = Math.round((correctCount / (questions.length || 1)) * 400);
+
     return (
       <div className="w-full max-w-4xl mx-auto pb-16 px-4">
         {/* Results Card */}
@@ -942,14 +1290,16 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
           {/* Top Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-bold mb-6">
             <Trophy size={18} className="text-blue-600 dark:text-blue-400" />
-            Practice Session Completed
+            {isJambCbt ? 'JAMB Mock CBT Completed' : 'Practice Session Completed'}
           </div>
 
           <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight mb-2">
-            {subject}
+            {isJambCbt ? 'JAMB UTME Mock Exam Results' : subject}
           </h2>
           <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base font-medium mb-8">
-            {topic ? `${topic} • ` : ''}{difficulty} Difficulty • {questions.length} Questions
+            {isJambCbt 
+              ? `${subjectTabs.length} Subjects • 400 Marks Total • Real CBT Marking`
+              : `${topic ? `${topic} • ` : ''}${difficulty} Difficulty • ${questions.length} Questions`}
           </p>
 
           {/* Main Percentage & Score Display */}
@@ -962,8 +1312,10 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
                     ? 'border-blue-500 text-blue-600 bg-blue-50/50 dark:bg-blue-950/20' 
                     : 'border-amber-500 text-amber-600 bg-amber-50/50 dark:bg-amber-950/20'
               }`}>
-                <span className="text-3xl font-black">{percentage}%</span>
-                <span className="text-xs uppercase font-bold tracking-wider opacity-80">Score</span>
+                <span className="text-3xl font-black">{isJambCbt ? aggregateJambScore : `${percentage}%`}</span>
+                <span className="text-xs uppercase font-bold tracking-wider opacity-80">
+                  {isJambCbt ? '/ 400' : 'Score'}
+                </span>
               </div>
             </div>
 
@@ -972,10 +1324,40 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
                 {percentage >= 75 ? 'Outstanding Performance!' : percentage >= 50 ? 'Good Effort!' : 'Keep Practicing!'}
               </p>
               <p className="text-slate-600 dark:text-slate-400 max-w-sm text-sm sm:text-base">
-                You correctly answered <span className="font-bold text-slate-900 dark:text-white">{correctCount}</span> out of <span className="font-bold text-slate-900 dark:text-white">{questions.length}</span> questions.
+                You correctly answered <span className="font-bold text-slate-900 dark:text-white">{correctCount}</span> out of <span className="font-bold text-slate-900 dark:text-white">{questions.length}</span> questions ({percentage}%).
               </p>
             </div>
           </div>
+
+          {/* If Multi-Subject CBT, render per-subject breakdown */}
+          {subjectTabs.length > 1 && (
+            <div className="mb-10 text-left">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <BookOpen size={18} className="text-blue-600" />
+                Subject Performance Breakdown (Scaled to 100 per subject)
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {subjectTabs.map((tab, idx) => {
+                  const tabPct = Math.round((tab.correctCount / (tab.count || 1)) * 100);
+                  return (
+                    <div key={idx} className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
+                      <p className="font-bold text-sm text-slate-900 dark:text-white truncate">{tab.name}</p>
+                      <div className="flex items-baseline justify-between mt-2">
+                        <span className="text-2xl font-black text-blue-600 dark:text-blue-400">{tabPct}</span>
+                        <span className="text-xs text-slate-500 font-medium">{tab.correctCount}/{tab.count} correct</span>
+                      </div>
+                      <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full mt-2 overflow-hidden">
+                        <div 
+                          className="bg-blue-600 h-full rounded-full transition-all" 
+                          style={{ width: `${tabPct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Stats Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10 text-left">
@@ -1245,7 +1627,7 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
       )}
 
       {/* Header Bar */}
-      <div className="flex items-center justify-between mb-6 shrink-0 gap-4">
+      <div className="flex items-center justify-between mb-6 shrink-0 gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <button 
             id="quiz-header-back-button"
@@ -1262,7 +1644,9 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
           </button>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">{subject}</h2>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
+                {currentSubjectTab?.name || subject}
+              </h2>
               {viewMode === 'review' && (
                 <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 text-xs font-bold">
                   Review Mode
@@ -1275,21 +1659,124 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
           </div>
         </div>
 
-        {viewMode === 'practice' ? (
-          <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-2xl text-slate-700 dark:text-slate-300 font-mono font-bold text-sm shadow-2xs">
-            <Clock size={16} className={timerRemaining <= 180 ? 'text-rose-500 animate-pulse' : 'text-blue-600'} />
-            <span className={timerRemaining <= 180 ? 'text-rose-600 dark:text-rose-400' : ''}>
-              {formatTime(timerRemaining)}
-            </span>
-          </div>
-        ) : (
+        <div className="flex items-center gap-2.5">
+          {/* On-screen Calculator Button */}
           <button
-            id="quiz-back-to-results-btn"
-            onClick={() => setViewMode('results')}
-            className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors cursor-pointer"
+            id="quiz-open-calculator-btn"
+            type="button"
+            onClick={() => setIsCalculatorOpen(prev => !prev)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs sm:text-sm font-bold transition-colors cursor-pointer shadow-2xs"
+            title="JAMB Calculator"
           >
-            Back to Results
+            <Calculator size={16} className="text-blue-600 dark:text-blue-400" />
+            <span className="hidden sm:inline">Calculator</span>
           </button>
+
+          {/* Mobile Questions Sheet Trigger */}
+          <button
+            id="quiz-mobile-nav-toggle-btn"
+            type="button"
+            onClick={() => setShowMobileNav(true)}
+            className="lg:hidden flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold cursor-pointer"
+          >
+            <Menu size={16} />
+            <span>{answeredCount}/{questions.length}</span>
+          </button>
+
+          {viewMode === 'practice' ? (
+            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-2xl text-slate-700 dark:text-slate-300 font-mono font-bold text-sm shadow-2xs">
+              <Clock size={16} className={!isUntimed && timerRemaining <= 180 ? 'text-rose-500 animate-pulse' : 'text-blue-600'} />
+              <span className={!isUntimed && timerRemaining <= 180 ? 'text-rose-600 dark:text-rose-400' : ''}>
+                {isUntimed ? `Untimed • ${formatTime(timeUsedSeconds)}` : formatTime(timerRemaining)}
+              </span>
+            </div>
+          ) : (
+            <button
+              id="quiz-back-to-results-btn"
+              onClick={() => setViewMode('results')}
+              className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors cursor-pointer"
+            >
+              Back to Results
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Multi-Subject Tabs (for JAMB CBT Mock with 4 subjects) */}
+      {subjectTabs.length > 1 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-4 no-scrollbar">
+          {subjectTabs.map((tab, idx) => {
+            const isActive = currentQIndex >= tab.startIndex && currentQIndex <= tab.endIndex;
+            return (
+              <button
+                key={idx}
+                type="button"
+                id={`quiz-subject-tab-${idx}`}
+                onClick={() => jumpToQuestion(tab.startIndex)}
+                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
+                  isActive 
+                    ? 'bg-blue-600 text-white shadow-xs' 
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                <span>{tab.name}</span>
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-black ${
+                  isActive ? 'bg-blue-700 text-blue-100' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'
+                }`}>
+                  {tab.answeredCount}/{tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Offline Status & Question Bank Management Banner */}
+      <div id="jamboffline" className="space-y-2 mb-4">
+        {!isOnline && (
+          <div className="px-4 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs font-semibold text-amber-800 dark:text-amber-200">
+            <div className="flex items-center gap-2.5">
+              <WifiOff size={16} className="shrink-0 text-amber-600 dark:text-amber-400" />
+              <span>
+                {isPoolLow 
+                  ? "Connect to the internet to get more questions." 
+                  : "Offline Mode: Practicing downloaded JAMB questions. Answers & history are saved locally and will sync when connected."}
+              </span>
+            </div>
+            {unansweredPoolCount > 0 && (
+              <span className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-900 dark:text-amber-100 font-bold text-[11px]">
+                {unansweredPoolCount} new questions available
+              </span>
+            )}
+          </div>
+        )}
+
+        {isOnline && isPoolLow && (
+          <div className="px-4 py-3 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 flex flex-wrap items-center justify-between gap-3 text-xs font-semibold text-blue-800 dark:text-blue-200">
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
+              <span>Offline question bank is running low for this subject.</span>
+            </div>
+            <button
+              id="download-more-questions-btn"
+              type="button"
+              disabled={isDownloadingMore}
+              onClick={handleDownloadMoreQuestions}
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+            >
+              {isDownloadingMore ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+              <span>Download More Questions (AI Powered)</span>
+            </button>
+          </div>
+        )}
+
+        {downloadFeedback && (
+          <div className="px-4 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-xs font-bold text-emerald-800 dark:text-emerald-200 flex items-center justify-between">
+            <span>{downloadFeedback}</span>
+            <button type="button" onClick={() => setDownloadFeedback(null)} className="text-slate-400 hover:text-slate-600">
+              <X size={14} />
+            </button>
+          </div>
         )}
       </div>
 
@@ -1308,44 +1795,83 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
               className="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-700 shadow-xs"
             >
               {/* Question Card Header */}
-              <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100 dark:border-slate-700/60 gap-4">
-                <span className="inline-block px-3.5 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs sm:text-sm font-bold">
-                  Question {currentQIndex + 1} of {questions.length}
-                </span>
+              <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100 dark:border-slate-700/60 gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block px-3.5 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs sm:text-sm font-bold">
+                    Question {currentQIndex + 1} of {questions.length}
+                  </span>
+                  {question.subject && (
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 hidden sm:inline">
+                      {question.subject} {question.year ? `(${question.year})` : ''}
+                    </span>
+                  )}
+                </div>
 
-                {viewMode === 'practice' && (
-                  <button 
-                    id="quiz-toggle-mark-review"
-                    onClick={toggleMarkReview}
-                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer ${
-                      markedForReview[currentQIndex] 
-                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' 
+                <div className="flex items-center gap-2">
+                  {/* Bookmark Button */}
+                  <button
+                    id="quiz-toggle-bookmark-btn"
+                    type="button"
+                    onClick={toggleBookmarkCurrent}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer ${
+                      bookmarkedIds.has(question.id || `q-${currentQIndex}`)
+                        ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-300'
                         : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                     }`}
+                    title="Bookmark Question"
                   >
-                    <Flag size={15} className={markedForReview[currentQIndex] ? 'fill-current' : ''} />
-                    <span>{markedForReview[currentQIndex] ? 'Marked for Review' : 'Mark for Review'}</span>
+                    <Bookmark size={15} className={bookmarkedIds.has(question.id || `q-${currentQIndex}`) ? 'fill-current text-amber-600' : ''} />
+                    <span className="hidden sm:inline">
+                      {bookmarkedIds.has(question.id || `q-${currentQIndex}`) ? 'Bookmarked' : 'Bookmark'}
+                    </span>
                   </button>
-                )}
 
-                {viewMode === 'review' && (
-                  <div className="flex items-center gap-2">
-                    {answers[currentQIndex] === undefined ? (
-                      <span className="px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold">
-                        Unanswered
-                      </span>
-                    ) : isOptionCorrect(question, answers[currentQIndex]) ? (
-                      <span className="px-3 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-1">
-                        <Check size={14} /> Correct
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 rounded-lg bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-center gap-1">
-                        <X size={14} /> Incorrect
-                      </span>
-                    )}
-                  </div>
-                )}
+                  {viewMode === 'practice' && (
+                    <button 
+                      id="quiz-toggle-mark-review"
+                      onClick={toggleMarkReview}
+                      className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer ${
+                        markedForReview[currentQIndex] 
+                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' 
+                          : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                      }`}
+                    >
+                      <Flag size={15} className={markedForReview[currentQIndex] ? 'fill-current' : ''} />
+                      <span>{markedForReview[currentQIndex] ? 'Marked' : 'Mark for Review'}</span>
+                    </button>
+                  )}
+
+                  {viewMode === 'review' && (
+                    <div className="flex items-center gap-2">
+                      {answers[currentQIndex] === undefined ? (
+                        <span className="px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold">
+                          Unanswered
+                        </span>
+                      ) : isOptionCorrect(question, answers[currentQIndex]) ? (
+                        <span className="px-3 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-1">
+                          <Check size={14} /> Correct
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 rounded-lg bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-center gap-1">
+                          <X size={14} /> Incorrect
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {/* Comprehension Passage / Context if available (English/Literature) */}
+              {question.passage && (
+                <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 text-slate-800 dark:text-slate-200">
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400 mb-2">
+                    Reading Passage / Context
+                  </p>
+                  <div className="text-sm sm:text-base leading-relaxed whitespace-pre-line italic">
+                    {question.passage}
+                  </div>
+                </div>
+              )}
 
               {/* Question Text (Full and clearly visible) */}
               <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-8 leading-relaxed break-words">
@@ -1576,6 +2102,12 @@ export default function Quiz({ onBack, setView }: { onBack?: () => void, setView
           )}
         </AnimatePresence>
       </div>
+
+      {/* On-Screen Standard JAMB Calculator */}
+      <JambCalculator 
+        isOpen={isCalculatorOpen} 
+        onClose={() => setIsCalculatorOpen(false)} 
+      />
     </div>
   );
 }

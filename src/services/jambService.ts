@@ -1,7 +1,7 @@
 import { db, auth } from '../lib/firebase';
 import { collection, doc, setDoc, getDoc, getDocs, query, where, orderBy, limit, deleteDoc } from 'firebase/firestore';
-import { JambQuestion, getJambQuestionsByFilter } from '../data/jambQuestions';
-import { jambOfflineDb, DownloadedSubjectMeta, StoredOfflineAttempt, StoredOfflineBookmark } from './jambOfflineDb';
+import { JambQuestion, getJambQuestionsByFilter, JAMB_SUBJECTS } from '../data/jambQuestions';
+import { jambOfflineDb, DownloadedSubjectMeta, StoredOfflineAttempt, StoredOfflineBookmark, OfflinePracticeOptions } from './jambOfflineDb';
 
 export interface JambExamAttempt {
   id: string;
@@ -31,11 +31,162 @@ export interface BookmarkedJambQuestion {
 
 const LOCAL_STORAGE_HISTORY_KEY = 'learndean_jamb_history';
 const LOCAL_STORAGE_BOOKMARKS_KEY = 'learndean_jamb_bookmarks';
+const LOCAL_STORAGE_SUBJECTS_KEY = 'learndean_user_jamb_subjects';
+const LOCAL_STORAGE_PENDING_SUBJECTS_KEY = 'learndean_user_jamb_subjects_pending';
 
 // Concurrency lock to strictly prevent duplicate syncing
 let isSyncInProgress = false;
 
 export const jambService = {
+  // 0. USER JAMB SUBJECTS (MY JAMB SUBJECTS)
+  getUserJambSubjects(): string[] {
+    try {
+      const raw = localStorage.getItem(LOCAL_STORAGE_SUBJECTS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // English Language is always compulsory and first
+          const nonEnglish = Array.from(new Set(parsed.filter(s => s !== 'English Language' && s !== 'english')));
+          const subjects = ['English Language', ...nonEnglish.slice(0, 3)];
+          
+          // Backfill to standard 4 subjects if needed
+          const defaults = ['Mathematics', 'Physics', 'Chemistry', 'Biology'];
+          for (const d of defaults) {
+            if (subjects.length >= 4) break;
+            if (!subjects.includes(d)) subjects.push(d);
+          }
+          return subjects;
+        }
+      }
+    } catch {}
+    return ['English Language', 'Mathematics', 'Physics', 'Chemistry'];
+  },
+
+  async saveUserJambSubjects(subjects: string[]): Promise<string[]> {
+    const nonEnglish = Array.from(new Set(subjects.filter(s => s !== 'English Language' && s !== 'english')));
+    const validSubjects = ['English Language', ...nonEnglish.slice(0, 3)];
+
+    const defaults = ['Mathematics', 'Physics', 'Chemistry', 'Biology'];
+    for (const d of defaults) {
+      if (validSubjects.length >= 4) break;
+      if (!validSubjects.includes(d)) validSubjects.push(d);
+    }
+
+    // 1. Save to local storage for instant offline retrieval and guaranteed fallback
+    try {
+      localStorage.setItem(LOCAL_STORAGE_SUBJECTS_KEY, JSON.stringify(validSubjects));
+    } catch (e) {
+      console.warn('Failed to save jamb subjects to localStorage:', e);
+    }
+
+    // 2. Mark pending sync by default until confirmed written to remote
+    try {
+      localStorage.setItem(LOCAL_STORAGE_PENDING_SUBJECTS_KEY, 'true');
+    } catch {}
+
+    // 3. Sync to Firestore using authenticated UID if online & signed in
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+    if (isOnline && auth.currentUser) {
+      try {
+        const userUid = auth.currentUser.uid;
+        await setDoc(doc(db, 'user_jamb_profile', userUid), {
+          uid: userUid,
+          selectedSubjects: validSubjects,
+          updatedAt: Date.now(),
+          syncStatus: 'synced'
+        }, { merge: true });
+        
+        // Clear pending flag once remote write completes
+        try {
+          localStorage.removeItem(LOCAL_STORAGE_PENDING_SUBJECTS_KEY);
+        } catch {}
+      } catch (err) {
+        console.warn('Could not sync jamb subjects to Firestore right now; queued for offline sync:', err);
+      }
+    }
+
+    // Trigger local event so other components update synchronously
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('learndean-jamb-subjects-changed', {
+        detail: { subjects: validSubjects }
+      }));
+    }
+
+    return validSubjects;
+  },
+
+  async loadRemoteUserJambSubjects(): Promise<string[] | null> {
+    const localFallback = this.getUserJambSubjects();
+
+    if (!auth.currentUser) {
+      return localFallback;
+    }
+
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+    if (!isOnline) {
+      return localFallback;
+    }
+
+    const userUid = auth.currentUser.uid;
+
+    try {
+      // If there are pending changes saved while offline, sync them up first
+      const hasPendingSync = typeof localStorage !== 'undefined' && localStorage.getItem(LOCAL_STORAGE_PENDING_SUBJECTS_KEY) === 'true';
+      if (hasPendingSync) {
+        await setDoc(doc(db, 'user_jamb_profile', userUid), {
+          uid: userUid,
+          selectedSubjects: localFallback,
+          updatedAt: Date.now(),
+          syncStatus: 'synced'
+        }, { merge: true });
+        localStorage.removeItem(LOCAL_STORAGE_PENDING_SUBJECTS_KEY);
+        return localFallback;
+      }
+
+      // Fetch user's owned document from Firestore
+      const snap = await getDoc(doc(db, 'user_jamb_profile', userUid));
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.selectedSubjects && Array.isArray(data.selectedSubjects) && data.selectedSubjects.length > 0) {
+          const nonEnglish = Array.from(new Set(data.selectedSubjects.filter((s: string) => s !== 'English Language' && s !== 'english')));
+          const validSubjects = ['English Language', ...nonEnglish.slice(0, 3)];
+          
+          const defaults = ['Mathematics', 'Physics', 'Chemistry', 'Biology'];
+          for (const d of defaults) {
+            if (validSubjects.length >= 4) break;
+            if (!validSubjects.includes(d)) validSubjects.push(d);
+          }
+
+          localStorage.setItem(LOCAL_STORAGE_SUBJECTS_KEY, JSON.stringify(validSubjects));
+          localStorage.removeItem(LOCAL_STORAGE_PENDING_SUBJECTS_KEY);
+
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('learndean-jamb-subjects-changed', {
+              detail: { subjects: validSubjects }
+            }));
+          }
+
+          return validSubjects;
+        }
+      } else {
+        // Document does not exist yet on remote: initialize with current user selection
+        await setDoc(doc(db, 'user_jamb_profile', userUid), {
+          uid: userUid,
+          selectedSubjects: localFallback,
+          updatedAt: Date.now(),
+          syncStatus: 'synced'
+        }, { merge: true });
+        localStorage.removeItem(LOCAL_STORAGE_PENDING_SUBJECTS_KEY);
+        return localFallback;
+      }
+    } catch (e) {
+      console.warn('Could not fetch remote user jamb subjects, using local cache:', e);
+      return localFallback;
+    }
+
+    return localFallback;
+  },
+
   // 1. SAVE PRACTICE ATTEMPT (OFFLINE-FIRST + FIRESTORE SYNC)
   async saveAttempt(attempt: Omit<JambExamAttempt, 'id' | 'uid' | 'completedAt'>): Promise<string> {
     const attemptId = `jamb_attempt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -273,56 +424,201 @@ export const jambService = {
 
   // 4. QUESTIONS LOADER (AWARE OF OFFLINE STATUS AND INDEXEDDB DOWNLOADS)
   async getQuestionsForExam(
-    subject: 'english' | 'mathematics' | 'physics' | 'chemistry' | 'biology',
+    subject: string,
     year?: number | 'all',
     count: number = 20
   ): Promise<{ questions: JambQuestion[]; isOfflineSource: boolean }> {
-    // 1. Check if downloaded in IndexedDB
-    const isDownloaded = await jambOfflineDb.isSubjectDownloaded(subject);
-    if (isDownloaded) {
-      try {
-        const offlineQuestions = await jambOfflineDb.getOfflineQuestions(subject, year, count);
-        if (offlineQuestions.length > 0) {
-          return { questions: offlineQuestions, isOfflineSource: true };
-        }
-      } catch (e) {
-        console.warn('Failed to load from IndexedDB, falling back:', e);
-      }
+    const res = await jambOfflineDb.getOfflinePracticeQuestions({
+      subject,
+      year,
+      count,
+      order: 'random'
+    });
+    if (res.questions.length > 0) {
+      return { questions: res.questions, isOfflineSource: res.isOfflineSource };
     }
 
-    // 2. If not in IndexedDB, check if we are online or have bundle
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
-    if (!isOnline && !isDownloaded) {
-      throw new Error(`Subject "${subject}" is not downloaded for offline practice. Please connect to the internet to download it.`);
+    if (!isOnline) {
+      throw new Error(`Subject "${subject}" has no downloaded questions for offline practice. Please connect to the internet to get questions.`);
     }
 
     const memoryQuestions = getJambQuestionsByFilter(subject, year, count);
     return { questions: memoryQuestions, isOfflineSource: false };
   },
 
-  // 5. AUTOMATIC BACKGROUND SYNC TO FIREBASE (PREVENTS DUPLICATE SYNCING VIA MUTEX LOCK)
-  async syncPendingData(): Promise<{ syncedAttempts: number; syncedBookmarks: number }> {
+  /**
+   * Primary practice question loader:
+   * Prioritizes unanswered downloaded questions first, never duplicates in a session,
+   * respects order (random/sequential), and signals if question pool is low.
+   */
+  async getPracticeQuestions(options: OfflinePracticeOptions): Promise<{
+    questions: any[];
+    totalAvailable: number;
+    unansweredCount: number;
+    isPoolLow: boolean;
+    isOfflineSource: boolean;
+  }> {
+    const result = await jambOfflineDb.getOfflinePracticeQuestions(options);
+
+    const mapped = result.questions.map((q, idx) => ({
+      id: q.id,
+      question: q.passage ? `${q.passage}\n\n${q.question}` : q.question,
+      options: q.options,
+      correctAnswerIndex: q.correctAnswer,
+      correctAnswer: q.correctAnswer,
+      explanation: q.explanation || 'Review topic notes and syllabus for full derivation.',
+      difficulty: 'Medium',
+      topic: q.topic || 'General',
+      subject: q.subjectName || q.subject,
+      subjectId: q.subject,
+      year: q.year,
+      questionNumber: q.questionNumber || (idx + 1)
+    }));
+
+    return {
+      questions: mapped,
+      totalAvailable: result.totalAvailable,
+      unansweredCount: result.unansweredCount,
+      isPoolLow: result.isPoolLow,
+      isOfflineSource: result.isOfflineSource
+    };
+  },
+
+  /**
+   * Generates additional JAMB-style questions using AI and adds them to the offline bank.
+   * REQUIRES INTERNET CONNECTION.
+   * NEVER generates offline or simulates generation.
+   * Prevents duplicate questions.
+   */
+  async generateAndDownloadMoreQuestions(
+    subjectId: string,
+    topic: string = 'General',
+    amount: number = 5
+  ): Promise<{ addedCount: number; duplicatesSkipped: number; totalOfflineCount: number }> {
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+    if (!isOnline) {
+      throw new Error('Connect to the internet to get more questions.');
+    }
+
+    const token = await auth.currentUser?.getIdToken().catch(() => null);
+    const targetMeta = JAMB_SUBJECTS.find(s => s.id === subjectId || s.name.toLowerCase() === subjectId.toLowerCase());
+    const subjectName = targetMeta?.name || subjectId;
+
+    const response = await fetch('/api/generate-questions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({
+        subject: subjectName,
+        topic: topic && topic !== 'All Topics' ? topic : 'General',
+        difficulty: 'Medium',
+        amount: Math.min(20, Math.max(1, amount)),
+        educationLevel: 'Secondary (JAMB UTME)',
+        country: 'Nigeria',
+        practiceMode: 'JAMB UTME Drill',
+        examType: 'JAMB'
+      })
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || `Server responded with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data.questions || !Array.isArray(data.questions) || data.questions.length === 0) {
+      throw new Error('No questions were returned by the AI question generator.');
+    }
+
+    const newJambQuestions: JambQuestion[] = data.questions.map((q: any, idx: number) => {
+      let correctIdx = 0;
+      if (typeof q.correctAnswer === 'number') {
+        correctIdx = q.correctAnswer;
+      } else if (typeof q.correctAnswerIndex === 'number') {
+        correctIdx = q.correctAnswerIndex;
+      } else if (typeof q.correctAnswer === 'string') {
+        const charCode = q.correctAnswer.trim().toUpperCase().charCodeAt(0);
+        if (charCode >= 65 && charCode <= 68) correctIdx = charCode - 65;
+      }
+
+      return {
+        id: `jamb_ai_${subjectId.toLowerCase()}_${Date.now()}_${idx}`,
+        subject: subjectId.toLowerCase(),
+        subjectName: subjectName,
+        year: 2024,
+        questionNumber: 100 + idx + 1,
+        question: q.question,
+        options: Array.isArray(q.options) && q.options.length >= 4 ? q.options.slice(0, 4) : (q.options || ['A', 'B', 'C', 'D']),
+        correctAnswer: correctIdx,
+        explanation: q.explanation || 'Refer to the official JAMB syllabus for full derivation.',
+        topic: topic && topic !== 'All Topics' ? topic : (q.topic || 'General')
+      };
+    });
+
+    return await jambOfflineDb.addQuestionsToOfflineBank(subjectId, newJambQuestions);
+  },
+
+  // 5. UNFINISHED PRACTICE SESSIONS (LOCAL + INDEXEDDB PERSISTENCE)
+  async saveActiveSession(session: any): Promise<void> {
+    await jambOfflineDb.saveActiveSession(session);
+  },
+
+  async getActiveSession(): Promise<any | null> {
+    return await jambOfflineDb.getActiveSession();
+  },
+
+  async clearActiveSession(): Promise<void> {
+    await jambOfflineDb.clearActiveSession();
+  },
+
+  // 6. AUTOMATIC BACKGROUND SYNC TO FIREBASE (PREVENTS DUPLICATE SYNCING VIA MUTEX LOCK)
+  async syncPendingData(): Promise<{ syncedAttempts: number; syncedBookmarks: number; syncedSubjects: number }> {
     // Guard 1: Concurrency mutex lock to prevent duplicate syncing
     if (isSyncInProgress) {
-      return { syncedAttempts: 0, syncedBookmarks: 0 };
+      return { syncedAttempts: 0, syncedBookmarks: 0, syncedSubjects: 0 };
     }
 
     // Guard 2: Network check
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
     if (!isOnline) {
-      return { syncedAttempts: 0, syncedBookmarks: 0 };
+      return { syncedAttempts: 0, syncedBookmarks: 0, syncedSubjects: 0 };
     }
 
     // Guard 3: User authentication check
     if (!auth.currentUser) {
-      return { syncedAttempts: 0, syncedBookmarks: 0 };
+      return { syncedAttempts: 0, syncedBookmarks: 0, syncedSubjects: 0 };
     }
 
     isSyncInProgress = true;
     let syncedAttemptsCount = 0;
     let syncedBookmarksCount = 0;
+    let syncedSubjectsCount = 0;
 
     try {
+      const userUid = auth.currentUser.uid;
+
+      // 0. Sync pending JAMB subject profile if changed while offline
+      const hasPendingSubjects = typeof localStorage !== 'undefined' && localStorage.getItem(LOCAL_STORAGE_PENDING_SUBJECTS_KEY) === 'true';
+      if (hasPendingSubjects) {
+        try {
+          const localSubjects = this.getUserJambSubjects();
+          await setDoc(doc(db, 'user_jamb_profile', userUid), {
+            uid: userUid,
+            selectedSubjects: localSubjects,
+            updatedAt: Date.now(),
+            syncStatus: 'synced'
+          }, { merge: true });
+          localStorage.removeItem(LOCAL_STORAGE_PENDING_SUBJECTS_KEY);
+          syncedSubjectsCount++;
+        } catch (err) {
+          console.warn('Failed to sync pending JAMB subjects to Firestore:', err);
+        }
+      }
+
       // 1. Fetch pending attempts from IndexedDB
       const pendingAttempts = await jambOfflineDb.getPendingAttempts();
 
@@ -330,7 +626,7 @@ export const jambService = {
         try {
           const remoteDoc: JambExamAttempt = {
             ...attempt,
-            uid: auth.currentUser.uid,
+            uid: userUid,
             syncStatus: 'synced',
             syncedAt: Date.now()
           };
@@ -349,9 +645,9 @@ export const jambService = {
 
       for (const b of pendingBookmarks) {
         try {
-          const bookmarkDocId = `${auth.currentUser.uid}_${b.questionId}`;
+          const bookmarkDocId = `${userUid}_${b.questionId}`;
           await setDoc(doc(db, 'jamb_bookmarks', bookmarkDocId), {
-            uid: auth.currentUser.uid,
+            uid: userUid,
             questionId: b.questionId,
             subject: b.subject,
             savedAt: b.savedAt,
@@ -366,10 +662,10 @@ export const jambService = {
         }
       }
 
-      if (syncedAttemptsCount > 0 || syncedBookmarksCount > 0) {
+      if (syncedAttemptsCount > 0 || syncedBookmarksCount > 0 || syncedSubjectsCount > 0) {
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('learndean-jamb-synced', {
-            detail: { attempts: syncedAttemptsCount, bookmarks: syncedBookmarksCount }
+            detail: { attempts: syncedAttemptsCount, bookmarks: syncedBookmarksCount, subjects: syncedSubjectsCount }
           }));
         }
       }
@@ -377,7 +673,7 @@ export const jambService = {
       isSyncInProgress = false;
     }
 
-    return { syncedAttempts: syncedAttemptsCount, syncedBookmarks: syncedBookmarksCount };
+    return { syncedAttempts: syncedAttemptsCount, syncedBookmarks: syncedBookmarksCount, syncedSubjects: syncedSubjectsCount };
   },
 
   /**
@@ -387,9 +683,17 @@ export const jambService = {
     try {
       const pendingAttempts = await jambOfflineDb.getPendingAttempts();
       const pendingBookmarks = await jambOfflineDb.getPendingBookmarks();
-      return pendingAttempts.length + pendingBookmarks.length;
+      const hasPendingSubjects = typeof localStorage !== 'undefined' && localStorage.getItem(LOCAL_STORAGE_PENDING_SUBJECTS_KEY) === 'true' ? 1 : 0;
+      return pendingAttempts.length + pendingBookmarks.length + hasPendingSubjects;
     } catch {
       return 0;
     }
   }
 };
+
+// Automatic online event sync listener
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    jambService.syncPendingData().catch(() => {});
+  });
+}

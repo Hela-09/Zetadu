@@ -229,9 +229,28 @@
         "timestamp": { "type": "number" }
       },
       "required": ["id", "uid", "novelId", "totalQuestions", "correctAnswers", "scorePercentage", "timestamp"]
+    },
+    "UserJambProfile": {
+      "title": "UserJambProfile",
+      "description": "Stores user selected JAMB UTME subjects and configuration",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "selectedSubjects": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "updatedAt": { "type": "number" },
+        "syncStatus": { "type": "string" }
+      },
+      "required": ["uid", "selectedSubjects", "updatedAt"]
     }
   },
   "firestore": {
+    "user_jamb_profile/{docId}": {
+      "schema": { "$ref": "#/entities/UserJambProfile" },
+      "description": "User personal JAMB UTME subjects selection, protected by authenticated user UID."
+    },
     "user_reading_progress/{docId}": {
       "schema": { "$ref": "#/entities/UserReadingProgress" },
       "description": "User reading progress for prescribed JAMB novels and literature texts."

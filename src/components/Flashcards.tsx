@@ -48,8 +48,16 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
   };
   
   // Decks & Cards state
-  const [allCards, setAllCards] = useState<Flashcard[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [allCards, setAllCards] = useState<Flashcard[]>(() => {
+    if (!user) return [];
+    try {
+      const cached = localStorage.getItem(`learndean_flashcards_cache_${user.uid}`);
+      return cached ? JSON.parse(cached) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState(false);
   const [activeView, setActiveView] = useState<'decks' | 'all-cards' | 'due-cards' | 'bookmarked-cards'>('decks');
   const [activeFilter, setActiveFilter] = useState<'all' | 'due' | 'bookmarked'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -202,6 +210,9 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
       });
 
       setAllCards(cardsList);
+      try {
+        localStorage.setItem(`learndean_flashcards_cache_${user.uid}`, JSON.stringify(cardsList));
+      } catch (_) {}
 
       // Fetch decks from flashcard_decks if any exist
       try {
@@ -212,7 +223,13 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
         console.warn("Could not query flashcard_decks collection:", err);
       }
     } catch (err) {
-      console.error("Failed to load flashcard decks:", err);
+      console.warn("Offline or failed to load flashcards from remote:", err);
+      try {
+        const cached = localStorage.getItem(`learndean_flashcards_cache_${user.uid}`);
+        if (cached) {
+          setAllCards(JSON.parse(cached));
+        }
+      } catch (_) {}
     } finally {
       setLoading(false);
     }
