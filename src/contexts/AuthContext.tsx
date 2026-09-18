@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut, onAuthStateChanged, getIdToken } from 'firebase/auth';
 import { auth, googleProvider, db, isFirestoreQuotaExhausted } from '../lib/firebase';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, increment, onSnapshot } from 'firebase/firestore';
+import { jambOfflineDb } from '../services/jambOfflineDb';
 
 export interface UserSettings {
   fontSize: "small" | "medium" | "large";
@@ -14,6 +15,7 @@ interface AuthContextType {
   userProfile: any | null;
   settings: UserSettings;
   updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
+  awardQuestionProgress: (params: { xpToAdd: number; questionId?: string; isCorrect?: boolean; subject?: string }) => Promise<void>;
   refreshProfile: () => Promise<void>;
   isSuperAdmin: boolean;
   loading: boolean;
@@ -388,6 +390,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const awardQuestionProgress = async (params: { xpToAdd: number; questionId?: string; isCorrect?: boolean; subject?: string }) => {
+    const { xpToAdd, questionId, subject } = params;
+
+    // 1. Immediately update in-memory userProfile and localStorage
+    setUserProfile((prev: any) => {
+      if (!prev) return prev;
+      const currentXp = typeof prev.xp === 'number' ? prev.xp : 0;
+      const currentAnswered = typeof prev.questionsAnswered === 'number' ? prev.questionsAnswered : 0;
+      const updated = {
+        ...prev,
+        xp: currentXp + xpToAdd,
+        questionsAnswered: currentAnswered + 1
+      };
+      if (user) {
+        try {
+          localStorage.setItem(`zetadu_profile_${user.uid}`, JSON.stringify(updated));
+        } catch (_) {}
+      }
+      return updated;
+    });
+
+    // 2. Track daily question count in localStorage immediately
+    if (user) {
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const localQKey = `zetadu_today_questions_${user.uid}_${todayStr}`;
+        const prevQ = parseInt(localStorage.getItem(localQKey) || '0', 10);
+        localStorage.setItem(localQKey, String(prevQ + 1));
+      } catch (_) {}
+    }
+
+    // 3. Mark question as answered in IndexedDB offline database
+    if (questionId) {
+      try {
+        await jambOfflineDb.markQuestionsAnswered([questionId], subject);
+      } catch (err) {
+        console.warn('[Auth] markQuestionsAnswered warning:', err);
+      }
+    }
+
+    // 4. Persist updated stats directly to Firestore
+    if (user && db && !isFirestoreQuotaExhausted()) {
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+          xp: increment(xpToAdd),
+          questionsAnswered: increment(1)
+        });
+      } catch (err) {
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          await setDoc(userRef, {
+            xp: increment(xpToAdd),
+            questionsAnswered: increment(1)
+          }, { merge: true });
+        } catch (setErr) {
+          console.warn('[Auth] Realtime XP Firestore update warning:', setErr);
+        }
+      }
+    }
+  };
+
   const clearError = () => setError(null);
 
   const signInWithGoogle = async () => {
@@ -457,7 +521,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, refreshProfile, settings, updateSettings, isSuperAdmin, loading, error, signInWithGoogle, signOut, getToken, clearError, setError, oauthToken }}>
+    <AuthContext.Provider value={{ user, userProfile, refreshProfile, settings, updateSettings, awardQuestionProgress, isSuperAdmin, loading, error, signInWithGoogle, signOut, getToken, clearError, setError, oauthToken }}>
       {children}
     </AuthContext.Provider>
   );

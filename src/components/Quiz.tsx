@@ -78,7 +78,7 @@ export interface QuizProps {
 let cachedInternalSession: any = null;
 
 export default function Quiz({ onBack, setView, initialMode, initialConfig }: QuizProps) {
-  const { user, getToken, settings, userProfile } = useAuth();
+  const { user, getToken, settings, userProfile, awardQuestionProgress } = useAuth();
 
   const getNormalizedCorrectIndex = (question: any): number => {
     let correctValue = question?.correctAnswerIndex !== undefined ? question.correctAnswerIndex : question?.correctAnswer;
@@ -132,6 +132,12 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
   // CBT State
   const [answers, setAnswers] = useState<Record<number, number>>(cachedInternalSession ? cachedInternalSession.answers : {});
   const [markedForReview, setMarkedForReview] = useState<Record<number, boolean>>(cachedInternalSession ? cachedInternalSession.markedForReview : {});
+  const [awardedQuestionIndices, setAwardedQuestionIndices] = useState<Set<number>>(() => {
+    if (cachedInternalSession?.awardedQuestionIndices && Array.isArray(cachedInternalSession.awardedQuestionIndices)) {
+      return new Set(cachedInternalSession.awardedQuestionIndices);
+    }
+    return new Set();
+  });
   const [timerDuration, setTimerDuration] = useState<number>(() => {
     if (initialConfig?.timerDuration !== undefined) return initialConfig.timerDuration;
     return cachedInternalSession ? cachedInternalSession.timerDuration : 30;
@@ -150,6 +156,16 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     if (cachedInternalSession?.timeUsedSeconds) return cachedInternalSession.timeUsedSeconds;
     return 0;
   });
+
+  // Shortfall / Exact Question Count modal state
+  const [poolShortfallState, setPoolShortfallState] = useState<{
+    requested: number;
+    available: number;
+    shortfall: number;
+    subjects: string[];
+    pendingQuestions: Question[];
+  } | null>(null);
+  const [isGeneratingShortfall, setIsGeneratingShortfall] = useState(false);
 
   // Offline & sync state
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -241,6 +257,8 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
       let poolLow = false;
       let unanswered = 0;
 
+      const reqCount = initialConfig.amount || 20;
+
       if (initialConfig.questions && initialConfig.questions.length > 0) {
         loadedQ = initialConfig.questions;
       } else {
@@ -251,7 +269,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
             subject: initialConfig.subjectId || initialConfig.subject,
             topic: initialConfig.topic,
             year: initialConfig.year,
-            count: initialConfig.amount || 20,
+            count: reqCount,
             order: initialConfig.ordering || 'random'
           });
           loadedQ = res.questions;
@@ -264,38 +282,83 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
             subject: initialConfig.subjectId || initialConfig.subject,
             topic: initialConfig.topic,
             year: initialConfig.year,
-            count: initialConfig.amount || 20,
+            count: reqCount,
             order: initialConfig.ordering || 'random'
           });
         }
       }
 
+      // If loaded questions is fewer than requested and online, attempt automated backfill replenishment
+      if (loadedQ.length < reqCount && typeof navigator !== 'undefined' && navigator.onLine) {
+        try {
+          const subjectsToReplenish = initialConfig.subjects && initialConfig.subjects.length > 0 
+            ? initialConfig.subjects 
+            : [initialConfig.subjectId || initialConfig.subject || 'English Language'];
+          const missing = reqCount - loadedQ.length;
+          const perSub = Math.max(1, Math.ceil(missing / subjectsToReplenish.length));
+
+          for (const s of subjectsToReplenish) {
+            if (loadedQ.length >= reqCount) break;
+            const subMissing = Math.min(perSub, reqCount - loadedQ.length);
+            await jambService.generateAndDownloadMoreQuestions(s, subMissing, () => {});
+          }
+
+          const refreshed = await jambService.getPracticeQuestions({
+            subjects: initialConfig.subjects,
+            subject: initialConfig.subjectId || initialConfig.subject,
+            topic: initialConfig.topic,
+            year: initialConfig.year,
+            count: reqCount,
+            order: initialConfig.ordering || 'random'
+          });
+          loadedQ = refreshed.questions;
+          poolLow = refreshed.isPoolLow;
+          unanswered = refreshed.unansweredCount;
+        } catch (e) {
+          console.warn("Online auto-replenish error:", e);
+        }
+      }
+
       if (isCancelled) return;
 
-      setIsPoolLow(poolLow || loadedQ.length < (initialConfig.amount || 20));
+      setIsPoolLow(poolLow || loadedQ.length < reqCount);
       setUnansweredPoolCount(unanswered);
 
-      if (loadedQ.length > 0) {
-        setQuestions(loadedQ);
+      // CRITICAL: The session must NEVER contain fewer questions than the number selected.
+      // If we cannot meet the exact count, show the Shortfall Prompt and DO NOT start session.
+      if (loadedQ.length < reqCount) {
+        setPoolShortfallState({
+          requested: reqCount,
+          available: loadedQ.length,
+          shortfall: reqCount - loadedQ.length,
+          subjects: initialConfig.subjects || [initialConfig.subjectId || initialConfig.subject || 'General'],
+          pendingQuestions: loadedQ
+        });
         setSetupMode(false);
-        setIsSubmitted(false);
-        setViewMode('practice');
-        setCurrentQIndex(0);
-        setAnswers({});
-        setMarkedForReview({});
-        const dur = initialConfig.timerDuration !== undefined ? initialConfig.timerDuration : 30;
-        setTimerDuration(dur);
-        const untimed = initialConfig.isUntimed || dur === 0;
-        setIsUntimed(untimed);
-        setTimerRemaining(dur * 60);
-        setTimeUsedSeconds(0);
-        if (initialConfig.subject) setSubject(initialConfig.subject);
-        if (initialConfig.subjectId) setSubjectId(initialConfig.subjectId);
-        if (initialConfig.topic) setTopic(initialConfig.topic);
-        setHasRestored(true);
-      } else {
-        setIsPoolLow(true);
+        return;
       }
+
+      // Exact count guaranteed
+      const exactQuestions = loadedQ.slice(0, reqCount);
+      setQuestions(exactQuestions);
+      setPoolShortfallState(null);
+      setSetupMode(false);
+      setIsSubmitted(false);
+      setViewMode('practice');
+      setCurrentQIndex(0);
+      setAnswers({});
+      setMarkedForReview({});
+      setAwardedQuestionIndices(new Set());
+      const dur = initialConfig.timerDuration !== undefined ? initialConfig.timerDuration : 30;
+      setTimerDuration(dur);
+      const untimed = initialConfig.isUntimed || dur === 0;
+      setIsUntimed(untimed);
+      setTimerRemaining(dur * 60);
+      setTimeUsedSeconds(0);
+      if (initialConfig.subject) setSubject(initialConfig.subject);
+      if (initialConfig.subjectId) setSubjectId(initialConfig.subjectId);
+      if (initialConfig.topic) setTopic(initialConfig.topic);
+      setHasRestored(true);
     }
 
     loadConfiguredQuestions();
@@ -669,57 +732,52 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
         });
       }
 
-      // 2. If pool is low and user is online, attempt AI generation to supplement
-      if (loadedQuestions.length < Math.min(amount, 5) && typeof navigator !== 'undefined' && navigator.onLine) {
+      // 2. If pool has fewer questions than requested and user is online, attempt replenishment
+      if (loadedQuestions.length < amount && typeof navigator !== 'undefined' && navigator.onLine) {
         try {
-          const token = await getToken();
-          
-          const response = await fetch('/api/generate-questions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-            },
-            body: JSON.stringify({
-              subject: subject,
-              topic: topic || 'General',
-              difficulty: difficulty,
-              amount: amount,
-              educationLevel: level,
-              country: userProfile?.country || 'Nigeria',
-              practiceMode: practiceMode,
-              examType: 'JAMB'
-            })
+          const missing = amount - loadedQuestions.length;
+          await jambService.generateAndDownloadMoreQuestions(
+            subjectId || subject.toLowerCase(),
+            missing,
+            () => {}
+          );
+          const refreshed = await jambService.getPracticeQuestions({
+            subject: subjectId || subject.toLowerCase(),
+            topic: topic || undefined,
+            count: amount,
+            order: 'random'
           });
-
-          if (response.ok) {
-            const data = await response.json();
-            if (data.questions && data.questions.length > 0) {
-              await jambOfflineDb.addQuestionsToOfflineBank(data.questions, subjectId || subject.toLowerCase());
-              loadedQuestions = [...loadedQuestions, ...data.questions];
-              poolIsLow = false;
-            }
-          }
+          loadedQuestions = refreshed.questions;
+          poolIsLow = refreshed.isPoolLow;
+          unanswered = refreshed.unansweredCount;
         } catch (apiErr) {
-          console.warn("API question generation error, falling back to local curriculum question bank:", apiErr);
+          console.warn("Question auto-replenish error:", apiErr);
         }
       }
 
-      if (loadedQuestions.length === 0) {
-        if (typeof navigator !== 'undefined' && !navigator.onLine) {
-          throw new Error("Connect to the internet to get more questions.");
-        }
-        throw new Error("No questions are currently available for this subject.");
+      // 3. Strict exact count enforcement: never launch with fewer questions than requested
+      if (loadedQuestions.length < amount) {
+        setPoolShortfallState({
+          requested: amount,
+          available: loadedQuestions.length,
+          shortfall: amount - loadedQuestions.length,
+          subjects: [subjectId || subject],
+          pendingQuestions: loadedQuestions
+        });
+        setIsPoolLow(true);
+        return;
       }
 
-      setIsPoolLow(poolIsLow || loadedQuestions.length < amount);
+      const exactQuestions = loadedQuestions.slice(0, amount);
+      setIsPoolLow(false);
       setUnansweredPoolCount(unanswered);
-      setQuestions(loadedQuestions);
+      setQuestions(exactQuestions);
+      setPoolShortfallState(null);
       setScore(0);
       setCurrentQIndex(0);
       setAnswers({});
       setMarkedForReview({});
+      setAwardedQuestionIndices(new Set());
       setTimerRemaining(timerDuration * 60);
       setTimeUsedSeconds(0);
       setSetupMode(false);
@@ -789,6 +847,67 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     }
   };
 
+  const handleGenerateShortfall = async () => {
+    if (!poolShortfallState) return;
+    setIsGeneratingShortfall(true);
+    try {
+      const { shortfall, subjects, requested } = poolShortfallState;
+      const targetSubs = subjects.length > 0 ? subjects : [subjectId || subject || 'English Language'];
+      const perSub = Math.max(1, Math.ceil(shortfall / targetSubs.length));
+
+      for (const s of targetSubs) {
+        await jambService.generateAndDownloadMoreQuestions(s, perSub, () => {});
+      }
+
+      const refreshed = await jambService.getPracticeQuestions({
+        subjects: targetSubs.length > 1 ? targetSubs : undefined,
+        subject: targetSubs.length === 1 ? targetSubs[0] : undefined,
+        topic: topic || undefined,
+        year: initialConfig?.year,
+        count: requested,
+        order: 'random'
+      });
+
+      if (refreshed.questions.length >= requested) {
+        const exactQuestions = refreshed.questions.slice(0, requested);
+        setQuestions(exactQuestions);
+        setPoolShortfallState(null);
+        setSetupMode(false);
+        setIsSubmitted(false);
+        setViewMode('practice');
+        setCurrentQIndex(0);
+        setAnswers({});
+        setMarkedForReview({});
+        setAwardedQuestionIndices(new Set());
+      } else {
+        setPoolShortfallState(prev => prev ? {
+          ...prev,
+          available: refreshed.questions.length,
+          shortfall: Math.max(0, requested - refreshed.questions.length),
+          pendingQuestions: refreshed.questions
+        } : null);
+      }
+    } catch (e: any) {
+      alert(e?.message || "Failed to generate missing questions. Ensure you have an active internet connection.");
+    } finally {
+      setIsGeneratingShortfall(false);
+    }
+  };
+
+  const handleStartWithAvailable = () => {
+    if (!poolShortfallState || poolShortfallState.pendingQuestions.length === 0) return;
+    const exact = poolShortfallState.pendingQuestions;
+    setQuestions(exact);
+    setPoolShortfallState(null);
+    setSetupMode(false);
+    setIsSubmitted(false);
+    setViewMode('practice');
+    setCurrentQIndex(0);
+    setAnswers({});
+    setMarkedForReview({});
+    setAwardedQuestionIndices(new Set());
+  };
+
   const handleOptionClick = (index: number) => {
     if (isSubmitted || viewMode !== 'practice') return;
     const newAnswers = {
@@ -796,8 +915,37 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
       [currentQIndex]: index
     };
     setAnswers(newAnswers);
-    // Instant background save
-    persistSessionToFirebase({ answers: newAnswers });
+
+    const q = questions[currentQIndex];
+    const isCorrect = isOptionCorrect(q, index);
+
+    // Track every question the student actually answers.
+    // Update XP/progress immediately after a valid answer.
+    // Do not award XP multiple times for the same question.
+    if (!awardedQuestionIndices.has(currentQIndex)) {
+      const nextAwarded = new Set(awardedQuestionIndices);
+      nextAwarded.add(currentQIndex);
+      setAwardedQuestionIndices(nextAwarded);
+
+      const xpEarned = isCorrect ? 10 : 2; // 10 XP for correct, 2 XP for effort
+      if (awardQuestionProgress) {
+        awardQuestionProgress({
+          xpToAdd: xpEarned,
+          questionId: q?.id,
+          isCorrect,
+          subject: q?.subject || subject
+        }).catch(err => console.warn("XP Award warning:", err));
+      }
+
+      // Instant background save including awardedQuestionIndices
+      persistSessionToFirebase({ 
+        answers: newAnswers,
+        awardedQuestionIndices: Array.from(nextAwarded)
+      });
+    } else {
+      // Instant background save for answer modification without duplicate XP award
+      persistSessionToFirebase({ answers: newAnswers });
+    }
   };
 
   const toggleMarkReview = () => {
@@ -855,11 +1003,6 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     
     if (user) {
       try {
-        const todayStr = new Date().toISOString().split('T')[0];
-        const localQKey = `zetadu_today_questions_${user.uid}_${todayStr}`;
-        const prevQ = parseInt(localStorage.getItem(localQKey) || '0', 10);
-        localStorage.setItem(localQKey, String(prevQ + questions.length));
-
         await addDoc(collection(db, 'learning_data'), {
           uid: user.uid,
           subject,
@@ -867,6 +1010,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
           difficulty,
           score: finalScore,
           totalQuestions: questions.length,
+          answeredQuestionsCount: Object.keys(answers).length,
           percentage: Math.round((finalScore / questions.length) * 100),
           timeUsedSeconds: usedSeconds,
           answeredQuestions: questions.map((q, i) => ({
@@ -1235,12 +1379,11 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
                 onChange={(e) => setAmount(Number(e.target.value))} 
                 className="w-full p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white font-medium"
               >
-                <option value={5}>5 Questions</option>
-                <option value={10}>10 Questions</option>
                 <option value={20}>20 Questions</option>
-                <option value={30}>30 Questions</option>
                 <option value={40}>40 Questions</option>
                 <option value={60}>60 Questions</option>
+                <option value={80}>80 Questions</option>
+                <option value={100}>100 Questions</option>
               </select>
             </div>
 
@@ -1270,6 +1413,90 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
             {loading ? 'Generating Questions...' : 'Start Practice Session'}
           </button>
         </form>
+      </div>
+    );
+  }
+
+  // Render 1.5: Insufficient Questions / Shortfall Notice (Guarantees CBT never starts with fewer questions)
+  if (poolShortfallState) {
+    return (
+      <div className="w-full max-w-xl mx-auto p-4 sm:p-6 my-auto">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-700 shadow-xl text-center"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center mb-5">
+            <AlertCircle size={32} />
+          </div>
+
+          <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mb-2">
+            Exam Question Pool Notice
+          </h3>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">
+            You requested <span className="font-bold text-slate-900 dark:text-white">{poolShortfallState.requested} questions</span>, but only <span className="font-bold text-amber-600 dark:text-amber-400">{poolShortfallState.available} unique questions</span> are currently downloaded offline for this subject combination.
+          </p>
+
+          <div className="bg-slate-50 dark:bg-slate-900/60 rounded-2xl p-4 mb-6 text-left border border-slate-200 dark:border-slate-800 space-y-2 text-xs text-slate-600 dark:text-slate-400">
+            <div className="flex justify-between font-medium">
+              <span>Target Question Count:</span>
+              <span className="font-bold text-slate-900 dark:text-white">{poolShortfallState.requested} questions</span>
+            </div>
+            <div className="flex justify-between font-medium">
+              <span>Downloaded Offline Pool:</span>
+              <span className="font-bold text-emerald-600 dark:text-emerald-400">{poolShortfallState.available} questions</span>
+            </div>
+            <div className="flex justify-between font-medium border-t border-slate-200 dark:border-slate-800 pt-2">
+              <span>Shortfall to Generate:</span>
+              <span className="font-bold text-rose-600 dark:text-rose-400">{poolShortfallState.shortfall} questions</span>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <button
+              type="button"
+              disabled={isGeneratingShortfall}
+              onClick={handleGenerateShortfall}
+              className="w-full py-4 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-2xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm text-sm sm:text-base"
+            >
+              {isGeneratingShortfall ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  <span>Generating {poolShortfallState.shortfall} Questions Online...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={18} />
+                  <span>Generate Missing {poolShortfallState.shortfall} Questions with AI</span>
+                </>
+              )}
+            </button>
+
+            {poolShortfallState.available > 0 && (
+              <button
+                type="button"
+                disabled={isGeneratingShortfall}
+                onClick={handleStartWithAvailable}
+                className="w-full py-3.5 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-bold rounded-2xl transition-colors text-sm cursor-pointer"
+              >
+                Start Practice with Available ({poolShortfallState.available} Questions)
+              </button>
+            )}
+
+            <button
+              type="button"
+              disabled={isGeneratingShortfall}
+              onClick={() => {
+                setPoolShortfallState(null);
+                if (onBack) onBack();
+                else setSetupMode(true);
+              }}
+              className="w-full py-3 px-4 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-semibold text-xs transition-colors cursor-pointer"
+            >
+              Cancel & Adjust Combination / Count
+            </button>
+          </div>
+        </motion.div>
       </div>
     );
   }

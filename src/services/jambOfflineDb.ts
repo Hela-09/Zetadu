@@ -36,6 +36,9 @@ export interface OfflinePracticeResult {
   unansweredCount: number;
   isPoolLow: boolean;
   isOfflineSource: boolean;
+  shortfallBySubject?: Record<string, number>;
+  totalShortfall?: number;
+  targetCount?: number;
 }
 
 const DB_NAME = 'LearnDean_JAMB_OfflineDB';
@@ -540,24 +543,36 @@ class JambOfflineDatabase {
       req.onerror = () => resolve([]);
     });
 
-    // 2. Fetch answered question IDs
+    // 2. Fetch answered question IDs and signatures
     const answeredIds = await this.getAnsweredQuestionIds();
+
+    // Track all question IDs and text signatures used in this session to guarantee zero duplicates
+    const sessionUsedIds = new Set<string>();
+    const sessionUsedSignatures = new Set<string>();
+
+    const shortfallBySubject: Record<string, number> = {};
+    let totalShortfall = 0;
 
     // Multi-subject CBT Mode (e.g. 4 subjects)
     if (subjects && subjects.length > 0) {
-      const perSubjectCount = Math.max(1, Math.floor(count / subjects.length));
+      const numSubs = subjects.length;
+      const baseCount = Math.floor(count / numSubs);
+      const remainder = count % numSubs;
+
       const combinedSelected: JambQuestion[] = [];
       let totalPoolAvailable = 0;
       let totalUnansweredCount = 0;
       let anyPoolLow = false;
 
-      for (const sub of subjects) {
+      for (let idx = 0; idx < numSubs; idx++) {
+        const sub = subjects[idx];
+        const targetForSubject = baseCount + (idx < remainder ? 1 : 0);
         const normSub = sub.toLowerCase().trim();
         
-        // Gather candidates from DB and bundled questions
+        // Gather all candidates for this subject from DB and bundled questions
         const candidateMap = new Map<string, JambQuestion>();
 
-        // IndexedDB questions
+        // 1. IndexedDB questions
         allDbQuestions.forEach(q => {
           if (
             q.subject.toLowerCase() === normSub ||
@@ -569,7 +584,7 @@ class JambOfflineDatabase {
           }
         });
 
-        // Bundled questions
+        // 2. Bundled questions
         JAMB_QUESTIONS.forEach(q => {
           if (
             q.subject.toLowerCase() === normSub ||
@@ -581,67 +596,152 @@ class JambOfflineDatabase {
           }
         });
 
-        let candidates = Array.from(candidateMap.values());
+        const allCandidates = Array.from(candidateMap.values());
+        totalPoolAvailable += allCandidates.length;
 
-        // Apply year filter if specified
-        if (year && year !== 'all') {
-          const yf = candidates.filter(q => q.year === year);
-          if (yf.length > 0) candidates = yf;
-        }
+        // Partition by requested filters (year and topic)
+        const filterMatching: JambQuestion[] = [];
+        const otherValid: JambQuestion[] = [];
 
-        totalPoolAvailable += candidates.length;
+        for (const q of allCandidates) {
+          const matchYear = !year || year === 'all' || q.year === year;
+          const matchTopic = !topic || topic === 'All Topics' || topic === 'General' || 
+            (q.topic && q.topic.toLowerCase().includes(topic.toLowerCase()));
 
-        // Partition into unanswered and answered
-        const unanswered: JambQuestion[] = [];
-        const answered: JambQuestion[] = [];
-
-        for (const q of candidates) {
-          const sig = normalizeQuestionText(q.question);
-          if (answeredIds.has(q.id) || answeredIds.has(sig)) {
-            answered.push(q);
+          if (matchYear && matchTopic) {
+            filterMatching.push(q);
           } else {
-            unanswered.push(q);
+            otherValid.push(q);
           }
         }
 
-        totalUnansweredCount += unanswered.length;
+        // Sub-partition into unanswered and answered
+        const filterUnanswered: JambQuestion[] = [];
+        const filterAnswered: JambQuestion[] = [];
+        const otherUnanswered: JambQuestion[] = [];
+        const otherAnswered: JambQuestion[] = [];
 
-        if (candidates.length < perSubjectCount || unanswered.length < Math.min(perSubjectCount, 5)) {
+        for (const q of filterMatching) {
+          const sig = normalizeQuestionText(q.question);
+          if (answeredIds.has(q.id) || answeredIds.has(sig)) {
+            filterAnswered.push(q);
+          } else {
+            filterUnanswered.push(q);
+          }
+        }
+
+        for (const q of otherValid) {
+          const sig = normalizeQuestionText(q.question);
+          if (answeredIds.has(q.id) || answeredIds.has(sig)) {
+            otherAnswered.push(q);
+          } else {
+            otherUnanswered.push(q);
+          }
+        }
+
+        totalUnansweredCount += (filterUnanswered.length + otherUnanswered.length);
+
+        if (allCandidates.length < targetForSubject || (filterUnanswered.length + otherUnanswered.length) < Math.min(targetForSubject, 5)) {
           anyPoolLow = true;
         }
 
-        // Apply ordering
-        if (order === 'random') {
-          unanswered.sort(() => 0.5 - Math.random());
-          answered.sort(() => 0.5 - Math.random());
-        } else {
-          unanswered.sort((a, b) => (a.questionNumber || 0) - (b.questionNumber || 0));
-          answered.sort((a, b) => (a.questionNumber || 0) - (b.questionNumber || 0));
+        // Ordering function
+        const sortFn = (a: JambQuestion, b: JambQuestion) => {
+          if (order === 'random') return 0.5 - Math.random();
+          return (a.questionNumber || 0) - (b.questionNumber || 0);
+        };
+
+        filterUnanswered.sort(sortFn);
+        filterAnswered.sort(sortFn);
+        otherUnanswered.sort(sortFn);
+        otherAnswered.sort(sortFn);
+
+        // Priority selection:
+        // 1. Filter-matching Unanswered
+        // 2. Filter-matching Answered
+        // 3. Backfill with Other Unanswered from same subject
+        // 4. Backfill with Other Answered from same subject
+        const subSelected: JambQuestion[] = [];
+        const candidatePipelines = [filterUnanswered, filterAnswered, otherUnanswered, otherAnswered];
+
+        for (const pipeline of candidatePipelines) {
+          if (subSelected.length >= targetForSubject) break;
+          for (const q of pipeline) {
+            if (subSelected.length >= targetForSubject) break;
+            const sig = normalizeQuestionText(q.question);
+            if (!sessionUsedIds.has(q.id) && !sessionUsedSignatures.has(sig)) {
+              subSelected.push(q);
+              sessionUsedIds.add(q.id);
+              sessionUsedSignatures.add(sig);
+            }
+          }
         }
 
-        // Select: unanswered first, then answered to fill up to perSubjectCount
-        // NEVER REPLICATE OR DUPLICATE A QUESTION
-        const subSelected: JambQuestion[] = [];
-        for (const q of unanswered) {
-          if (subSelected.length >= perSubjectCount) break;
-          subSelected.push(q);
-        }
-        if (subSelected.length < perSubjectCount) {
-          for (const q of answered) {
-            if (subSelected.length >= perSubjectCount) break;
-            subSelected.push(q);
-          }
+        // Record shortfall if any for this subject
+        if (subSelected.length < targetForSubject) {
+          const needed = targetForSubject - subSelected.length;
+          shortfallBySubject[sub] = needed;
+          totalShortfall += needed;
         }
 
         combinedSelected.push(...subSelected);
       }
 
+      // If combinedSelected is still under target count, backfill from unused questions across all selected subjects
+      if (combinedSelected.length < count) {
+        for (const sub of subjects) {
+          if (combinedSelected.length >= count) break;
+          const normSub = sub.toLowerCase().trim();
+          
+          const availableExtras: JambQuestion[] = [];
+          allDbQuestions.forEach(q => {
+            if (
+              (q.subject.toLowerCase() === normSub || q.subjectName?.toLowerCase() === normSub || q.id.toLowerCase().includes(normSub)) &&
+              !sessionUsedIds.has(q.id) &&
+              !sessionUsedSignatures.has(normalizeQuestionText(q.question))
+            ) {
+              availableExtras.push(q);
+            }
+          });
+          JAMB_QUESTIONS.forEach(q => {
+            if (
+              (q.subject.toLowerCase() === normSub || q.subjectName.toLowerCase() === normSub || q.id.toLowerCase().includes(normSub)) &&
+              !sessionUsedIds.has(q.id) &&
+              !sessionUsedSignatures.has(normalizeQuestionText(q.question))
+            ) {
+              availableExtras.push(q);
+            }
+          });
+
+          if (order === 'random') {
+            availableExtras.sort(() => 0.5 - Math.random());
+          }
+
+          for (const q of availableExtras) {
+            if (combinedSelected.length >= count) break;
+            const sig = normalizeQuestionText(q.question);
+            if (!sessionUsedIds.has(q.id) && !sessionUsedSignatures.has(sig)) {
+              combinedSelected.push(q);
+              sessionUsedIds.add(q.id);
+              sessionUsedSignatures.add(sig);
+            }
+          }
+        }
+      }
+
+      const finalCount = Math.min(combinedSelected.length, count);
+      const exactQuestions = combinedSelected.slice(0, count);
+      const remainingShortfall = Math.max(0, count - exactQuestions.length);
+
       return {
-        questions: combinedSelected,
+        questions: exactQuestions,
         totalAvailable: totalPoolAvailable,
         unansweredCount: totalUnansweredCount,
-        isPoolLow: anyPoolLow || totalPoolAvailable < count,
-        isOfflineSource: true
+        isPoolLow: anyPoolLow || remainingShortfall > 0,
+        isOfflineSource: true,
+        shortfallBySubject,
+        totalShortfall: remainingShortfall,
+        targetCount: count
       };
     }
 
@@ -673,72 +773,96 @@ class JambOfflineDatabase {
       }
     });
 
-    let candidates = Array.from(candidateMap.values());
+    const allCandidates = Array.from(candidateMap.values());
+    const totalAvailable = allCandidates.length;
 
-    // Filter by topic if specified
-    if (topic && topic !== 'All Topics' && topic !== 'General') {
-      const normTopic = topic.toLowerCase();
-      const topicMatches = candidates.filter(q => q.topic.toLowerCase().includes(normTopic));
-      if (topicMatches.length > 0) {
-        candidates = topicMatches;
+    // Partition by filters (topic & year)
+    const filterMatching: JambQuestion[] = [];
+    const otherValid: JambQuestion[] = [];
+
+    for (const q of allCandidates) {
+      const matchYear = !year || year === 'all' || q.year === year;
+      const matchTopic = !topic || topic === 'All Topics' || topic === 'General' || 
+        (q.topic && q.topic.toLowerCase().includes(topic.toLowerCase()));
+
+      if (matchYear && matchTopic) {
+        filterMatching.push(q);
+      } else {
+        otherValid.push(q);
       }
     }
 
-    // Filter by year if specified
-    if (year && year !== 'all') {
-      const yearMatches = candidates.filter(q => q.year === year);
-      if (yearMatches.length > 0) {
-        candidates = yearMatches;
-      }
-    }
+    // Sub-partition into unanswered and answered
+    const filterUnanswered: JambQuestion[] = [];
+    const filterAnswered: JambQuestion[] = [];
+    const otherUnanswered: JambQuestion[] = [];
+    const otherAnswered: JambQuestion[] = [];
 
-    const totalAvailable = candidates.length;
-
-    // Partition into unanswered and answered
-    const unanswered: JambQuestion[] = [];
-    const answered: JambQuestion[] = [];
-
-    for (const q of candidates) {
+    for (const q of filterMatching) {
       const sig = normalizeQuestionText(q.question);
       if (answeredIds.has(q.id) || answeredIds.has(sig)) {
-        answered.push(q);
+        filterAnswered.push(q);
       } else {
-        unanswered.push(q);
+        filterUnanswered.push(q);
       }
     }
 
-    const unansweredCount = unanswered.length;
-    const isPoolLow = totalAvailable < 15 || unansweredCount === 0 || totalAvailable < count;
-
-    // Apply ordering
-    if (order === 'random') {
-      unanswered.sort(() => 0.5 - Math.random());
-      answered.sort(() => 0.5 - Math.random());
-    } else {
-      unanswered.sort((a, b) => (a.questionNumber || 0) - (b.questionNumber || 0));
-      answered.sort((a, b) => (a.questionNumber || 0) - (b.questionNumber || 0));
+    for (const q of otherValid) {
+      const sig = normalizeQuestionText(q.question);
+      if (answeredIds.has(q.id) || answeredIds.has(sig)) {
+        otherAnswered.push(q);
+      } else {
+        otherUnanswered.push(q);
+      }
     }
 
-    // Select: Unanswered first, then fill from answered
-    // NEVER duplicate any question in the session
+    const unansweredCount = filterUnanswered.length + otherUnanswered.length;
+
+    // Ordering function
+    const sortFn = (a: JambQuestion, b: JambQuestion) => {
+      if (order === 'random') return 0.5 - Math.random();
+      return (a.questionNumber || 0) - (b.questionNumber || 0);
+    };
+
+    filterUnanswered.sort(sortFn);
+    filterAnswered.sort(sortFn);
+    otherUnanswered.sort(sortFn);
+    otherAnswered.sort(sortFn);
+
+    // Priority selection: Unanswered matching -> Answered matching -> Other Unanswered -> Other Answered
     const selected: JambQuestion[] = [];
-    for (const q of unanswered) {
+    const candidatePipelines = [filterUnanswered, filterAnswered, otherUnanswered, otherAnswered];
+
+    for (const pipeline of candidatePipelines) {
       if (selected.length >= count) break;
-      selected.push(q);
-    }
-    if (selected.length < count) {
-      for (const q of answered) {
+      for (const q of pipeline) {
         if (selected.length >= count) break;
-        selected.push(q);
+        const sig = normalizeQuestionText(q.question);
+        if (!sessionUsedIds.has(q.id) && !sessionUsedSignatures.has(sig)) {
+          selected.push(q);
+          sessionUsedIds.add(q.id);
+          sessionUsedSignatures.add(sig);
+        }
       }
     }
+
+    if (selected.length < count) {
+      const needed = count - selected.length;
+      shortfallBySubject[targetSubject] = needed;
+      totalShortfall = needed;
+    }
+
+    const isPoolLow = totalAvailable < count || unansweredCount === 0 || totalShortfall > 0;
 
     return {
       questions: selected,
       totalAvailable,
       unansweredCount,
       isPoolLow,
-      isOfflineSource: true
+      isOfflineSource: true,
+      shortfallBySubject,
+      totalShortfall,
+      targetCount: count
     };
   }
 

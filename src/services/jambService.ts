@@ -450,7 +450,8 @@ export const jambService = {
   /**
    * Primary practice question loader:
    * Prioritizes unanswered downloaded questions first, never duplicates in a session,
-   * respects order (random/sequential), and signals if question pool is low.
+   * respects order (random/sequential), auto-replenishes online if pool is short,
+   * and signals if question pool is insufficient offline.
    */
   async getPracticeQuestions(options: OfflinePracticeOptions): Promise<{
     questions: any[];
@@ -458,8 +459,35 @@ export const jambService = {
     unansweredCount: number;
     isPoolLow: boolean;
     isOfflineSource: boolean;
+    isPoolInsufficient?: boolean;
+    shortfall?: number;
+    requestedCount?: number;
+    shortfallBySubject?: Record<string, number>;
   }> {
-    const result = await jambOfflineDb.getOfflinePracticeQuestions(options);
+    let result = await jambOfflineDb.getOfflinePracticeQuestions(options);
+
+    const targetCount = options.count || 20;
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+
+    // If count is not satisfied and student is online, auto-replenish to reach the EXACT required count
+    if (result.questions.length < targetCount && isOnline && result.shortfallBySubject) {
+      try {
+        const subjectsShort = Object.entries(result.shortfallBySubject);
+        for (const [sub, shortAmount] of subjectsShort) {
+          if (shortAmount > 0) {
+            try {
+              await this.generateAndDownloadMoreQuestions(sub, options.topic || 'General', Math.min(20, shortAmount + 2));
+            } catch (genErr) {
+              console.warn(`Failed to auto-replenish questions for ${sub}:`, genErr);
+            }
+          }
+        }
+        // Re-query with replenished pool
+        result = await jambOfflineDb.getOfflinePracticeQuestions(options);
+      } catch (err) {
+        console.warn("Auto-replenishment attempt failed:", err);
+      }
+    }
 
     const mapped = result.questions.map((q, idx) => ({
       id: q.id,
@@ -476,12 +504,19 @@ export const jambService = {
       questionNumber: q.questionNumber || (idx + 1)
     }));
 
+    const finalMapped = mapped.length >= targetCount ? mapped.slice(0, targetCount) : mapped;
+    const isPoolInsufficient = finalMapped.length < targetCount;
+
     return {
-      questions: mapped,
+      questions: finalMapped,
       totalAvailable: result.totalAvailable,
       unansweredCount: result.unansweredCount,
-      isPoolLow: result.isPoolLow,
-      isOfflineSource: result.isOfflineSource
+      isPoolLow: result.isPoolLow || isPoolInsufficient,
+      isOfflineSource: result.isOfflineSource,
+      isPoolInsufficient,
+      shortfall: Math.max(0, targetCount - finalMapped.length),
+      requestedCount: targetCount,
+      shortfallBySubject: result.shortfallBySubject
     };
   },
 

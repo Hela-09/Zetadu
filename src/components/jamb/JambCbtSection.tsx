@@ -82,7 +82,7 @@ export default function JambCbtSection({
     return base.filter(s => s !== 'English Language').slice(0, 3);
   });
 
-  const [examLengthMode, setExamLengthMode] = useState<'standard' | 'mini' | 'express'>('mini');
+  const [examLengthMode, setExamLengthMode] = useState<'20' | '40' | '60' | '80' | '100' | 'standard'>('80');
   const [examDurationMinutes, setExamDurationMinutes] = useState<number>(60);
   const [isUntimed, setIsUntimed] = useState<boolean>(false);
   const [subjectSearch, setSubjectSearch] = useState<string>('');
@@ -143,11 +143,13 @@ export default function JambCbtSection({
   });
 
   // Calculate total question count
-  const questionCount = examLengthMode === 'standard' 
-    ? (60 + selectedElectives.length * 40) // 180 questions
-    : examLengthMode === 'mini'
-    ? (20 + selectedElectives.length * 20) // 80 questions
-    : (10 + selectedElectives.length * 10); // 40 questions
+  const questionCount = 
+    examLengthMode === '20' ? 20 :
+    examLengthMode === '40' ? 40 :
+    examLengthMode === '60' ? 60 :
+    examLengthMode === '80' ? 80 :
+    examLengthMode === '100' ? 100 :
+    (60 + selectedElectives.length * 40); // 180 questions
 
   const handleLaunch = () => {
     onStartCbt({
@@ -413,6 +415,111 @@ export default function JambCbtSection({
               <button
                 type="button"
                 onClick={() => {
+                  setExamLengthMode('100');
+                  setExamDurationMinutes(90);
+                }}
+                className={`w-full p-3 rounded-2xl border text-left cursor-pointer transition-colors ${
+                  examLengthMode === '100'
+                    ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/30 font-bold'
+                    : 'border-slate-200 dark:border-slate-800'
+                }`}
+              >
+                <div className="flex items-center justify-between text-xs">
+                  <span>Comprehensive 100-Question Mock</span>
+                  <span className="text-blue-600 font-bold">100 Questions</span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-normal mt-0.5">
+                  25 questions per subject (Authentic mock length)
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setExamLengthMode('80');
+                  setExamDurationMinutes(60);
+                }}
+                className={`w-full p-3 rounded-2xl border text-left cursor-pointer transition-colors ${
+                  examLengthMode === '80'
+                    ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/30 font-bold'
+                    : 'border-slate-200 dark:border-slate-800'
+                }`}
+              >
+                <div className="flex items-center justify-between text-xs">
+                  <span>Standard Mini Mock (Recommended)</span>
+                  <span className="text-blue-600 font-bold">80 Questions</span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-normal mt-0.5">
+                  20 questions per subject, 400 marks scaled
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setExamLengthMode('60');
+                  setExamDurationMinutes(45);
+                }}
+                className={`w-full p-3 rounded-2xl border text-left cursor-pointer transition-colors ${
+                  examLengthMode === '60'
+                    ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/30 font-bold'
+                    : 'border-slate-200 dark:border-slate-800'
+                }`}
+              >
+                <div className="flex items-center justify-between text-xs">
+                  <span>Standard 60-Question Drill</span>
+                  <span className="text-blue-600 font-bold">60 Questions</span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-normal mt-0.5">
+                  15 questions per subject (Balanced practice)
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setExamLengthMode('40');
+                  setExamDurationMinutes(30);
+                }}
+                className={`w-full p-3 rounded-2xl border text-left cursor-pointer transition-colors ${
+                  examLengthMode === '40'
+                    ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/30 font-bold'
+                    : 'border-slate-200 dark:border-slate-800'
+                }`}
+              >
+                <div className="flex items-center justify-between text-xs">
+                  <span>Express 40-Question Sprint</span>
+                  <span className="text-blue-600 font-bold">40 Questions</span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-normal mt-0.5">
+                  10 questions per subject (Speed drill)
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setExamLengthMode('20');
+                  setExamDurationMinutes(15);
+                }}
+                className={`w-full p-3 rounded-2xl border text-left cursor-pointer transition-colors ${
+                  examLengthMode === '20'
+                    ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/30 font-bold'
+                    : 'border-slate-200 dark:border-slate-800'
+                }`}
+              >
+                <div className="flex items-center justify-between text-xs">
+                  <span>Quick 20-Question Check</span>
+                  <span className="text-blue-600 font-bold">20 Questions</span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-normal mt-0.5">
+                  5 questions per subject (Rapid diagnostic)
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
                   setExamLengthMode('standard');
                   setExamDurationMinutes(120);
                 }}
@@ -424,52 +531,10 @@ export default function JambCbtSection({
               >
                 <div className="flex items-center justify-between text-xs">
                   <span>Full Official UTME Length</span>
-                  <span className="text-blue-600">180 Questions</span>
+                  <span className="text-blue-600 font-bold">180 Questions</span>
                 </div>
                 <p className="text-[11px] text-slate-500 font-normal mt-0.5">
                   60 English + 3x40 Electives (Exact exam standard)
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setExamLengthMode('mini');
-                  setExamDurationMinutes(60);
-                }}
-                className={`w-full p-3 rounded-2xl border text-left cursor-pointer transition-colors ${
-                  examLengthMode === 'mini'
-                    ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/30 font-bold'
-                    : 'border-slate-200 dark:border-slate-800'
-                }`}
-              >
-                <div className="flex items-center justify-between text-xs">
-                  <span>Standard Mini Mock (Recommended)</span>
-                  <span className="text-blue-600">80 Questions</span>
-                </div>
-                <p className="text-[11px] text-slate-500 font-normal mt-0.5">
-                  20 questions per subject, 400 marks scaled
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setExamLengthMode('express');
-                  setExamDurationMinutes(30);
-                }}
-                className={`w-full p-3 rounded-2xl border text-left cursor-pointer transition-colors ${
-                  examLengthMode === 'express'
-                    ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/30 font-bold'
-                    : 'border-slate-200 dark:border-slate-800'
-                }`}
-              >
-                <div className="flex items-center justify-between text-xs">
-                  <span>Express Drill</span>
-                  <span className="text-blue-600">40 Questions</span>
-                </div>
-                <p className="text-[11px] text-slate-500 font-normal mt-0.5">
-                  10 questions per subject (Quick revision)
                 </p>
               </button>
             </div>

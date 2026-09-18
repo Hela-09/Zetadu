@@ -1,4 +1,10 @@
 import { OFFICIAL_JAMB_SUBJECTS, JambSubject } from './jambSubjects';
+import { MATH_QUESTIONS } from './jamb/mathQuestions';
+import { ENGLISH_QUESTIONS } from './jamb/englishQuestions';
+import { PHYSICS_QUESTIONS } from './jamb/physicsQuestions';
+import { CHEMISTRY_QUESTIONS } from './jamb/chemistryQuestions';
+import { BIOLOGY_QUESTIONS } from './jamb/biologyQuestions';
+import { ARTS_SOCIAL_QUESTIONS } from './jamb/artsSocialQuestions';
 
 export interface JambQuestion {
   id: string;
@@ -19,7 +25,7 @@ export type { JambSubject };
 
 export const JAMB_YEARS = [2024, 2023, 2022, 2021, 2020, 2019, 2018];
 
-export const JAMB_QUESTIONS: JambQuestion[] = [
+const RAW_STATIC_QUESTIONS: JambQuestion[] = [
   // ==========================================
   // MATHEMATICS
   // ==========================================
@@ -1051,40 +1057,50 @@ export const JAMB_QUESTIONS: JambQuestion[] = [
   }
 ];
 
+// Merge all modular subject questions with raw static questions, deduplicated by id
+const questionMap = new Map<string, JambQuestion>();
+for (const q of [
+  ...RAW_STATIC_QUESTIONS,
+  ...MATH_QUESTIONS,
+  ...ENGLISH_QUESTIONS,
+  ...PHYSICS_QUESTIONS,
+  ...CHEMISTRY_QUESTIONS,
+  ...BIOLOGY_QUESTIONS,
+  ...ARTS_SOCIAL_QUESTIONS
+]) {
+  if (q && q.id && !questionMap.has(q.id)) {
+    questionMap.set(q.id, q);
+  }
+}
+
+export const JAMB_QUESTIONS: JambQuestion[] = Array.from(questionMap.values());
+
 export function getJambQuestionsByFilter(
   subject: string,
   year?: number | 'all',
   count: number = 20
 ): JambQuestion[] {
   const normSub = subject.toLowerCase().trim();
-  let filtered = JAMB_QUESTIONS.filter(q => 
+  let subjectQuestions = JAMB_QUESTIONS.filter(q => 
     q.subject.toLowerCase() === normSub || 
     q.subjectName.toLowerCase() === normSub ||
     q.id.toLowerCase().includes(normSub)
   );
   
+  let filtered = [...subjectQuestions];
   if (year && year !== 'all') {
-    const yearFiltered = filtered.filter(q => q.year === year);
-    if (yearFiltered.length > 0) {
+    const yearFiltered = subjectQuestions.filter(q => q.year === year);
+    if (yearFiltered.length >= count) {
       filtered = yearFiltered;
+    } else if (yearFiltered.length > 0) {
+      // Prioritize questions from the requested year, then backfill with other years from the same subject
+      const otherYears = subjectQuestions.filter(q => q.year !== year);
+      filtered = [...yearFiltered, ...otherYears];
     }
   }
 
-  // Shuffle questions randomly to ensure fresh practice
+  // Shuffle questions randomly without any duplicates
   const shuffled = [...filtered].sort(() => 0.5 - Math.random());
-  
-  // If count exceeds existing questions for that specific filter, duplicate with varying order or return all
-  if (shuffled.length < count && filtered.length > 0) {
-    const extraPool = [...filtered];
-    while (shuffled.length < count && extraPool.length > 0) {
-      const pick = extraPool[Math.floor(Math.random() * extraPool.length)];
-      shuffled.push({
-        ...pick,
-        id: `${pick.id}-variant-${shuffled.length + 1}`
-      });
-    }
-  }
-
   return shuffled.slice(0, count);
 }
 
@@ -1105,69 +1121,164 @@ export interface PracticeQueryOptions {
 export function getUnifiedQuestionsForPractice(options: PracticeQueryOptions) {
   const { subjects, subject, topic, year, count = 20, order = 'random' } = options;
 
-  let resultList: any[] = [];
+  let resultList: JambQuestion[] = [];
+  const globalUsedIds = new Set<string>();
 
   // Multi-subject mode (e.g. 4-subject JAMB CBT combination)
   if (subjects && subjects.length > 0) {
-    const perSubjectCount = Math.max(1, Math.floor(count / subjects.length));
-    
-    for (const subId of subjects) {
+    const numSubs = subjects.length;
+    const baseCount = Math.floor(count / numSubs);
+    const remainder = count % numSubs;
+
+    subjects.forEach((subId, idx) => {
+      const targetForSubject = baseCount + (idx < remainder ? 1 : 0);
       const normSubId = subId.toLowerCase().trim();
-      let subQuestions = JAMB_QUESTIONS.filter(q => 
+      
+      const allSubQuestions = JAMB_QUESTIONS.filter(q => 
         q.subject.toLowerCase() === normSubId || 
         q.subjectName.toLowerCase() === normSubId ||
         q.id.toLowerCase().includes(normSubId)
       );
-      if (year && year !== 'all') {
-        const yf = subQuestions.filter(q => q.year === year);
-        if (yf.length > 0) subQuestions = yf;
-      }
-      
-      let pool = [...subQuestions];
-      if (order === 'random') {
-        pool.sort(() => 0.5 - Math.random());
-      } else {
-        pool.sort((a, b) => a.questionNumber - b.questionNumber);
+
+      // Primary filter: requested year if specified
+      let primaryPool: JambQuestion[] = [];
+      let secondaryPool: JambQuestion[] = [];
+
+      for (const q of allSubQuestions) {
+        if (globalUsedIds.has(q.id)) continue;
+        if (year && year !== 'all' && q.year === year) {
+          primaryPool.push(q);
+        } else {
+          secondaryPool.push(q);
+        }
       }
 
-      // Select without repetition (never show the same question twice in a session)
-      const selected = pool.slice(0, perSubjectCount);
-      resultList.push(...selected);
+      if (order === 'random') {
+        primaryPool.sort(() => 0.5 - Math.random());
+        secondaryPool.sort(() => 0.5 - Math.random());
+      } else {
+        primaryPool.sort((a, b) => a.questionNumber - b.questionNumber);
+        secondaryPool.sort((a, b) => a.questionNumber - b.questionNumber);
+      }
+
+      const selectedForSubject: JambQuestion[] = [];
+      for (const q of primaryPool) {
+        if (selectedForSubject.length >= targetForSubject) break;
+        selectedForSubject.push(q);
+        globalUsedIds.add(q.id);
+      }
+      for (const q of secondaryPool) {
+        if (selectedForSubject.length >= targetForSubject) break;
+        selectedForSubject.push(q);
+        globalUsedIds.add(q.id);
+      }
+
+      resultList.push(...selectedForSubject);
+    });
+
+    // Backfill from unused questions in any of the selected subjects to satisfy count exactly
+    if (resultList.length < count) {
+      for (const subId of subjects) {
+        if (resultList.length >= count) break;
+        const normSubId = subId.toLowerCase().trim();
+        const extras = JAMB_QUESTIONS.filter(q => 
+          (q.subject.toLowerCase() === normSubId || 
+           q.subjectName.toLowerCase() === normSubId ||
+           q.id.toLowerCase().includes(normSubId)) &&
+          !globalUsedIds.has(q.id)
+        );
+        for (const eq of extras) {
+          if (resultList.length >= count) break;
+          resultList.push(eq);
+          globalUsedIds.add(eq.id);
+        }
+      }
     }
   } else if (subject) {
     const normSubject = subject.toLowerCase().trim();
-    let subQuestions = JAMB_QUESTIONS.filter(q => 
+    const allSubQuestions = JAMB_QUESTIONS.filter(q => 
       q.subject.toLowerCase() === normSubject || 
       q.subjectName.toLowerCase() === normSubject ||
       q.id.toLowerCase().includes(normSubject)
     );
-    if (topic && topic !== 'All Topics' && topic !== 'General') {
-      const tf = subQuestions.filter(q => q.topic.toLowerCase().includes(topic.toLowerCase()));
-      if (tf.length > 0) subQuestions = tf;
-    }
-    if (year && year !== 'all') {
-      const yf = subQuestions.filter(q => q.year === year);
-      if (yf.length > 0) subQuestions = yf;
+
+    let topicAndYearMatches: JambQuestion[] = [];
+    let yearOnlyMatches: JambQuestion[] = [];
+    let topicOnlyMatches: JambQuestion[] = [];
+    let generalMatches: JambQuestion[] = [];
+
+    const hasTopic = topic && topic !== 'All Topics' && topic !== 'General';
+    const hasYear = year && year !== 'all';
+
+    for (const q of allSubQuestions) {
+      const matchTopic = hasTopic && q.topic.toLowerCase().includes(topic!.toLowerCase());
+      const matchYear = hasYear && q.year === year;
+
+      if (matchTopic && matchYear) {
+        topicAndYearMatches.push(q);
+      } else if (matchYear) {
+        yearOnlyMatches.push(q);
+      } else if (matchTopic) {
+        topicOnlyMatches.push(q);
+      } else {
+        generalMatches.push(q);
+      }
     }
 
-    let pool = [...subQuestions];
     if (order === 'random') {
-      pool.sort(() => 0.5 - Math.random());
+      topicAndYearMatches.sort(() => 0.5 - Math.random());
+      yearOnlyMatches.sort(() => 0.5 - Math.random());
+      topicOnlyMatches.sort(() => 0.5 - Math.random());
+      generalMatches.sort(() => 0.5 - Math.random());
     } else {
-      pool.sort((a, b) => a.questionNumber - b.questionNumber);
+      topicAndYearMatches.sort((a, b) => a.questionNumber - b.questionNumber);
+      yearOnlyMatches.sort((a, b) => a.questionNumber - b.questionNumber);
+      topicOnlyMatches.sort((a, b) => a.questionNumber - b.questionNumber);
+      generalMatches.sort((a, b) => a.questionNumber - b.questionNumber);
     }
 
-    // Select without repetition (never show the same question twice in a session)
-    resultList = pool.slice(0, count);
+    const priorityPool = [
+      ...topicAndYearMatches,
+      ...topicOnlyMatches,
+      ...yearOnlyMatches,
+      ...generalMatches
+    ];
+
+    for (const q of priorityPool) {
+      if (resultList.length >= count) break;
+      if (!globalUsedIds.has(q.id)) {
+        resultList.push(q);
+        globalUsedIds.add(q.id);
+      }
+    }
+
+    // If still under count, backfill from any unused question in the subject
+    if (resultList.length < count) {
+      for (const q of allSubQuestions) {
+        if (resultList.length >= count) break;
+        if (!globalUsedIds.has(q.id)) {
+          resultList.push(q);
+          globalUsedIds.add(q.id);
+        }
+      }
+    }
   } else {
     // General all subjects mix
     let pool = [...JAMB_QUESTIONS];
     if (order === 'random') pool.sort(() => 0.5 - Math.random());
-    resultList = pool.slice(0, count);
+    for (const q of pool) {
+      if (resultList.length >= count) break;
+      if (!globalUsedIds.has(q.id)) {
+        resultList.push(q);
+        globalUsedIds.add(q.id);
+      }
+    }
   }
 
+  const finalQuestions = resultList.slice(0, count);
+
   // Convert to Quiz.tsx Question format
-  return resultList.map((q, idx) => ({
+  return finalQuestions.map((q, idx) => ({
     id: q.id,
     question: q.passage ? `${q.passage}\n\n${q.question}` : q.question,
     options: q.options,
