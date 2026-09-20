@@ -162,9 +162,9 @@ export default function JambCbtSection({
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-fadeIn">
+    <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 animate-fadeIn w-full min-w-0">
       {/* Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl space-y-4">
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-900 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 text-white shadow-xl space-y-3 sm:space-y-4 w-full min-w-0">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 rounded-full text-[11px] font-extrabold bg-blue-500 text-white uppercase tracking-wider">
@@ -183,23 +183,23 @@ export default function JambCbtSection({
           )}
         </div>
 
-        <h3 className="text-2xl sm:text-3xl font-black">Official 4-Subject JAMB CBT Mock</h3>
+        <h3 className="text-xl sm:text-2xl md:text-3xl font-black">Official 4-Subject JAMB CBT Mock</h3>
         <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl">
           Simulate the true computer-based examination experience with your 4 subject combinations, live multi-subject switching tabs, onscreen calculator, flagged question review, and comprehensive performance breakdown out of 400 marks.
         </p>
 
         {/* Feature badges */}
         <div className="flex flex-wrap gap-2 pt-2 text-xs">
-          <span className="px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-xs flex items-center gap-1.5 font-medium">
-            <Calculator size={14} className="text-amber-300" />
+          <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-xs flex items-center gap-1.5 font-medium text-[11px] sm:text-xs">
+            <Calculator size={14} className="text-amber-300 shrink-0" />
             Standard JAMB 8-digit Calculator
           </span>
-          <span className="px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-xs flex items-center gap-1.5 font-medium">
-            <Layers size={14} className="text-blue-300" />
+          <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-xs flex items-center gap-1.5 font-medium text-[11px] sm:text-xs">
+            <Layers size={14} className="text-blue-300 shrink-0" />
             Multi-Subject Tabs Navigation
           </span>
-          <span className="px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-xs flex items-center gap-1.5 font-medium">
-            <Flag size={14} className="text-rose-300" />
+          <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-xs flex items-center gap-1.5 font-medium text-[11px] sm:text-xs">
+            <Flag size={14} className="text-rose-300 shrink-0" />
             Flagged Review Navigator
           </span>
         </div>
@@ -207,7 +207,7 @@ export default function JambCbtSection({
 
       {/* Calculator Notification Banner if applicable */}
       {subjectsWithCalculator.length > 0 && (
-        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 flex items-center justify-between gap-3 text-xs text-amber-800 dark:text-amber-200">
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 text-xs text-amber-800 dark:text-amber-200 w-full min-w-0">
           <div className="flex items-center gap-2">
             <Calculator className="w-5 h-5 text-amber-600 shrink-0" />
             <span>
@@ -221,7 +221,7 @@ export default function JambCbtSection({
       )}
 
       {/* Preset Combinations */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm space-y-4 w-full min-w-0">
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
             Quick Faculty Subject Presets
@@ -277,7 +277,7 @@ export default function JambCbtSection({
       </div>
 
       {/* Subject Combination Selector */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-6">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm space-y-5 sm:space-y-6 w-full min-w-0">
         <div>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -299,7 +299,7 @@ export default function JambCbtSection({
           </div>
 
           {/* ACTIVE COMBINATION SUMMARY CHIPS */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 mb-6 w-full min-w-0">
             {/* Slot 1: English */}
             <div className="p-3.5 rounded-2xl border-2 border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 flex items-center justify-between">
               <div>
@@ -317,13 +317,13 @@ export default function JambCbtSection({
               if (electiveName && meta) {
                 return (
                   <div key={slotIdx} className="p-3.5 rounded-2xl border border-emerald-500/50 bg-emerald-50/40 dark:bg-emerald-950/20 flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400">Slot {slotIdx + 2} • {meta.code}</span>
+                    <div className="min-w-0 pr-1">
+                      <span className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400 block truncate">Slot {slotIdx + 2} • {meta.code}</span>
                       <p className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate">{electiveName}</p>
                     </div>
                     {meta.hasCalculator && (
-                      <span title="Calculator allowed">
-                        <Calculator size={14} className="text-amber-500 shrink-0" />
+                      <span title="Calculator allowed" className="shrink-0">
+                        <Calculator size={14} className="text-amber-500" />
                       </span>
                     )}
                   </div>
@@ -370,7 +370,7 @@ export default function JambCbtSection({
             </div>
 
             {/* ELECTIVES GRID */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-60 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-2.5 max-h-60 overflow-y-auto pr-1">
               {filteredElectiveSubjects.map(subj => {
                 const isSelected = selectedElectives.includes(subj.name);
                 return (

@@ -37,14 +37,31 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 body {
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
+  max-width: 100%;
+  min-width: 320px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--color-slate-50);
   color: var(--color-slate-900);
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+img, video, canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+p, h1, h2, h3, h4, h5, h6, span, a, button, label {
+  overflow-wrap: break-word;
 }
 
 html.dark body,

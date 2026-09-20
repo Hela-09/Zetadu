@@ -175,14 +175,14 @@ export default function App() {
           </div>
         )}
 
-        <main className={`flex-1 flex flex-col min-h-0 relative ${currentView === 'tutor' ? 'p-0 overflow-hidden' : 'p-3 sm:p-4 md:p-8 pb-[calc(7.5rem+env(safe-area-inset-bottom))] md:pb-8 overflow-y-auto'}`}>
-          <header className={`flex justify-between items-center shrink-0 gap-3 md:gap-4 flex-wrap ${currentView === 'tutor' ? 'hidden' : 'mb-6 md:mb-8'}`}>
-            <div className="flex items-center gap-3">
-              <div className="space-y-1">
-                <p className="text-blue-600 font-semibold text-[10px] md:text-xs uppercase tracking-wider">
+        <main className={`flex-1 flex flex-col min-h-0 relative ${currentView === 'tutor' ? 'p-0 overflow-hidden' : 'p-3 sm:p-4 md:p-8 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-8 overflow-y-auto'}`}>
+          <header className={`flex justify-between items-center shrink-0 gap-2 sm:gap-3 md:gap-4 flex-wrap ${currentView === 'tutor' ? 'hidden' : 'mb-5 md:mb-8'}`}>
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="space-y-0.5 sm:space-y-1 truncate">
+                <p className="text-blue-600 font-semibold text-[10px] sm:text-xs uppercase tracking-wider truncate">
                   Adaptive Learning Engine
                 </p>
-                <h1 className="text-xl md:text-3xl font-bold tracking-tight text-slate-800 dark:text-white">
+                <h1 className="text-lg sm:text-xl md:text-3xl font-bold tracking-tight text-slate-800 dark:text-white truncate">
                   Exam Readiness: <span className="text-blue-600">High</span>
                 </h1>
               </div>
@@ -208,7 +208,7 @@ export default function App() {
               </button>
             </div>
 
-            <div className="flex items-center gap-2 md:gap-3 ml-auto">
+            <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 ml-auto shrink-0">
               {/* Mobile Search Button */}
               <button
                 id="mobile-header-search-btn"

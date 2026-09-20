@@ -232,8 +232,8 @@ export const MyJambSubjectsSection: React.FC<MyJambSubjectsSectionProps> = ({
 
       {/* 4 SUBJECT SLOTS GRID */}
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-4">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white flex flex-wrap items-baseline gap-1.5">
             <span>Your 4 Official JAMB Slots</span>
             <span className="text-xs font-normal text-slate-500 dark:text-slate-400">
               (Slot 1 is compulsory; Slots 2–4 are your chosen electives)
@@ -384,13 +384,13 @@ export const MyJambSubjectsSection: React.FC<MyJambSubjectsSectionProps> = ({
       </div>
 
       {/* QUICK LAUNCH CALLOUT */}
-      <div className="bg-slate-900 text-white p-6 rounded-2xl border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-6 shadow-md">
+      <div className="bg-slate-900 text-white p-4 sm:p-6 rounded-2xl border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 sm:gap-6 shadow-md w-full min-w-0">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold uppercase tracking-wider">
-            <Sparkles className="w-4 h-4" />
+            <Sparkles className="w-4 h-4 shrink-0" />
             Synchronized Full-Mock CBT Engine
           </div>
-          <h4 className="text-lg font-bold">
+          <h4 className="text-base sm:text-lg font-bold">
             Ready to test your {selectedSubjects.length}-subject combination?
           </h4>
           <p className="text-slate-300 text-xs md:text-sm">
@@ -400,7 +400,7 @@ export const MyJambSubjectsSection: React.FC<MyJambSubjectsSectionProps> = ({
 
         <button
           onClick={() => onStartCbtWithSubjects(selectedSubjects)}
-          className="w-full md:w-auto px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 transition shadow-lg shadow-emerald-500/20 whitespace-nowrap"
+          className="w-full md:w-auto px-5 sm:px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 transition shadow-lg shadow-emerald-500/20 whitespace-nowrap cursor-pointer shrink-0"
         >
           <Play className="w-4 h-4 fill-current" />
           Launch My 4-Subject Mock CBT
@@ -409,28 +409,28 @@ export const MyJambSubjectsSection: React.FC<MyJambSubjectsSectionProps> = ({
 
       {/* SUBJECT PICKER MODAL */}
       {isPickerOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full max-h-[88vh] border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-scaleUp">
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl max-w-3xl w-full max-h-[92vh] sm:max-h-[88vh] border border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col overflow-hidden animate-scaleUp">
             {/* MODAL HEADER */}
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">
+            <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white truncate">
                   Select Subject for Slot {(activeSlotIndex ?? 0) + 1}
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 truncate">
                   Choose from all 26 official Joint Admissions and Matriculation Board UTME subjects
                 </p>
               </div>
               <button
                 onClick={() => setIsPickerOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition"
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition shrink-0"
               >
                 ✕
               </button>
             </div>
 
             {/* SEARCH AND CATEGORY FILTER */}
-            <div className="p-4 bg-slate-50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800 space-y-3">
+            <div className="p-3 sm:p-4 bg-slate-50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800 space-y-2 sm:space-y-3">
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -438,7 +438,7 @@ export const MyJambSubjectsSection: React.FC<MyJambSubjectsSectionProps> = ({
                   placeholder="Search by subject name, code (e.g. MTH, ECN, BIO)..."
                   value={pickerSearch}
                   onChange={e => setPickerSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
 
@@ -448,7 +448,7 @@ export const MyJambSubjectsSection: React.FC<MyJambSubjectsSectionProps> = ({
                   <button
                     key={cat}
                     onClick={() => setPickerCategory(cat)}
-                    className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition ${
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition ${
                       pickerCategory === cat 
                         ? 'bg-emerald-600 text-white'
                         : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100'
@@ -461,7 +461,7 @@ export const MyJambSubjectsSection: React.FC<MyJambSubjectsSectionProps> = ({
             </div>
 
             {/* SUBJECTS LIST */}
-            <div className="p-6 overflow-y-auto space-y-3 flex-1">
+            <div className="p-3 sm:p-6 overflow-y-auto space-y-2.5 sm:space-y-3 flex-1">
               {filteredPickerSubjects.length === 0 ? (
                 <div className="text-center py-12 text-slate-500">
                   <p className="font-semibold text-sm">No official subjects match your search.</p>

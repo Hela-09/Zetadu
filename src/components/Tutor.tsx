@@ -841,8 +841,8 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
             )}
           </AnimatePresence>
 
-          <div className="bg-white dark:bg-slate-900 shrink-0 flex flex-col items-center w-full pb-[env(safe-area-inset-bottom)]">
-            <div className="w-[calc(100%-24px)] md:w-[calc(100%-48px)] max-w-[900px] mx-auto">
+          <div className="bg-white dark:bg-slate-900 shrink-0 flex flex-col items-center w-full pb-[env(safe-area-inset-bottom)] min-w-0">
+            <div className="w-full px-3 sm:px-4 md:px-6 max-w-[900px] mx-auto min-w-0">
             {messages.length === 1 && !activeConversationId && (
               <div className="flex gap-2 overflow-x-auto pb-4 hide-scrollbar">
                 {prompts.map((p, i) => (

@@ -29,7 +29,8 @@ import {
   CheckSquare,
   Wifi,
   WifiOff,
-  Download
+  Download,
+  History
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../lib/firebase';
@@ -39,6 +40,7 @@ import JambCalculator from './jamb/JambCalculator';
 import { jambService } from '../services/jambService';
 import { jambOfflineDb } from '../services/jambOfflineDb';
 import { getUnifiedQuestionsForPractice } from '../data/jambQuestions';
+import { practiceHistoryService, PracticeHistorySession } from '../services/practiceHistoryService';
 
 export interface Question {
   id?: string;
@@ -59,7 +61,7 @@ export interface Question {
 export interface QuizProps {
   onBack?: () => void;
   setView?: (v: any) => void;
-  initialMode?: 'standard' | 'jamb-cbt' | 'jamb-practice' | 'topic-practice';
+  initialMode?: 'standard' | 'jamb-cbt' | 'jamb-practice' | 'topic-practice' | 'history-review';
   initialConfig?: {
     subject?: string;
     subjectId?: string;
@@ -72,6 +74,23 @@ export interface QuizProps {
     isUntimed?: boolean;
     questions?: Question[];
     examType?: 'JAMB' | 'WAEC' | 'General';
+    reviewSession?: {
+      id?: string;
+      questions: Question[];
+      answers: Record<number | string, number>;
+      score: number;
+      totalQuestions: number;
+      percentage: number;
+      timeUsedSeconds: number;
+      subject?: string;
+      subjectId?: string;
+      subjectName?: string;
+      topic?: string;
+      difficulty?: string;
+      year?: number | string;
+      isJambCbt?: boolean;
+      subjects?: string[];
+    };
   };
 }
 
@@ -241,6 +260,53 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
   const [showLeavePrompt, setShowLeavePrompt] = useState(false);
   const [showSubmitPrompt, setShowSubmitPrompt] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [practiceHistoryList, setPracticeHistoryList] = useState<PracticeHistorySession[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  const loadPracticeHistory = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const list = await practiceHistoryService.getHistory();
+      setPracticeHistoryList(list);
+    } catch (err) {
+      console.warn("Failed to load practice history:", err);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  const handleOpenPracticeHistoryItem = (session: PracticeHistorySession) => {
+    setShowHistoryModal(false);
+    const qList = session.answeredQuestions && session.answeredQuestions.length > 0 ? session.answeredQuestions : [];
+    setQuestions(qList);
+
+    const normAnswers: Record<number, number> = {};
+    if (session.answers && typeof session.answers === 'object') {
+      qList.forEach((q, idx) => {
+        if (session.answers[idx] !== undefined) {
+          normAnswers[idx] = Number(session.answers[idx]);
+        } else if (session.answers[String(idx)] !== undefined) {
+          normAnswers[idx] = Number(session.answers[String(idx)]);
+        } else if (q.id && session.answers[q.id] !== undefined) {
+          normAnswers[idx] = Number(session.answers[q.id]);
+        } else if ((q as any).userAnswerIndex !== undefined && (q as any).userAnswerIndex !== null) {
+          normAnswers[idx] = Number((q as any).userAnswerIndex);
+        }
+      });
+    }
+    setAnswers(normAnswers);
+    setScore(session.score || 0);
+    setTimeUsedSeconds(session.timeUsedSeconds || 0);
+    setIsSubmitted(true);
+    setViewMode('review');
+    setCurrentQIndex(0);
+    setSetupMode(false);
+    setHasRestored(true);
+    if (session.subject) setSubject(session.subjectName || session.subject);
+    if (session.topic) setTopic(session.topic);
+    if (session.difficulty) setDifficulty(session.difficulty);
+  };
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedTimerRef = useRef<number>(timerRemaining);
@@ -252,6 +318,41 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
 
     async function loadConfiguredQuestions() {
       if (!initialConfig) return;
+
+      // Check if this is a historical review session
+      if (initialConfig.reviewSession) {
+        const rs = initialConfig.reviewSession;
+        const qList = rs.questions && rs.questions.length > 0 ? rs.questions : [];
+        setQuestions(qList);
+
+        const normAnswers: Record<number, number> = {};
+        if (rs.answers && typeof rs.answers === 'object') {
+          qList.forEach((q, idx) => {
+            if (rs.answers[idx] !== undefined) {
+              normAnswers[idx] = Number(rs.answers[idx]);
+            } else if (rs.answers[String(idx)] !== undefined) {
+              normAnswers[idx] = Number(rs.answers[String(idx)]);
+            } else if (q.id && rs.answers[q.id] !== undefined) {
+              normAnswers[idx] = Number(rs.answers[q.id]);
+            } else if ((q as any).userAnswerIndex !== undefined && (q as any).userAnswerIndex !== null) {
+              normAnswers[idx] = Number((q as any).userAnswerIndex);
+            }
+          });
+        }
+        setAnswers(normAnswers);
+        setScore(typeof rs.score === 'number' ? rs.score : 0);
+        setTimeUsedSeconds(typeof rs.timeUsedSeconds === 'number' ? rs.timeUsedSeconds : 0);
+        setIsSubmitted(true);
+        setViewMode('review');
+        setCurrentQIndex(0);
+        setSetupMode(false);
+        setHasRestored(true);
+        if (rs.subject) setSubject(rs.subject);
+        if (rs.subjectId) setSubjectId(rs.subjectId);
+        if (rs.topic) setTopic(rs.topic);
+        if (rs.difficulty) setDifficulty(rs.difficulty);
+        return;
+      }
 
       let loadedQ: Question[] = [];
       let poolLow = false;
@@ -300,7 +401,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
           for (const s of subjectsToReplenish) {
             if (loadedQ.length >= reqCount) break;
             const subMissing = Math.min(perSub, reqCount - loadedQ.length);
-            await jambService.generateAndDownloadMoreQuestions(s, subMissing, () => {});
+            await jambService.generateAndDownloadMoreQuestions(s, 'General', subMissing);
           }
 
           const refreshed = await jambService.getPracticeQuestions({
@@ -738,8 +839,8 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
           const missing = amount - loadedQuestions.length;
           await jambService.generateAndDownloadMoreQuestions(
             subjectId || subject.toLowerCase(),
-            missing,
-            () => {}
+            topic || 'General',
+            missing
           );
           const refreshed = await jambService.getPracticeQuestions({
             subject: subjectId || subject.toLowerCase(),
@@ -856,7 +957,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
       const perSub = Math.max(1, Math.ceil(shortfall / targetSubs.length));
 
       for (const s of targetSubs) {
-        await jambService.generateAndDownloadMoreQuestions(s, perSub, () => {});
+        await jambService.generateAndDownloadMoreQuestions(s, 'General', perSub);
       }
 
       const refreshed = await jambService.getPracticeQuestions({
@@ -1001,6 +1102,29 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     setIsSubmitted(true);
     setViewMode('results');
     
+    // Save practice attempt to unified practiceHistoryService (local + firestore)
+    try {
+      await practiceHistoryService.saveSession({
+        uid: user?.uid,
+        subject: subjectId || subject,
+        subjectName: subject,
+        topic: topic || 'General',
+        difficulty,
+        score: finalScore,
+        totalQuestions: questions.length,
+        percentage: Math.round((finalScore / questions.length) * 100),
+        timeUsedSeconds: usedSeconds,
+        answeredQuestions: questions.map((q, i) => ({
+          ...q,
+          userAnswerIndex: answers[i] !== undefined ? answers[i] : null
+        })),
+        answers,
+        examType: initialConfig?.examType || (initialMode?.startsWith('jamb') ? 'JAMB' : 'General')
+      });
+    } catch (practiceHistErr) {
+      console.warn("Silent save practice history error:", practiceHistErr);
+    }
+
     if (user) {
       try {
         await addDoc(collection(db, 'learning_data'), {
@@ -1181,9 +1305,9 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
       );
 
       return (
-        <div className="w-full max-w-7xl mx-auto pb-12 flex flex-col">
-          <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shrink-0">
-            <div className="flex items-center gap-4">
+        <div className="w-full max-w-7xl mx-auto pb-12 flex flex-col px-3 sm:px-4 min-w-0">
+          <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 shrink-0">
+            <div className="flex items-center gap-3 sm:gap-4">
               <button 
                 id="quiz-back-button"
                 onClick={() => {
@@ -1195,36 +1319,51 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
                     setView('home');
                   }
                 }} 
-                className="p-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors self-start cursor-pointer"
+                className="p-2 sm:p-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors self-start cursor-pointer"
                 title="Go back"
                 aria-label="Go back"
               >
-                <ArrowLeft size={24} />
+                <ArrowLeft size={22} />
               </button>
               <div>
                 <p className="text-xs font-bold tracking-widest text-blue-600 dark:text-blue-400 uppercase mb-1">
                   Practice Session
                 </p>
-                <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
                   Select a Subject
                 </h2>
               </div>
             </div>
             
-            <div className="relative w-full md:w-96">
-              <input 
-                id="quiz-search-subjects-input"
-                type="text" 
-                placeholder="Search subjects..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-xs"
-              />
-              <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <div className="relative flex-1 md:w-80 min-w-0">
+                <input 
+                  id="quiz-search-subjects-input"
+                  type="text" 
+                  placeholder="Search subjects..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-xs text-sm sm:text-base"
+                />
+                <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              </div>
+              <button
+                id="quiz-history-btn"
+                type="button"
+                onClick={() => {
+                  loadPracticeHistory();
+                  setShowHistoryModal(true);
+                }}
+                className="px-3.5 sm:px-4 py-3 rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 text-slate-700 dark:text-slate-200 text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0 shadow-xs"
+                title="Practice History"
+              >
+                <History size={18} className="text-blue-600 dark:text-blue-400" />
+                <span>History</span>
+              </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 flex-1 pb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 flex-1 pb-8 w-full min-w-0">
             {filtered.map((sub) => (
               <button
                 key={sub.id}
@@ -1234,19 +1373,19 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
                   setSubject(sub.name);
                   setSetupStep(2);
                 }}
-                className="bg-white dark:bg-slate-800 rounded-3xl p-6 border-2 border-slate-100 dark:border-slate-700/60 hover:border-blue-500 dark:hover:border-blue-500 shadow-xs hover:shadow-lg transition-all cursor-pointer group flex flex-col justify-between text-left relative"
+                className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 border-2 border-slate-100 dark:border-slate-700/60 hover:border-blue-500 dark:hover:border-blue-500 shadow-xs hover:shadow-lg transition-all cursor-pointer group flex flex-col justify-between text-left relative min-w-0"
               >
                 <div>
-                  <div className="flex justify-between items-start mb-5">
-                    <div className={`p-4 rounded-2xl text-white shadow-sm ${sub.color} group-hover:scale-105 transition-transform duration-200`}>
-                      <BookOpen size={26} />
+                  <div className="flex justify-between items-start mb-4 sm:mb-5">
+                    <div className={`p-3 sm:p-4 rounded-2xl text-white shadow-sm ${sub.color} group-hover:scale-105 transition-transform duration-200`}>
+                      <BookOpen size={24} />
                     </div>
                   </div>
                   
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
+                  <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
                     {sub.name}
                   </h3>
-                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{sub.category}</p>
+                  <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">{sub.category}</p>
                 </div>
               </button>
             ))}
@@ -1261,29 +1400,98 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
               </div>
             )}
           </div>
+
+          {/* Practice History Modal */}
+          {showHistoryModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl max-w-xl w-full p-4 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 max-h-[85vh] flex flex-col min-w-0">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <History size={20} className="text-blue-600 dark:text-blue-400" />
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Your Practice History</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowHistoryModal(false)}
+                    className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 pr-1 space-y-3">
+                  {isLoadingHistory ? (
+                    <div className="py-12 text-center text-slate-500">
+                      <Loader2 className="animate-spin mx-auto mb-2 text-blue-600" size={24} />
+                      <p className="text-xs">Loading practice history...</p>
+                    </div>
+                  ) : practiceHistoryList.length === 0 ? (
+                    <div className="py-10 text-center space-y-2">
+                      <p className="font-bold text-slate-700 dark:text-slate-300">No practice attempts yet</p>
+                      <p className="text-xs text-slate-500">Completed practice sessions will automatically appear here for review.</p>
+                    </div>
+                  ) : (
+                    practiceHistoryList.map(session => (
+                      <button
+                        key={session.id}
+                        type="button"
+                        onClick={() => handleOpenPracticeHistoryItem(session)}
+                        className="w-full text-left p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 hover:border-blue-300 dark:hover:border-blue-700 transition-all flex items-center justify-between gap-4 cursor-pointer group"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-bold text-slate-900 dark:text-white text-sm">
+                              {session.subjectName || session.subject}
+                            </span>
+                            <span className="text-xs text-slate-400">
+                              • {session.topic || 'General'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500">
+                            {new Date(session.completedAt).toLocaleDateString()} • {Math.floor(session.timeUsedSeconds / 60)}m {session.timeUsedSeconds % 60}s
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <span className="text-base font-black text-blue-600 dark:text-blue-400">
+                              {session.score} / {session.totalQuestions}
+                            </span>
+                            <p className="text-[11px] font-bold text-slate-500">{session.percentage}%</p>
+                          </div>
+                          <ChevronRight size={18} className="text-slate-400 group-hover:text-blue-600 transition-colors" />
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
 
     return (
-      <div className="w-full max-w-2xl mx-auto pb-12">
-        <div className="mb-8 flex items-center justify-between">
+      <div className="w-full max-w-2xl mx-auto pb-12 px-3 sm:px-4 min-w-0">
+        <div className="mb-6 sm:mb-8 flex items-center justify-between gap-3">
           <button 
             id="quiz-back-to-step1"
             onClick={() => setSetupStep(1)} 
-            className="p-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
+            className="p-2 sm:p-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors shrink-0 cursor-pointer"
           >
-            <ArrowLeft size={24} />
+            <ArrowLeft size={22} />
           </button>
-          <div className="text-center flex-1 mr-10">
+          <div className="text-center flex-1 min-w-0">
             <p className="text-xs font-bold tracking-wider text-blue-600 dark:text-blue-400 uppercase mb-1">
               Setup Practice
             </p>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">Learndean Practice Session</h2>
+            <h2 className="text-xl sm:text-3xl font-extrabold text-slate-900 dark:text-white truncate">Learndean Practice Session</h2>
           </div>
+          <div className="w-9 shrink-0" />
         </div>
         
-        <form onSubmit={handleGenerate} className="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
+        <form onSubmit={handleGenerate} className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 border border-slate-200 dark:border-slate-700 shadow-sm space-y-5 sm:space-y-6 w-full min-w-0">
           <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 rounded-2xl flex items-center gap-3">
             <BookOpen size={24} className="text-blue-600 dark:text-blue-400 shrink-0" />
             <div>
@@ -1507,47 +1715,47 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     const aggregateJambScore = Math.round((correctCount / (questions.length || 1)) * 400);
 
     return (
-      <div className="w-full max-w-4xl mx-auto pb-16 px-4">
+      <div className="w-full max-w-4xl mx-auto pb-16 px-3 sm:px-4 min-w-0">
         {/* Results Card */}
         <motion.div 
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-10 border border-slate-200 dark:border-slate-700 shadow-md text-center relative overflow-hidden"
+          className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-10 border border-slate-200 dark:border-slate-700 shadow-md text-center relative overflow-hidden w-full min-w-0"
         >
           {/* Top Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-bold mb-6">
+          <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs sm:text-sm font-bold mb-4 sm:mb-6">
             <Trophy size={18} className="text-blue-600 dark:text-blue-400" />
             {isJambCbt ? 'JAMB Mock CBT Completed' : 'Practice Session Completed'}
           </div>
 
-          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight mb-2">
+          <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight mb-2">
             {isJambCbt ? 'JAMB UTME Mock Exam Results' : subject}
           </h2>
-          <p className="text-slate-500 dark:text-slate-400 text-sm sm:text-base font-medium mb-8">
+          <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-base font-medium mb-6 sm:mb-8">
             {isJambCbt 
               ? `${subjectTabs.length} Subjects • 400 Marks Total • Real CBT Marking`
               : `${topic ? `${topic} • ` : ''}${difficulty} Difficulty • ${questions.length} Questions`}
           </p>
 
           {/* Main Percentage & Score Display */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-8 py-6 mb-8 border-y border-slate-100 dark:border-slate-700/60">
-            <div className="flex flex-col items-center">
-              <div className={`w-32 h-32 rounded-full border-8 flex flex-col items-center justify-center ${
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-8 py-5 sm:py-6 mb-6 sm:mb-8 border-y border-slate-100 dark:border-slate-700/60 w-full min-w-0">
+            <div className="flex flex-col items-center shrink-0">
+              <div className={`w-28 h-28 sm:w-32 sm:h-32 rounded-full border-8 flex flex-col items-center justify-center ${
                 percentage >= 70 
                   ? 'border-emerald-500 text-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20' 
                   : percentage >= 50 
                     ? 'border-blue-500 text-blue-600 bg-blue-50/50 dark:bg-blue-950/20' 
                     : 'border-amber-500 text-amber-600 bg-amber-50/50 dark:bg-amber-950/20'
               }`}>
-                <span className="text-3xl font-black">{isJambCbt ? aggregateJambScore : `${percentage}%`}</span>
+                <span className="text-2xl sm:text-3xl font-black">{isJambCbt ? aggregateJambScore : `${percentage}%`}</span>
                 <span className="text-xs uppercase font-bold tracking-wider opacity-80">
                   {isJambCbt ? '/ 400' : 'Score'}
                 </span>
               </div>
             </div>
 
-            <div className="text-left space-y-2">
-              <p className="text-2xl font-bold text-slate-900 dark:text-white">
+            <div className="text-center sm:text-left space-y-2 min-w-0">
+              <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
                 {percentage >= 75 ? 'Outstanding Performance!' : percentage >= 50 ? 'Good Effort!' : 'Keep Practicing!'}
               </p>
               <p className="text-slate-600 dark:text-slate-400 max-w-sm text-sm sm:text-base">
@@ -1587,72 +1795,87 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
           )}
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10 text-left">
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700">
-              <div className="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">
-                <Award size={16} className="text-blue-500" /> Total Score
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-8 sm:mb-10 text-left w-full min-w-0">
+            <div className="p-3 sm:p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700 min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-slate-500 text-[11px] sm:text-xs font-bold uppercase tracking-wider mb-1 truncate">
+                <Award size={15} className="text-blue-500 shrink-0" /> <span className="truncate">Total Score</span>
               </div>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                {correctCount} <span className="text-sm font-medium text-slate-400">/ {questions.length}</span>
+              <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
+                {correctCount} <span className="text-xs sm:text-sm font-medium text-slate-400">/ {questions.length}</span>
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40">
-              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">
-                <CheckCircle2 size={16} /> Correct
+            <div className="p-3 sm:p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-emerald-600 dark:text-emerald-400 text-[11px] sm:text-xs font-bold uppercase tracking-wider mb-1 truncate">
+                <CheckCircle2 size={15} className="shrink-0" /> <span className="truncate">Correct</span>
               </div>
-              <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
+              <p className="text-xl sm:text-2xl font-bold text-emerald-700 dark:text-emerald-400">
                 {correctCount}
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/40">
-              <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 text-xs font-bold uppercase tracking-wider mb-1">
-                <XCircle size={16} /> Incorrect
+            <div className="p-3 sm:p-4 rounded-2xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/40 min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-rose-600 dark:text-rose-400 text-[11px] sm:text-xs font-bold uppercase tracking-wider mb-1 truncate">
+                <XCircle size={15} className="shrink-0" /> <span className="truncate">Incorrect</span>
               </div>
-              <p className="text-2xl font-bold text-rose-700 dark:text-rose-400">
+              <p className="text-xl sm:text-2xl font-bold text-rose-700 dark:text-rose-400">
                 {incorrectCount}
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700">
-              <div className="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">
-                <Clock size={16} className="text-purple-500" /> Time Used
+            <div className="p-3 sm:p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700 min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-slate-500 text-[11px] sm:text-xs font-bold uppercase tracking-wider mb-1 truncate">
+                <Clock size={15} className="text-purple-500 shrink-0" /> <span className="truncate">Time Used</span>
               </div>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white">
+              <p className="text-lg sm:text-2xl font-bold text-slate-900 dark:text-white truncate">
                 {formatTimeSpentString(timeUsedSeconds)}
               </p>
             </div>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-stretch sm:items-center w-full min-w-0">
             <button
               id="quiz-results-review-button"
               onClick={() => {
                 setCurrentQIndex(0);
                 setViewMode('review');
               }}
-              className="w-full sm:w-auto px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-colors shadow-sm flex items-center justify-center gap-2.5 text-base cursor-pointer"
+              className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-colors shadow-sm flex items-center justify-center gap-2.5 text-sm sm:text-base cursor-pointer"
             >
               <Eye size={20} /> Review Answers
             </button>
 
-            <button
-              id="quiz-results-retake-button"
-              onClick={handleRetake}
-              className="w-full sm:w-auto px-6 py-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-bold rounded-2xl transition-colors flex items-center justify-center gap-2 text-base cursor-pointer"
-            >
-              <RotateCcw size={18} /> Retake Practice
-            </button>
+            {initialConfig?.reviewSession ? (
+              <button
+                id="quiz-results-back-history-btn"
+                onClick={() => {
+                  if (onBack) onBack();
+                  else setSetupMode(true);
+                }}
+                className="w-full sm:w-auto px-6 py-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-bold rounded-2xl transition-colors flex items-center justify-center gap-2 text-base cursor-pointer"
+              >
+                <ArrowLeft size={18} /> Back to History
+              </button>
+            ) : (
+              <>
+                <button
+                  id="quiz-results-retake-button"
+                  onClick={handleRetake}
+                  className="w-full sm:w-auto px-6 py-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-bold rounded-2xl transition-colors flex items-center justify-center gap-2 text-base cursor-pointer"
+                >
+                  <RotateCcw size={18} /> Retake Practice
+                </button>
 
-            <button
-              id="quiz-results-new-button"
-              onClick={handleStartNew}
-              className="w-full sm:w-auto px-6 py-4 border-2 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-2xl transition-colors flex items-center justify-center gap-2 text-base cursor-pointer"
-            >
-              <Sparkles size={18} /> New Subject
-            </button>
+                <button
+                  id="quiz-results-new-button"
+                  onClick={handleStartNew}
+                  className="w-full sm:w-auto px-6 py-4 border-2 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-2xl transition-colors flex items-center justify-center gap-2 text-base cursor-pointer"
+                >
+                  <Sparkles size={18} /> New Subject
+                </button>
+              </>
+            )}
           </div>
         </motion.div>
       </div>
@@ -1661,11 +1884,11 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
 
   // Reusable Questions Panel (Used for both Desktop sidebar and Mobile drawer)
   const renderQuestionsPanel = () => (
-    <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 p-5 flex flex-col h-full shadow-xs">
-      <div className="flex justify-between items-center mb-4 shrink-0">
+    <div className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-700 p-3 sm:p-5 flex flex-col h-full shadow-xs w-full min-w-0">
+      <div className="flex justify-between items-center mb-3 sm:mb-4 shrink-0">
         <div>
-          <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Questions</h3>
-          <p className="text-xs text-slate-500 font-medium">
+          <h3 className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base">Questions</h3>
+          <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
             {viewMode === 'review' ? 'Review questions' : `${answeredCount} of ${questions.length} Answered`}
           </p>
         </div>
@@ -1673,7 +1896,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
           <button 
             id="quiz-close-mobile-drawer"
             onClick={() => setShowMobileNav(false)} 
-            className="lg:hidden p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
+            className="lg:hidden p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
           >
             <X size={20} />
           </button>
@@ -1681,14 +1904,14 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
       </div>
 
       {/* Grid of question numbers */}
-      <div className="flex-1 overflow-y-auto pr-1 min-h-0 py-1">
-        <div className="grid grid-cols-5 gap-2 w-full">
+      <div className="flex-1 overflow-y-auto pr-1 min-h-0 py-1 w-full">
+        <div className="grid grid-cols-5 gap-1.5 sm:gap-2 w-full min-w-0">
           {questions.map((q, i) => {
             const isAnswered = answers[i] !== undefined;
             const isMarked = markedForReview[i];
             const isCurrent = currentQIndex === i;
             
-            let btnClass = "w-full aspect-square min-w-0 rounded-xl font-bold text-sm flex items-center justify-center transition-all relative shrink-0 cursor-pointer ";
+            let btnClass = "w-full aspect-square min-w-0 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center transition-all relative shrink-0 cursor-pointer ";
             
             if (isCurrent) {
               btnClass += "border-2 border-blue-600 ring-2 ring-blue-500/30 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 font-black ";
@@ -1859,13 +2082,17 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
           <button 
             id="quiz-header-back-button"
             onClick={() => {
-              if (viewMode === 'review') {
+              if (initialConfig?.reviewSession) {
+                if (onBack) onBack();
+                else setSetupMode(true);
+              } else if (viewMode === 'review') {
                 setViewMode('results');
               } else {
                 setShowLeavePrompt(true);
               }
             }}
             className="p-2.5 rounded-2xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            title={initialConfig?.reviewSession ? "Back to History" : "Go back"}
           >
             <ArrowLeft size={22} />
           </button>
@@ -1918,13 +2145,22 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
               </span>
             </div>
           ) : (
-            <button
-              id="quiz-back-to-results-btn"
-              onClick={() => setViewMode('results')}
-              className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors cursor-pointer"
-            >
-              Back to Results
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300">
+                <Clock size={14} className="text-blue-500" />
+                <span>{formatTime(timeUsedSeconds)}</span>
+              </div>
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-200/50 dark:border-emerald-800/40">
+                <span>Score: {score}/{questions.length}</span>
+              </div>
+              <button
+                id="quiz-back-to-results-btn"
+                onClick={() => setViewMode('results')}
+                className="px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-xs sm:text-sm font-bold hover:bg-blue-100 transition-colors cursor-pointer"
+              >
+                Summary
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -2008,7 +2244,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
       </div>
 
       {/* Main Content Layout: Question Area + Desktop Sidebar */}
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
+      <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-start w-full min-w-0">
         
         {/* Main Question Area (No internal scrollbar clamp) */}
         <div className="flex-1 w-full min-w-0" ref={questionCardRef}>
@@ -2019,7 +2255,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.15 }}
-              className="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 border border-slate-200 dark:border-slate-700 shadow-xs"
+              className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 border border-slate-200 dark:border-slate-700 shadow-xs w-full min-w-0"
             >
               {/* Question Card Header */}
               <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100 dark:border-slate-700/60 gap-3 flex-wrap">
@@ -2114,7 +2350,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
                   const isWrongSelection = isSelected && !isCorrect;
                   const cleanedText = formatOptionText(option);
 
-                  let cardStyle = "border-2 transition-all duration-150 rounded-2xl p-4 sm:p-5 flex items-center justify-between gap-4 cursor-pointer text-left w-full ";
+                  let cardStyle = "border-2 transition-all duration-150 rounded-2xl p-3.5 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 cursor-pointer text-left w-full ";
 
                   if (viewMode === 'practice') {
                     if (isSelected) {
@@ -2320,7 +2556,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
                 animate={{ x: 0 }}
                 exit={{ x: '100%' }}
                 transition={{ type: 'spring', damping: 26, stiffness: 280 }}
-                className="w-4/5 max-w-sm bg-white dark:bg-slate-900 h-full p-4 shadow-2xl overflow-y-auto"
+                className="w-[88vw] max-w-[320px] sm:max-w-sm bg-white dark:bg-slate-900 h-full p-2.5 sm:p-4 shadow-2xl overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
                 {renderQuestionsPanel()}

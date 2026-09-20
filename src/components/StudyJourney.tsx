@@ -829,18 +829,18 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
   // -------------------------------------------------------------
   if (!journey) {
     return (
-      <div className="w-full max-w-5xl mx-auto pb-16 px-4">
+      <div className="w-full max-w-5xl mx-auto pb-16 px-3 sm:px-4 min-w-0">
         {/* Header */}
-        <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 text-xs font-bold uppercase tracking-widest mb-2">
               <Compass size={16} />
               <span>Personalized Learning Engine</span>
             </div>
-            <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Study Journey
             </h1>
-            <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base mt-1">
+            <p className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm md:text-base mt-1">
               Connect Learn, Flashcards, Practice, Mistakes Review, and Retest into one guided mastery path.
             </p>
           </div>
@@ -852,7 +852,7 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
                 setView('home');
               }
             }}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors self-start md:self-auto cursor-pointer"
+            className="flex items-center gap-2 px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors self-start md:self-auto cursor-pointer shrink-0"
           >
             <ArrowLeft size={16} />
             <span>Dashboard</span>
@@ -860,7 +860,7 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
         </div>
 
         {/* Selection Steps Card */}
-        <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 md:p-8 border border-slate-200 dark:border-slate-700 shadow-sm space-y-8">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 border border-slate-200 dark:border-slate-700 shadow-sm space-y-6 sm:space-y-8 min-w-0">
           {/* 1. Education Level */}
           <div>
             <div className="flex items-center gap-2 mb-3">
@@ -1141,9 +1141,9 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
   ];
 
   return (
-    <div className="w-full max-w-5xl mx-auto pb-16 px-4">
+    <div className="w-full max-w-5xl mx-auto pb-16 px-3 sm:px-4 min-w-0">
       {/* Top Banner: Subject & Topic metadata + Leave Journey */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 md:p-5 border border-slate-200 dark:border-slate-700 shadow-sm mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 md:p-5 border border-slate-200 dark:border-slate-700 shadow-sm mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 min-w-0">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-1">
             <span>{journey.subject}</span>

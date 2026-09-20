@@ -282,7 +282,7 @@ export default function Home({ setView }: HomeProps) {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col gap-8 pb-28 sm:pb-32">
+    <div className="w-full max-w-7xl mx-auto flex flex-col gap-5 sm:gap-8 pb-28 sm:pb-32 min-w-0">
       {/* Online Notification Banner */}
       {onlineNotification && (
         <div className="p-3.5 rounded-xl bg-emerald-600 text-white text-xs sm:text-sm font-semibold flex items-center justify-between shadow-xs">
@@ -299,10 +299,10 @@ export default function Home({ setView }: HomeProps) {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             Hello, {userName}! 👋
           </h1>
-          <p className="text-slate-600 dark:text-slate-400 mt-1">
+          <p className="text-slate-600 dark:text-slate-400 mt-1 text-sm sm:text-base">
             Welcome back to your personalized study dashboard.
           </p>
         </div>
@@ -345,16 +345,16 @@ export default function Home({ setView }: HomeProps) {
            const progressPct = levelInfo.level >= 7 ? 100 : Math.min(100, Math.max(0, ((xp - currentLevelBaseXp) / (levelInfo.nextXp - currentLevelBaseXp)) * 100));
            
            return (
-             <div className="flex items-center gap-4 bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white font-bold shadow-md">
+             <div className="flex items-center gap-3 sm:gap-4 bg-white dark:bg-slate-800 p-2.5 sm:p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs max-w-full">
+                <div className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white font-bold text-xs sm:text-base shadow-md shrink-0">
                    Lvl {levelInfo.level}
                 </div>
-                <div className="pr-2">
-                   <div className="flex items-center justify-between gap-4 mb-1">
-                      <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{levelInfo.title}</span>
-                      <span className="text-xs font-medium text-blue-600 dark:text-blue-400">{xp} / {levelInfo.nextXp} XP</span>
+                <div className="pr-1 sm:pr-2 min-w-0 flex-1">
+                   <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{levelInfo.title}</span>
+                      <span className="text-[10px] sm:text-xs font-medium text-blue-600 dark:text-blue-400 shrink-0">{xp} / {levelInfo.nextXp} XP</span>
                    </div>
-                   <div className="h-2 w-32 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                   <div className="h-2 w-24 sm:w-32 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                       <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${progressPct}%` }}></div>
                    </div>
                 </div>
@@ -396,10 +396,10 @@ export default function Home({ setView }: HomeProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 w-full min-w-0">
         
         {/* Main Content Area */}
-        <div className="lg:col-span-8 flex flex-col gap-8">
+        <div className="lg:col-span-8 flex flex-col gap-6 sm:gap-8 min-w-0">
           
           {/* Daily Study Plan */}
           <DailyStudyPlanCard
@@ -416,7 +416,7 @@ export default function Home({ setView }: HomeProps) {
           <div 
             id="jamb-prep-home-card"
             onClick={() => setView('jamb')}
-            className="bg-gradient-to-r from-blue-700 via-indigo-700 to-slate-900 rounded-3xl p-6 md:p-8 text-white cursor-pointer hover:shadow-xl hover:shadow-blue-600/25 transition-all group relative overflow-hidden border border-blue-500/30"
+            className="bg-gradient-to-r from-blue-700 via-indigo-700 to-slate-900 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 text-white cursor-pointer hover:shadow-xl hover:shadow-blue-600/25 transition-all group relative overflow-hidden border border-blue-500/30 w-full min-w-0"
           >
             <div className="absolute top-0 right-0 p-8 opacity-10 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform">
               <GraduationCap size={130} />
@@ -460,7 +460,7 @@ export default function Home({ setView }: HomeProps) {
           {/* Daily Challenge */}
           <div 
             onClick={() => setView('daily_challenge')}
-            className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-3xl p-6 md:p-8 text-white cursor-pointer hover:shadow-lg hover:shadow-orange-500/30 transition-all group relative overflow-hidden"
+            className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 text-white cursor-pointer hover:shadow-lg hover:shadow-orange-500/30 transition-all group relative overflow-hidden w-full min-w-0"
           >
             <div className="absolute top-0 right-0 p-8 opacity-10 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform">
               <Zap size={120} />
@@ -480,7 +480,7 @@ export default function Home({ setView }: HomeProps) {
           </div>
 
           {/* Weak Topics & Performance Diagnostics */}
-          <div id="weak-topics-home-card" className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-3xl p-6 md:p-8">
+          <div id="weak-topics-home-card" className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 w-full min-w-0">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-rose-50 dark:bg-rose-950/40 text-rose-600 rounded-2xl flex items-center justify-center border border-rose-100 dark:border-rose-900/50">
@@ -729,7 +729,7 @@ export default function Home({ setView }: HomeProps) {
           )}
           
           {/* Quick Actions */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
             <button id="quick-action-upload-notes" onClick={() => setView('upload_notes')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-blue-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
               <div className="w-11 h-11 mb-2.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
                 <FileUp size={24} />
@@ -754,7 +754,7 @@ export default function Home({ setView }: HomeProps) {
               </div>
               <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Library</h3>
             </button>
-            <button onClick={() => setView('practice')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-rose-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
+            <button onClick={() => setView('practice')} className="col-span-2 sm:col-span-1 lg:col-span-1 bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-rose-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
               <div className="w-11 h-11 mb-2.5 bg-rose-50 dark:bg-rose-900/30 text-rose-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
                 <PenTool size={24} />
               </div>
@@ -764,9 +764,9 @@ export default function Home({ setView }: HomeProps) {
         </div>
 
         {/* Right Sidebar */}
-        <div className="lg:col-span-4 flex flex-col gap-6">
+        <div className="lg:col-span-4 flex flex-col gap-6 min-w-0">
           {/* Continue Study */}
-          <div className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-3xl p-6">
+          <div className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 w-full min-w-0">
             <h3 className="font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
               <Clock size={18} className="text-blue-500" /> Continue Study
             </h3>

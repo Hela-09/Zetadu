@@ -70,11 +70,11 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-4 sm:space-y-6 w-full min-w-0">
       {/* Header Info */}
-      <div className="bg-gradient-to-r from-blue-700 to-indigo-800 rounded-3xl p-6 text-white shadow-lg space-y-2">
+      <div className="bg-gradient-to-r from-blue-700 to-indigo-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-white shadow-lg space-y-2 w-full min-w-0">
         <div className="flex items-center gap-2">
-          <Sparkles size={16} className="text-amber-300" />
+          <Sparkles size={16} className="text-amber-300 shrink-0" />
           <span className="text-xs font-bold uppercase tracking-wider text-blue-200">
             Targeted UTME Practice Mode
           </span>
@@ -85,7 +85,7 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
         </p>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-6">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm space-y-5 sm:space-y-6 w-full min-w-0">
         
         {/* 1. Subject Choice */}
         <div>
@@ -111,7 +111,7 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto pr-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-2.5 max-h-72 overflow-y-auto pr-1">
             {JAMB_SUBJECTS.filter(s => subjectCategory === 'All' || s.category === subjectCategory).map(subj => {
               const isSelected = selectedSubjectId === subj.id;
               return (
@@ -218,7 +218,7 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
           <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
             3. Number of Questions
           </label>
-          <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-1.5 sm:gap-2">
             {[5, 10, 20, 30, 40, 50].map(count => (
               <button
                 key={count}

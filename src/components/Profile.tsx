@@ -9,6 +9,9 @@ import { db } from '../lib/firebase';
 import { ViewType } from '../types';
 import { fetchUserAiUsage, UserAiUsageResponse } from '../utils/aiUsageService';
 import PasswordSecurityView from './PasswordSecurityView';
+import Quiz, { QuizProps } from './Quiz';
+import { jambService, JambExamAttempt } from '../services/jambService';
+import { practiceHistoryService, SavedPracticeSession } from '../services/practiceHistoryService';
 
 interface ProfileProps {
   setView: (view: ViewType) => void;
@@ -38,6 +41,7 @@ export default function Profile({ setView }: ProfileProps) {
   };
 
   const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [reviewingSessionConfig, setReviewingSessionConfig] = useState<QuizProps['initialConfig'] | null>(null);
 
   const navigateToSection = (section: string | null) => {
     setActiveSection(section);
@@ -988,22 +992,421 @@ export default function Profile({ setView }: ProfileProps) {
     );
   };
 
+  const PracticeHistoryView = () => {
+    const [filterTab, setFilterTab] = useState<'all' | 'cbt' | 'practice'>('all');
+    const [jambAttempts, setJambAttempts] = useState<JambExamAttempt[]>([]);
+    const [practiceSessions, setPracticeSessions] = useState<SavedPracticeSession[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
+
+    const loadAllHistory = async () => {
+      setLoading(true);
+      try {
+        const [jambList, practiceList] = await Promise.all([
+          jambService.getHistory(),
+          practiceHistoryService.getHistory(user?.uid)
+        ]);
+        setJambAttempts(jambList || []);
+        setPracticeSessions(practiceList || []);
+      } catch (err) {
+        console.error('Failed to load practice & CBT history:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    useEffect(() => {
+      loadAllHistory();
+    }, [user]);
+
+    const handleOpenJambAttempt = async (attempt: JambExamAttempt) => {
+      let questions = attempt.questions && attempt.questions.length > 0 ? (attempt.questions as any[]) : [];
+      if (questions.length === 0) {
+        try {
+          const res = await jambService.getPracticeQuestions({
+            subject: attempt.subject,
+            year: attempt.year,
+            count: attempt.totalQuestions || 20,
+            order: 'sequential'
+          });
+          questions = res.questions;
+        } catch (e) {
+          console.warn('Fallback loading questions for JAMB review:', e);
+        }
+      }
+
+      setReviewingSessionConfig({
+        subject: attempt.subjectName || attempt.subject,
+        subjectId: attempt.subject,
+        year: attempt.year,
+        reviewSession: {
+          id: attempt.id,
+          questions,
+          answers: attempt.answers || {},
+          score: attempt.score,
+          totalQuestions: attempt.totalQuestions,
+          percentage: attempt.percentage,
+          timeUsedSeconds: attempt.timeSpentSeconds,
+          subject: attempt.subject,
+          subjectName: attempt.subjectName,
+          year: attempt.year,
+          isJambCbt: attempt.subject?.toLowerCase().includes('cbt') || attempt.subjectName?.toLowerCase().includes('cbt') || (questions.length > 40)
+        }
+      });
+    };
+
+    const handleOpenPracticeSession = async (session: SavedPracticeSession) => {
+      let questions = (session.answeredQuestions && session.answeredQuestions.length > 0)
+        ? session.answeredQuestions
+        : (session.questions && session.questions.length > 0 ? session.questions : []);
+      if (questions.length === 0) {
+        try {
+          const res = await jambService.getPracticeQuestions({
+            subject: session.subject,
+            count: session.totalQuestions || 20,
+            order: 'sequential'
+          });
+          questions = res.questions;
+        } catch (e) {
+          console.warn('Fallback loading questions for practice review:', e);
+        }
+      }
+
+      setReviewingSessionConfig({
+        subject: session.subject,
+        topic: session.topic,
+        reviewSession: {
+          id: session.id,
+          questions,
+          answers: session.answers || {},
+          score: session.score,
+          totalQuestions: session.totalQuestions,
+          percentage: session.percentage || Math.round((session.score / (session.totalQuestions || 1)) * 100),
+          timeUsedSeconds: session.timeUsedSeconds,
+          subject: session.subject,
+          topic: session.topic,
+          isJambCbt: false
+        }
+      });
+    };
+
+    const handleDeletePractice = async (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (window.confirm('Delete this practice session record?')) {
+        await practiceHistoryService.deleteSession(id);
+        setPracticeSessions(prev => prev.filter(s => s.id !== id));
+      }
+    };
+
+    type UnifiedHistoryItem = {
+      id: string;
+      type: 'cbt' | 'practice';
+      title: string;
+      subtitle: string;
+      timestamp: number;
+      score: number;
+      total: number;
+      percentage: number;
+      timeSpent: number;
+      raw: any;
+    };
+
+    const unifiedList: UnifiedHistoryItem[] = [
+      ...jambAttempts.map(a => ({
+        id: a.id,
+        type: 'cbt' as const,
+        title: a.subjectName || a.subject,
+        subtitle: a.year === 'all' ? 'JAMB CBT • Mixed Years' : `JAMB CBT • ${a.year}`,
+        timestamp: a.completedAt,
+        score: a.score,
+        total: a.totalQuestions,
+        percentage: a.percentage,
+        timeSpent: a.timeSpentSeconds,
+        raw: a
+      })),
+      ...practiceSessions.map(p => ({
+        id: p.id,
+        type: 'practice' as const,
+        title: p.subject,
+        subtitle: p.topic ? `Practice • ${p.topic}` : `Practice • ${p.difficulty || 'Standard'}`,
+        timestamp: p.completedAt,
+        score: p.score,
+        total: p.totalQuestions,
+        percentage: p.percentage || Math.round((p.score / (p.totalQuestions || 1)) * 100),
+        timeSpent: p.timeUsedSeconds,
+        raw: p
+      }))
+    ].sort((a, b) => b.timestamp - a.timestamp);
+
+    const filtered = unifiedList.filter(item => {
+      if (filterTab === 'cbt' && item.type !== 'cbt') return false;
+      if (filterTab === 'practice' && item.type !== 'practice') return false;
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        return item.title.toLowerCase().includes(q) || item.subtitle.toLowerCase().includes(q);
+      }
+      return true;
+    });
+
+    const totalSessions = unifiedList.length;
+    const totalQuestionsAnswered = unifiedList.reduce((acc, cur) => acc + cur.total, 0);
+    const avgScore = totalSessions > 0 ? Math.round(unifiedList.reduce((acc, cur) => acc + cur.percentage, 0) / totalSessions) : 0;
+    const totalSeconds = unifiedList.reduce((acc, cur) => acc + (cur.timeSpent || 0), 0);
+
+    return (
+      <div className="animate-in fade-in duration-300">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <button 
+              id="practice-history-back-btn"
+              onClick={closeSection} 
+              className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer" 
+              aria-label="Back to Profile"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <BrainCircuit className="text-blue-600 dark:text-blue-400" size={24} />
+                JAMB CBT & Practice History
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Click any session to review questions, your selected answers & explanations
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => loadAllHistory()}
+            disabled={loading}
+            className="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 rounded-full transition-colors cursor-pointer disabled:opacity-50"
+            title="Refresh History"
+          >
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+
+        {/* Stats Row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          <div className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-2xs">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Sessions</span>
+            <span className="text-xl font-extrabold text-slate-900 dark:text-white">{totalSessions}</span>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-2xs">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Questions</span>
+            <span className="text-xl font-extrabold text-blue-600 dark:text-blue-400">{totalQuestionsAnswered}</span>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-2xs">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Avg Score</span>
+            <span className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{avgScore}%</span>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-2xs">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Time Spent</span>
+            <span className="text-xl font-extrabold text-slate-900 dark:text-white">
+              {Math.floor(totalSeconds / 60)}m
+            </span>
+          </div>
+        </div>
+
+        {/* Filter Tabs & Search */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-4 sm:p-6 mb-6 shadow-2xs">
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between mb-4">
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setFilterTab('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  filterTab === 'all'
+                    ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                All ({unifiedList.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterTab('cbt')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  filterTab === 'cbt'
+                    ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                JAMB CBT ({jambAttempts.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterTab('practice')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  filterTab === 'practice'
+                    ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-2xs'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                Practice Drills ({practiceSessions.length})
+              </button>
+            </div>
+
+            <div className="relative flex-1 sm:max-w-xs">
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search subject or topic..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:border-blue-500 transition-colors dark:text-white"
+              />
+            </div>
+          </div>
+
+          {/* Session Cards List */}
+          {loading ? (
+            <div className="py-16 text-center space-y-3">
+              <RefreshCw size={28} className="animate-spin text-blue-600 mx-auto" />
+              <p className="text-sm font-bold text-slate-600 dark:text-slate-300">Loading your sessions...</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="py-14 text-center space-y-2">
+              <BrainCircuit size={40} className="mx-auto text-slate-300 dark:text-slate-600" />
+              <p className="font-bold text-slate-700 dark:text-slate-300">No sessions found</p>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                {search.trim()
+                  ? 'No practice or CBT sessions matched your search terms.'
+                  : 'You have not completed any practice sessions yet. Start a drill or JAMB CBT exam to build your review history.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => { closeSection(); setView('practice'); }}
+                className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Start Practice Drill
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map(item => {
+                const isCbt = item.type === 'cbt';
+                const scoreColor = item.percentage >= 70 
+                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/40' 
+                  : item.percentage >= 50 
+                    ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800/40' 
+                    : 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/40';
+
+                return (
+                  <button
+                    key={`${item.type}-${item.id}`}
+                    id={`history-session-item-${item.id}`}
+                    type="button"
+                    onClick={() => {
+                      if (isCbt) handleOpenJambAttempt(item.raw);
+                      else handleOpenPracticeSession(item.raw);
+                    }}
+                    className="w-full text-left p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 hover:bg-blue-50/40 dark:hover:bg-blue-950/20 hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer group shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="flex items-start gap-3.5">
+                      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 mt-0.5 ${
+                        isCbt 
+                          ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' 
+                          : 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400'
+                      }`}>
+                        {isCbt ? <GraduationCap size={22} /> : <PenTool size={20} />}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <span className="font-bold text-slate-900 dark:text-white text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
+                            {item.title}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            isCbt 
+                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' 
+                              : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300'
+                          }`}>
+                            {isCbt ? 'JAMB CBT' : 'Practice Drill'}
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                          {item.subtitle}
+                        </p>
+
+                        <div className="flex items-center gap-3 text-[11px] text-slate-400 dark:text-slate-500">
+                          <span className="flex items-center gap-1">
+                            <Clock size={12} />
+                            {new Date(item.timestamp).toLocaleDateString()} at {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span>•</span>
+                          <span>{Math.floor(item.timeSpent / 60)}m {item.timeSpent % 60}s used</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/60 dark:border-slate-800">
+                      <div className="text-left sm:text-right">
+                        <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-black border ${scoreColor}`}>
+                          <span>{item.score} / {item.total}</span>
+                          <span className="opacity-75">({item.percentage}%)</span>
+                        </div>
+                        <p className="text-[10px] font-bold text-slate-400 mt-0.5 hidden sm:block">
+                          Click to review session
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {!isCbt && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeletePractice(item.id, e)}
+                            className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl transition-colors"
+                            title="Delete session record"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                        <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                          <ChevronRight size={18} />
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
 // --- Main View ---
 
-  if (activeSection === 'edit_profile') return <EditProfileView />;
-  if (activeSection === 'password_security') return <PasswordSecurityView onBack={closeSection} />;
-  if (activeSection === 'settings') return <SettingsView />;
-  if (activeSection === 'saved') return <SavedContentView />;
-  if (activeSection === 'stats') return <StatsView />;
-  if (activeSection === 'ai_usage') return <AiUsageView />;
-  if (activeSection === 'support') return <SupportView />;
-  if (activeSection === 'tutor_history') return <TutorHistoryView />;
-  if (activeSection === 'subject_history') return <SubjectHistoryView />;
+  if (reviewingSessionConfig) {
+    return (
+      <Quiz
+        initialMode="history-review"
+        initialConfig={reviewingSessionConfig}
+        onBack={() => setReviewingSessionConfig(null)}
+        setView={setView}
+      />
+    );
+  }
 
-  return (
-    <div className="max-w-3xl mx-auto w-full pb-16 sm:pb-20 animate-in fade-in duration-300">
-      {/* Header Profile Section */}
-      <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 md:p-8 border border-slate-100 dark:border-slate-700/50 shadow-sm flex flex-col md:flex-row items-center gap-6 mb-8 relative overflow-hidden">
+  const renderProfileContent = () => {
+    if (activeSection === 'edit_profile') return <EditProfileView />;
+    if (activeSection === 'password_security') return <PasswordSecurityView onBack={closeSection} />;
+    if (activeSection === 'settings') return <SettingsView />;
+    if (activeSection === 'saved') return <SavedContentView />;
+    if (activeSection === 'stats') return <StatsView />;
+    if (activeSection === 'ai_usage') return <AiUsageView />;
+    if (activeSection === 'support') return <SupportView />;
+    if (activeSection === 'tutor_history') return <TutorHistoryView />;
+    if (activeSection === 'subject_history') return <SubjectHistoryView />;
+    if (activeSection === 'practice_history') return <PracticeHistoryView />;
+
+    return (
+      <div className="w-full min-w-0 animate-in fade-in duration-300">
+        {/* Header Profile Section */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 border border-slate-100 dark:border-slate-700/50 shadow-sm flex flex-col md:flex-row items-center gap-6 mb-6 sm:mb-8 relative overflow-hidden min-w-0">
         <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-10"></div>
         
         <div className="relative z-10">
@@ -1094,7 +1497,7 @@ export default function Profile({ setView }: ProfileProps) {
         <ActionRow icon={Zap} title="AI Usage & Token Tracker" value="Tutor, Practice & Flashcards" onClick={() => handleAction('ai_usage')} />
         <ActionRow icon={BookOpen} title="Subjects & Curriculum" onClick={() => { window.scrollTo(0, 0); setView('subjects'); }} />
         <ActionRow icon={Clock} title="Recently Studied Subjects" onClick={() => handleAction('subject_history')} />
-        <ActionRow icon={BrainCircuit} title="Practice History" onClick={() => { window.scrollTo(0, 0); setView('practice'); }} />
+        <ActionRow icon={BrainCircuit} title="JAMB CBT & Practice History" value="View past questions, answers & explanations" onClick={() => handleAction('practice_history')} />
         <ActionRow icon={MessageSquare} title="AI Tutor History" onClick={() => handleAction('tutor_history')} />
         <ActionRow icon={Bookmark} title="Saved Content & Notes" onClick={() => handleAction('saved')} />
       </div>
@@ -1171,6 +1574,13 @@ export default function Profile({ setView }: ProfileProps) {
           </motion.div>
         )}
       </div>
+    </div>
+    );
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto w-full pb-16 sm:pb-20 px-3 sm:px-4 min-w-0">
+      {renderProfileContent()}
     </div>
   );
 }

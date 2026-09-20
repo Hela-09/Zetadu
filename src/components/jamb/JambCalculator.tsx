@@ -134,10 +134,10 @@ export default function JambCalculator({ isOpen, onClose, initialMode = 'scienti
   return (
     <AnimatePresence>
       <div 
-        className={`fixed inset-0 z-50 pointer-events-none flex p-2 sm:p-4 ${
+        className={`fixed inset-0 z-50 pointer-events-none flex p-1.5 sm:p-4 justify-center sm:justify-end ${
           dockPosition === 'top' 
-            ? 'items-start justify-end pt-12 sm:pt-16 sm:pr-6' 
-            : 'items-end justify-end pb-16 sm:pb-20 sm:pr-6'
+            ? 'items-start pt-2 sm:pt-16 sm:pr-6' 
+            : 'items-end pb-2 sm:pb-20 sm:pr-6'
         }`}
       >
         {isMinimized ? (
@@ -168,25 +168,25 @@ export default function JambCalculator({ isOpen, onClose, initialMode = 'scienti
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: dockPosition === 'top' ? -15 : 15 }}
             transition={{ duration: 0.2 }}
-            className="pointer-events-auto w-full sm:w-[350px] md:w-[370px] max-w-[calc(100vw-1rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[84vh] sm:max-h-[86vh]"
+            className="pointer-events-auto w-full sm:w-[350px] md:w-[370px] max-w-[min(calc(100vw-1rem),370px)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[min(84dvh,560px)] sm:max-h-[86vh]"
           >
             {/* Header Bar */}
-            <div className="bg-slate-900 dark:bg-slate-950 text-white px-3.5 py-2.5 flex items-center justify-between select-none shrink-0 border-b border-slate-800">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="p-1.5 rounded-lg bg-blue-600 text-white shrink-0">
-                  <CalcIcon size={15} />
+            <div className="bg-slate-900 dark:bg-slate-950 text-white px-2.5 sm:px-3.5 py-2 sm:py-2.5 flex items-center justify-between select-none shrink-0 border-b border-slate-800 gap-1.5">
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <div className="p-1 sm:p-1.5 rounded-lg bg-blue-600 text-white shrink-0">
+                  <CalcIcon size={14} className="sm:w-3.5 sm:h-3.5" />
                 </div>
                 <div className="truncate">
-                  <h4 className="text-xs font-bold tracking-tight">JAMB Calculator</h4>
-                  <p className="text-[10px] text-slate-400">Exam Mode</p>
+                  <h4 className="text-[11px] sm:text-xs font-bold tracking-tight truncate">JAMB Calculator</h4>
+                  <p className="text-[9px] sm:text-[10px] text-slate-400 truncate">Exam Mode</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
                 <button
                   type="button"
                   onClick={() => setAngleMode(m => m === 'DEG' ? 'RAD' : 'DEG')}
-                  className="px-2 py-0.5 text-[10px] sm:text-[11px] font-bold rounded-md bg-slate-800 hover:bg-slate-700 text-amber-400 transition-colors cursor-pointer border border-slate-700"
+                  className="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[11px] font-bold rounded-md bg-slate-800 hover:bg-slate-700 text-amber-400 transition-colors cursor-pointer border border-slate-700"
                   title="Toggle Angle Units (Degrees / Radians)"
                 >
                   {angleMode}
@@ -195,7 +195,7 @@ export default function JambCalculator({ isOpen, onClose, initialMode = 'scienti
                 <button
                   type="button"
                   onClick={() => setIsScientific(prev => !prev)}
-                  className="px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer border border-slate-700"
+                  className="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[11px] font-semibold rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer border border-slate-700"
                   title="Toggle Scientific Keypad"
                 >
                   {isScientific ? 'Sci' : 'Basic'}
@@ -204,28 +204,28 @@ export default function JambCalculator({ isOpen, onClose, initialMode = 'scienti
                 <button
                   type="button"
                   onClick={() => setDockPosition(p => p === 'top' ? 'bottom' : 'top')}
-                  className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="p-1 sm:p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
                   title={dockPosition === 'top' ? 'Dock to bottom' : 'Dock to top'}
                 >
-                  {dockPosition === 'top' ? <ArrowDownToLine size={14} /> : <ArrowUpToLine size={14} />}
+                  {dockPosition === 'top' ? <ArrowDownToLine size={13} /> : <ArrowUpToLine size={13} />}
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setIsMinimized(true)}
-                  className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="p-1 sm:p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
                   title="Minimize (Keep calculator open in background)"
                 >
-                  <Minimize2 size={14} />
+                  <Minimize2 size={13} />
                 </button>
 
                 <button
                   type="button"
                   onClick={onClose}
-                  className="p-1.5 rounded-md hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
+                  className="p-1 sm:p-1.5 rounded-md hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
                   title="Close Calculator"
                 >
-                  <X size={16} />
+                  <X size={15} />
                 </button>
               </div>
             </div>

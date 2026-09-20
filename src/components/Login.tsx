@@ -174,12 +174,12 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4 font-sans relative overflow-hidden">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4 py-8 sm:py-12 font-sans relative overflow-y-auto">
       <div className="absolute top-0 left-0 w-full h-[50vh] bg-gradient-to-b from-blue-600/5 to-transparent pointer-events-none"></div>
       <div className="absolute bottom-0 right-0 w-full h-[50vh] bg-gradient-to-t from-red-600/5 to-transparent pointer-events-none"></div>
       
       <motion.div 
-        className="w-full max-w-[440px] bg-white dark:bg-slate-800 rounded-3xl shadow-xl dark:shadow-2xl border border-slate-200 dark:border-slate-700/50 p-8 sm:p-10 relative z-10"
+        className="w-full max-w-[440px] bg-white dark:bg-slate-800 rounded-3xl shadow-xl dark:shadow-2xl border border-slate-200 dark:border-slate-700/50 p-6 sm:p-10 relative z-10 my-auto"
       >
         <div className="flex flex-col items-center mb-8">
           <div className="mb-6">

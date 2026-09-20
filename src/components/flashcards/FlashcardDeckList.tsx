@@ -169,7 +169,7 @@ export default function FlashcardDeckList({
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-fade-in relative z-10 pb-28 sm:pb-32">
+    <div className="w-full max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-fade-in relative z-10 pb-28 sm:pb-32 px-3 sm:px-4 min-w-0">
       {/* HEADER SECTION */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

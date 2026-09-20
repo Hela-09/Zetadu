@@ -254,20 +254,20 @@ export default function Subjects({ setView, initialSection }: { setView?: (view:
   return (
     <div className="w-full max-w-7xl mx-auto pb-28 sm:pb-32 flex flex-col">
       {/* Learn Section Switcher Tabs */}
-      <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl w-fit mb-8 border border-slate-200 dark:border-slate-700/60 shadow-xs">
+      <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl w-full sm:w-fit mb-6 sm:mb-8 border border-slate-200 dark:border-slate-700/60 shadow-xs max-w-full">
         <button
           onClick={() => {
             setActiveLearnSection('curriculum');
             localStorage.setItem('zetadu_learn_tab', 'curriculum');
           }}
-          className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-2 ${
+          className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-1.5 sm:gap-2 ${
             activeLearnSection === 'curriculum'
               ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
-          <BookOpen size={16} />
-          <span>Curriculum Subjects</span>
+          <BookOpen size={16} className="shrink-0" />
+          <span className="truncate">Curriculum</span>
         </button>
 
         <button
@@ -275,14 +275,14 @@ export default function Subjects({ setView, initialSection }: { setView?: (view:
             setActiveLearnSection('novels');
             localStorage.setItem('zetadu_learn_tab', 'novels');
           }}
-          className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center gap-2 ${
+          className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-1.5 sm:gap-2 ${
             activeLearnSection === 'novels'
               ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
-          <BookMarked size={16} className="text-amber-500" />
-          <span>Novels & Literature</span>
+          <BookMarked size={16} className="text-amber-500 shrink-0" />
+          <span className="truncate">Novels & Literature</span>
         </button>
       </div>
 

@@ -1479,7 +1479,7 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
       <AnimatePresence>
         {numberModal.isOpen && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto"
             onClick={() => setNumberModal(prev => ({ ...prev, isOpen: false }))}
           >
             <motion.div
@@ -1488,7 +1488,7 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
               exit={{ opacity: 0, scale: 0.95, y: 12 }}
               transition={{ duration: 0.16 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden p-6 sm:p-7 flex flex-col gap-5"
+              className="w-full max-w-md bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden p-5 sm:p-7 flex flex-col gap-4 sm:gap-5 my-auto max-h-[92dvh] overflow-y-auto"
             >
               {/* Header */}
               <div className="flex items-start justify-between gap-3">

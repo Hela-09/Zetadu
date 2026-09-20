@@ -453,24 +453,24 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
         <button
           onClick={() => setCurrentQIndex(Math.max(0, currentQIndex - 1))}
           disabled={currentQIndex === 0}
-          className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold disabled:opacity-50 transition-colors cursor-pointer"
+          className="flex-1 md:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-3 sm:py-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold disabled:opacity-50 transition-colors cursor-pointer text-xs sm:text-sm"
         >
-          <ArrowLeft size={20} /> <span className="hidden sm:inline">Previous</span>
+          <ArrowLeft size={18} /> <span>Prev</span>
         </button>
         
         {currentQIndex === questions.length - 1 ? (
           <button
             onClick={handleSubmit}
-            className="flex-[2] md:flex-none flex items-center justify-center gap-2 px-8 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg shadow-green-600/20 transition-all cursor-pointer"
+            className="flex-[2] md:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-8 py-3 sm:py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg shadow-green-600/20 transition-all cursor-pointer text-xs sm:text-sm"
           >
-            <CheckCircle2 size={20} /> Submit Challenge
+            <CheckCircle2 size={18} /> <span>Submit Challenge</span>
           </button>
         ) : (
           <button
             onClick={() => setCurrentQIndex(Math.min(questions.length - 1, currentQIndex + 1))}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-xl font-bold transition-colors cursor-pointer"
+            className="flex-1 md:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-3 sm:py-4 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-xl font-bold transition-colors cursor-pointer text-xs sm:text-sm"
           >
-            <span className="hidden sm:inline">Next</span> <ArrowRight size={20} />
+            <span>Next</span> <ArrowRight size={18} />
           </button>
         )}
       </div>

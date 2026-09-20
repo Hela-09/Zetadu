@@ -283,6 +283,46 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
     setMainTab('cbt');
   };
 
+  const handleOpenHistorySession = async (attempt: JambExamAttempt) => {
+    setShowHistoryModal(false);
+    let questions = attempt.questions && attempt.questions.length > 0 ? (attempt.questions as any[]) : [];
+    
+    // Fallback: If legacy attempt did not store questions array, load from question bank
+    if (questions.length === 0) {
+      try {
+        const res = await jambService.getPracticeQuestions({
+          subject: attempt.subject,
+          year: attempt.year,
+          count: attempt.totalQuestions || 20,
+          order: 'sequential'
+        });
+        questions = res.questions;
+      } catch (e) {
+        console.warn('Fallback loading questions for history session:', e);
+      }
+    }
+
+    setActiveQuizMode('history-review');
+    setActiveQuizConfig({
+      subject: attempt.subjectName || attempt.subject,
+      subjectId: attempt.subject,
+      year: attempt.year,
+      reviewSession: {
+        id: attempt.id,
+        questions,
+        answers: attempt.answers || {},
+        score: attempt.score,
+        totalQuestions: attempt.totalQuestions,
+        percentage: attempt.percentage,
+        timeUsedSeconds: attempt.timeSpentSeconds,
+        subject: attempt.subject,
+        subjectName: attempt.subjectName,
+        year: attempt.year,
+        isJambCbt: attempt.subject?.toLowerCase().includes('cbt') || attempt.subjectName?.toLowerCase().includes('cbt') || (questions.length > 40)
+      }
+    });
+  };
+
   // -----------------------------------------------------------------
   // ACTIVE QUIZ / CBT RUNNING: RENDER UNIFIED QUIZ ENGINE
   // -----------------------------------------------------------------
@@ -304,7 +344,7 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
   // MAIN JAMB PREP HUB
   // -----------------------------------------------------------------
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8 space-y-6">
+    <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-4 sm:space-y-6 w-full min-w-0">
       {/* Top Header with Status & History */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -390,7 +430,7 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
       )}
 
       {/* Primary Section Switcher: MY SUBJECTS | ALL SUBJECTS | COURSE COMBO | STUDY | PRACTICE | JAMB CBT */}
-      <div className="flex items-center gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 overflow-x-auto no-scrollbar w-full min-w-0 max-w-full shrink-0">
         <button
           id="jamb-main-tab-my-subjects"
           type="button"
@@ -559,31 +599,38 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
             ) : (
               <div className="space-y-3">
                 {historyList.map(attempt => (
-                  <div
+                  <button
                     key={attempt.id}
-                    className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-center justify-between gap-4"
+                    type="button"
+                    onClick={() => handleOpenHistorySession(attempt)}
+                    className="w-full text-left p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 hover:border-blue-300 dark:hover:border-blue-700 transition-all flex items-center justify-between gap-4 cursor-pointer group"
                   >
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-bold text-slate-900 dark:text-white text-sm">
+                        <span className="font-bold text-slate-900 dark:text-white text-sm group-hover:text-blue-600 transition-colors">
                           {attempt.subjectName}
                         </span>
                         <span className="text-xs text-slate-400">
                           • {attempt.year === 'all' ? 'Mixed Years' : `JAMB ${attempt.year}`}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-500">
-                        {new Date(attempt.completedAt).toLocaleDateString()} • {Math.floor(attempt.timeSpentSeconds / 60)}m {attempt.timeSpentSeconds % 60}s
+                      <p className="text-xs text-slate-500 flex items-center gap-2">
+                        <span>{new Date(attempt.completedAt).toLocaleDateString()}</span>
+                        <span>•</span>
+                        <span>{Math.floor(attempt.timeSpentSeconds / 60)}m {attempt.timeSpentSeconds % 60}s used</span>
                       </p>
                     </div>
 
-                    <div className="text-right">
-                      <span className="text-base font-black text-blue-600 dark:text-blue-400">
-                        {attempt.score} / {attempt.totalQuestions}
-                      </span>
-                      <p className="text-[11px] font-bold text-slate-500">{attempt.percentage}%</p>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <span className="text-base font-black text-blue-600 dark:text-blue-400">
+                          {attempt.score} / {attempt.totalQuestions}
+                        </span>
+                        <p className="text-[11px] font-bold text-slate-500">{attempt.percentage}%</p>
+                      </div>
+                      <ChevronRight size={18} className="text-slate-400 group-hover:text-blue-600 transition-colors shrink-0" />
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
