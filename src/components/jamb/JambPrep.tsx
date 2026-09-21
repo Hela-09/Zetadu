@@ -15,13 +15,17 @@ import {
   ChevronRight,
   Clock,
   ShieldCheck,
-  Sparkles
+  Sparkles,
+  Download,
+  Play,
+  Trash2
 } from 'lucide-react';
 import { JAMB_SUBJECTS, JambQuestion } from '../../data/jambQuestions';
 import { jambService, JambExamAttempt, BookmarkedJambQuestion } from '../../services/jambService';
-import { jambOfflineDb, DownloadedSubjectMeta } from '../../services/jambOfflineDb';
+import { jambOfflineDb, DownloadedSubjectMeta, JambOfflinePackMeta } from '../../services/jambOfflineDb';
 import { useAuth } from '../../contexts/AuthContext';
 import Quiz, { QuizProps } from '../Quiz';
+import PrepareForOfflineModal from '../offline/PrepareForOfflineModal';
 import JambStudySection, { StudySubTab } from './JambStudySection';
 import JambPracticeSection from './JambPracticeSection';
 import JambCbtSection from './JambCbtSection';
@@ -69,12 +73,39 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncToastMessage, setSyncToastMessage] = useState<string | null>(null);
 
+  // JAMB Offline Pack & Unfinished Session States
+  const [installedPackMeta, setInstalledPackMeta] = useState<JambOfflinePackMeta | null>(null);
+  const [activeSession, setActiveSession] = useState<any | null>(null);
+  const [showOfflineModal, setShowOfflineModal] = useState<boolean>(false);
+  const [isDownloadingPack, setIsDownloadingPack] = useState<boolean>(false);
+  const [packProgress, setPackProgress] = useState<{ percent: number; stepText: string } | null>(null);
+
   // Load initial data
   useEffect(() => {
     loadHistoryAndBookmarks();
     loadDownloadedSubjects();
     loadUnsyncedCount();
+    loadOfflinePackStatus();
+    loadActiveSession();
   }, [user]);
+
+  const loadOfflinePackStatus = async () => {
+    try {
+      const pack = await jambOfflineDb.getInstalledPackMeta();
+      setInstalledPackMeta(pack);
+    } catch (e) {
+      console.warn('Failed to load offline pack status:', e);
+    }
+  };
+
+  const loadActiveSession = async () => {
+    try {
+      const session = await jambOfflineDb.getActiveSession();
+      setActiveSession(session);
+    } catch (e) {
+      console.warn('Failed to load active session:', e);
+    }
+  };
 
   const loadDownloadedSubjects = async () => {
     try {
@@ -205,6 +236,68 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
       setSyncToastMessage(`Removed offline copy of ${subjectMeta?.name || subjectId}.`);
     } catch (err) {
       console.error('Failed to delete downloaded subject:', err);
+    }
+  };
+
+  const handleDownloadFullPack = async () => {
+    setIsDownloadingPack(true);
+    try {
+      const res = await jambOfflineDb.downloadJambOfflinePack((percent, stepText) => {
+        setPackProgress({ percent, stepText });
+      });
+      setInstalledPackMeta(res.packMeta);
+      setSyncToastMessage(`JAMB Offline Pack ready! ${res.totalQuestions} questions across ${res.totalSubjects} subjects installed for offline study.`);
+      await loadDownloadedSubjects();
+    } catch (err: any) {
+      console.error('Failed to download offline pack:', err);
+      alert('Failed to download JAMB offline pack. Please check your internet connection.');
+    } finally {
+      setIsDownloadingPack(false);
+      setPackProgress(null);
+    }
+  };
+
+  const handleCheckPackUpdates = async () => {
+    if (!isOnline) {
+      alert('Please connect to the internet to check for pack updates.');
+      return;
+    }
+    setIsSyncing(true);
+    try {
+      const res = await jambOfflineDb.checkAndUpdateOfflinePack(status => {
+        setSyncToastMessage(status);
+      });
+      if (res.packMeta) setInstalledPackMeta(res.packMeta);
+      setSyncToastMessage(res.message);
+      await loadDownloadedSubjects();
+    } catch (err) {
+      console.error('Failed to check for pack updates:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleResumeUnfinishedSession = () => {
+    if (!activeSession) return;
+    setActiveQuizMode(activeSession.isJambCbt ? 'jamb-cbt' : 'jamb-practice');
+    setActiveQuizConfig({
+      subject: activeSession.subject || 'JAMB Practice',
+      subjectId: activeSession.subjectId,
+      topic: activeSession.topic,
+      year: activeSession.year,
+      amount: activeSession.questions?.length || 20,
+      isUntimed: !!activeSession.isUntimed,
+      timerDuration: activeSession.timerDuration || 20,
+      examType: 'JAMB',
+      resumeSession: activeSession
+    });
+  };
+
+  const handleDiscardUnfinishedSession = async () => {
+    if (window.confirm('Discard this unfinished practice session?')) {
+      await jambOfflineDb.clearActiveSession();
+      setActiveSession(null);
+      setSyncToastMessage('Unfinished practice session discarded.');
     }
   };
 
@@ -396,6 +489,29 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
           )}
 
           <button
+            id="jamb-offline-pack-toggle-btn"
+            type="button"
+            onClick={() => setShowOfflineModal(true)}
+            className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors ${
+              installedPackMeta?.isFullyInstalled
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-500'
+            }`}
+          >
+            {installedPackMeta?.isFullyInstalled ? (
+              <>
+                <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400" />
+                <span>Offline Pack Ready</span>
+              </>
+            ) : (
+              <>
+                <Download size={15} className="text-blue-600 dark:text-blue-400" />
+                <span>Offline Pack</span>
+              </>
+            )}
+          </button>
+
+          <button
             id="jamb-history-toggle-btn"
             type="button"
             onClick={() => setShowHistoryModal(true)}
@@ -411,6 +527,152 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
           </button>
         </div>
       </div>
+
+      {/* Unfinished Session Card (Continuable Practice / CBT) */}
+      {activeSession && (
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 shrink-0">
+              <Play size={18} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                  Unfinished Practice Session
+                </span>
+                <span className="text-[11px] px-2 py-0.2 rounded-full bg-amber-200/60 dark:bg-amber-800/60 text-amber-900 dark:text-amber-200 font-semibold">
+                  Saved Offline
+                </span>
+              </div>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
+                {activeSession.subject || 'JAMB Practice Session'}
+              </h4>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                {Object.keys(activeSession.answers || {}).length} of {activeSession.questions?.length || 20} questions completed. Continue right where you stopped without internet!
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 pt-1 sm:pt-0">
+            <button
+              type="button"
+              onClick={handleResumeUnfinishedSession}
+              className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            >
+              <Play size={14} />
+              <span>Resume Session</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDiscardUnfinishedSession}
+              className="px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors cursor-pointer"
+              title="Discard session"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* JAMB Offline Pack Hero Banner */}
+      {!installedPackMeta?.isFullyInstalled ? (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white shadow-sm border border-blue-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-1 max-w-2xl">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950 uppercase tracking-wider">
+                Full CBT Offline App
+              </span>
+              <span className="text-xs text-blue-200">No internet required</span>
+            </div>
+            <h3 className="text-base sm:text-lg font-bold text-white">
+              Upgrade to the Complete JAMB Offline Pack
+            </h3>
+            <p className="text-xs text-blue-100 leading-relaxed">
+              Study without AI or Firebase. Includes verified past questions, answers, step-by-step explanations, 
+              official syllabus topics, past years (2018–2024), offline bookmarks, and multi-subject CBT practice.
+            </p>
+            {isDownloadingPack && packProgress && (
+              <div className="pt-2 space-y-1">
+                <div className="flex justify-between text-xs text-blue-200">
+                  <span>{packProgress.stepText}</span>
+                  <span>{packProgress.percent}%</span>
+                </div>
+                <div className="w-full h-1.5 bg-blue-950 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-emerald-400 rounded-full transition-all duration-200"
+                    style={{ width: `${packProgress.percent}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={handleDownloadFullPack}
+              disabled={isDownloadingPack}
+              className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md disabled:opacity-50"
+            >
+              {isDownloadingPack ? (
+                <>
+                  <RefreshCw size={14} className="animate-spin text-slate-950" />
+                  <span>Installing ({packProgress?.percent || 0}%)...</span>
+                </>
+              ) : (
+                <>
+                  <Download size={14} />
+                  <span>Download Full Pack</span>
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowOfflineModal(true)}
+              className="px-3 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Pack Details
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 shrink-0">
+              <CheckCircle2 size={16} />
+            </div>
+            <div>
+              <span className="font-bold text-emerald-900 dark:text-emerald-200">
+                JAMB Offline Pack Installed (v{installedPackMeta.version || '2025.1'})
+              </span>
+              <p className="text-[11px] text-emerald-700/90 dark:text-emerald-300/80">
+                {installedPackMeta.totalQuestions}+ questions • {installedPackMeta.totalSubjects} subjects • Full explanations, past years & CBT simulation ready offline.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {isOnline && (
+              <button
+                type="button"
+                onClick={handleCheckPackUpdates}
+                disabled={isSyncing}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
+                <span>Check Updates</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowOfflineModal(true)}
+              className="px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors cursor-pointer"
+            >
+              Manage Pack
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Sync Toast Notification */}
       {syncToastMessage && (
@@ -637,6 +899,20 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
           </div>
         </div>
       )}
+
+      {/* JAMB Offline Pack & Content Modal */}
+      <PrepareForOfflineModal
+        isOpen={showOfflineModal}
+        onClose={() => {
+          setShowOfflineModal(false);
+          loadOfflinePackStatus();
+          loadDownloadedSubjects();
+        }}
+        onRefreshHub={() => {
+          loadOfflinePackStatus();
+          loadDownloadedSubjects();
+        }}
+      />
     </div>
   );
 }

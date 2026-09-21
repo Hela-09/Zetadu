@@ -1,4 +1,4 @@
-import { JambQuestion, JAMB_QUESTIONS, JAMB_SUBJECTS } from '../data/jambQuestions';
+import { JambQuestion, JAMB_QUESTIONS, JAMB_SUBJECTS, getRealAvailableQuestionsForSubject } from '../data/jambQuestions';
 import { JambExamAttempt, BookmarkedJambQuestion } from './jambService';
 
 export interface DownloadedSubjectMeta {
@@ -9,6 +9,21 @@ export interface DownloadedSubjectMeta {
   years: number[];
   downloadedAt: number;
   sizeKb: number;
+}
+
+export interface JambOfflinePackMeta {
+  packId: 'jamb_official_full_pack';
+  title: string;
+  version: string;
+  totalQuestions: number;
+  totalSubjects: number;
+  totalTopics: number;
+  years: number[];
+  installedAt: number;
+  lastCheckedAt: number;
+  sizeKb: number;
+  isFullyInstalled: boolean;
+  subjectBreakdown: Record<string, { count: number; name: string; code: string; years: number[] }>;
 }
 
 export interface StoredOfflineAttempt extends JambExamAttempt {
@@ -42,7 +57,7 @@ export interface OfflinePracticeResult {
 }
 
 const DB_NAME = 'LearnDean_JAMB_OfflineDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export function normalizeQuestionText(text: string): string {
   if (!text) return '';
@@ -121,6 +136,11 @@ class JambOfflineDatabase {
           const ansStore = db.createObjectStore('answered_questions', { keyPath: 'questionId' });
           ansStore.createIndex('by_subject', 'subject', { unique: false });
           ansStore.createIndex('by_answeredAt', 'answeredAt', { unique: false });
+        }
+
+        // 7. JAMB Offline Pack metadata store
+        if (!db.objectStoreNames.contains('jamb_pack_meta')) {
+          db.createObjectStore('jamb_pack_meta', { keyPath: 'packId' });
         }
       };
 
@@ -203,11 +223,14 @@ class JambOfflineDatabase {
     onProgress?: (percent: number, current: number, total: number) => void
   ): Promise<{ success: boolean; count: number }> {
     const normSubId = subjectId.toLowerCase().trim();
-    const questions = JAMB_QUESTIONS.filter(q => 
-      q.subject.toLowerCase() === normSubId ||
-      q.subjectName.toLowerCase() === normSubId ||
-      q.id.toLowerCase().includes(normSubId)
-    );
+    let questions = getRealAvailableQuestionsForSubject(normSubId);
+    if (questions.length === 0) {
+      questions = JAMB_QUESTIONS.filter(q => 
+        q.subject.toLowerCase() === normSubId ||
+        q.subjectName.toLowerCase() === normSubId ||
+        q.id.toLowerCase().includes(normSubId)
+      );
+    }
 
     if (questions.length === 0) {
       throw new Error(`No questions available to download for subject: ${subjectId}`);
@@ -446,6 +469,325 @@ class JambOfflineDatabase {
   }
 
   // -------------------------------------------------------------
+  // COMPLETE JAMB OFFLINE PACK MANAGEMENT
+  // -------------------------------------------------------------
+
+  /**
+   * Get the current JAMB Offline Pack metadata
+   */
+  async getInstalledPackMeta(): Promise<JambOfflinePackMeta | null> {
+    try {
+      const db = await this.getDb();
+      const meta: JambOfflinePackMeta | null = await new Promise((resolve) => {
+        try {
+          const tx = db.transaction('jamb_pack_meta', 'readonly');
+          const store = tx.objectStore('jamb_pack_meta');
+          const req = store.get('jamb_official_full_pack');
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => resolve(null);
+        } catch {
+          resolve(null);
+        }
+      });
+
+      if (meta && meta.isFullyInstalled) {
+        return meta;
+      }
+    } catch {}
+
+    // Fallback: check localStorage mirror
+    try {
+      const raw = localStorage.getItem('learndean_jamb_offline_pack_meta');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.isFullyInstalled) return parsed;
+      }
+    } catch {}
+
+    return null;
+  }
+
+  /**
+   * Save or update the pack metadata
+   */
+  async savePackMeta(meta: JambOfflinePackMeta): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await new Promise<void>((resolve, reject) => {
+        try {
+          const tx = db.transaction('jamb_pack_meta', 'readwrite');
+          const store = tx.objectStore('jamb_pack_meta');
+          store.put(meta);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    } catch (e) {
+      console.warn('Could not save pack meta to IndexedDB:', e);
+    }
+
+    try {
+      localStorage.setItem('learndean_jamb_offline_pack_meta', JSON.stringify(meta));
+    } catch {}
+  }
+
+  /**
+   * Check whether the JAMB Offline Pack is currently installed and ready
+   */
+  async isPackInstalled(): Promise<boolean> {
+    const meta = await this.getInstalledPackMeta();
+    return Boolean(meta && meta.isFullyInstalled && meta.totalQuestions > 0);
+  }
+
+  /**
+   * Download and install the complete JAMB Offline Pack.
+   * Stores all authentic past questions, verified answers, detailed explanations,
+   * official syllabus topics, and multi-subject CBT configurations directly into IndexedDB.
+   */
+  async downloadJambOfflinePack(
+    onProgress?: (percent: number, stepText: string, current: number, total: number) => void
+  ): Promise<{
+    success: boolean;
+    totalQuestions: number;
+    totalSubjects: number;
+    totalTopics: number;
+    sizeKb: number;
+    packMeta: JambOfflinePackMeta;
+  }> {
+    const db = await this.getDb();
+    if (onProgress) onProgress(5, 'Preparing JAMB Question Bank...', 0, JAMB_QUESTIONS.length);
+
+    // 1. Fetch existing questions to preserve any generated questions
+    const existingList: JambQuestion[] = await new Promise((resolve) => {
+      const tx = db.transaction('offline_questions', 'readonly');
+      const store = tx.objectStore('offline_questions');
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+
+    const existingMap = new Map<string, JambQuestion>();
+    existingList.forEach(q => existingMap.set(q.id, q));
+
+    // Merge bundled questions without loss
+    JAMB_QUESTIONS.forEach(q => {
+      if (!existingMap.has(q.id)) {
+        existingMap.set(q.id, q);
+      }
+    });
+
+    const allQuestions = Array.from(existingMap.values());
+    const total = allQuestions.length;
+
+    // 2. Put into IndexedDB
+    const tx = db.transaction(['offline_questions', 'downloaded_subjects', 'jamb_pack_meta'], 'readwrite');
+    const qStore = tx.objectStore('offline_questions');
+    const subStore = tx.objectStore('downloaded_subjects');
+    const packStore = tx.objectStore('jamb_pack_meta');
+
+    // Group by subject to calculate metadata
+    const subjectsMap: Record<string, { count: number; name: string; code: string; years: Set<number> }> = {};
+    const topicsSet = new Set<string>();
+    const yearsSet = new Set<number>();
+
+    for (let i = 0; i < allQuestions.length; i++) {
+      const q = allQuestions[i];
+      qStore.put(q);
+
+      const normSub = q.subject.toLowerCase().trim();
+      if (!subjectsMap[normSub]) {
+        const subMeta = JAMB_SUBJECTS.find(s => s.id.toLowerCase() === normSub || s.name.toLowerCase() === normSub);
+        subjectsMap[normSub] = {
+          count: 0,
+          name: q.subjectName || subMeta?.name || normSub,
+          code: subMeta?.code || normSub.slice(0, 3).toUpperCase(),
+          years: new Set()
+        };
+      }
+      subjectsMap[normSub].count++;
+      if (q.year) {
+        subjectsMap[normSub].years.add(q.year);
+        yearsSet.add(q.year);
+      }
+      if (q.topic) {
+        topicsSet.add(q.topic);
+      }
+
+      if (i % 25 === 0 || i === allQuestions.length - 1) {
+        const pct = Math.min(85, Math.round(10 + (i / total) * 75));
+        if (onProgress) {
+          onProgress(pct, `Caching verified questions, answers & explanations (${i + 1}/${total})...`, i + 1, total);
+        }
+      }
+    }
+
+    if (onProgress) onProgress(88, 'Indexing official syllabus topics & past years...', total, total);
+
+    // Save each subject metadata to downloaded_subjects
+    const breakdown: Record<string, { count: number; name: string; code: string; years: number[] }> = {};
+    Object.entries(subjectsMap).forEach(([subId, data]) => {
+      const yearsArr = Array.from(data.years).sort();
+      const meta: DownloadedSubjectMeta = {
+        subjectId: subId,
+        name: data.name,
+        code: data.code,
+        questionCount: data.count,
+        years: yearsArr,
+        downloadedAt: Date.now(),
+        sizeKb: Math.max(16, Math.round(data.count * 0.95))
+      };
+      subStore.put(meta);
+      breakdown[subId] = {
+        count: data.count,
+        name: data.name,
+        code: data.code,
+        years: yearsArr
+      };
+    });
+
+    const yearsList = Array.from(yearsSet).sort();
+    const sizeKb = Math.round(total * 0.95);
+
+    const packMeta: JambOfflinePackMeta = {
+      packId: 'jamb_official_full_pack',
+      title: 'JAMB UTME Complete Offline Pack',
+      version: '2025.2.0',
+      totalQuestions: total,
+      totalSubjects: Object.keys(subjectsMap).length,
+      totalTopics: topicsSet.size,
+      years: yearsList,
+      installedAt: Date.now(),
+      lastCheckedAt: Date.now(),
+      sizeKb,
+      isFullyInstalled: true,
+      subjectBreakdown: breakdown
+    };
+
+    packStore.put(packMeta);
+    try {
+      localStorage.setItem('learndean_jamb_offline_pack_meta', JSON.stringify(packMeta));
+    } catch {}
+
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error('Pack installation transaction failed'));
+    });
+
+    if (onProgress) onProgress(100, 'JAMB Offline Pack ready for offline practice & CBT!', total, total);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('learndean-jamb-pack-installed', { detail: packMeta }));
+    }
+
+    return {
+      success: true,
+      totalQuestions: total,
+      totalSubjects: Object.keys(subjectsMap).length,
+      totalTopics: topicsSet.size,
+      sizeKb,
+      packMeta
+    };
+  }
+
+  /**
+   * Check for remote question updates and update the offline pack.
+   * Runs when online. Checks Firestore jamb_questions or updates pack indexes.
+   */
+  async checkAndUpdateOfflinePack(
+    onProgress?: (status: string) => void
+  ): Promise<{ updated: boolean; newQuestionsCount: number; message: string; packMeta: JambOfflinePackMeta | null }> {
+    const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+    const currentMeta = await this.getInstalledPackMeta();
+
+    if (!isOnline) {
+      return {
+        updated: false,
+        newQuestionsCount: 0,
+        message: 'You are currently offline. Connect to the internet to check for pack updates.',
+        packMeta: currentMeta
+      };
+    }
+
+    if (onProgress) onProgress('Checking for question bank updates...');
+
+    let newRemoteCount = 0;
+    const db = await this.getDb();
+
+    // 1. Check if Firestore has new questions published
+    try {
+      const { collection, getDocs, limit, query } = await import('firebase/firestore');
+      const { db: firestoreDb } = await import('../lib/firebase');
+      const q = query(collection(firestoreDb, 'jamb_questions'), limit(100));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const tx = db.transaction('offline_questions', 'readwrite');
+        const qStore = tx.objectStore('offline_questions');
+        snap.forEach(docSnap => {
+          const remoteQ = docSnap.data() as JambQuestion;
+          if (remoteQ && remoteQ.id && remoteQ.question) {
+            qStore.put(remoteQ);
+            newRemoteCount++;
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Remote questions check info:', e);
+    }
+
+    // 2. Re-install / merge bundled questions to refresh pack
+    const res = await this.downloadJambOfflinePack();
+    const updatedMeta: JambOfflinePackMeta = {
+      ...res.packMeta,
+      lastCheckedAt: Date.now()
+    };
+    await this.savePackMeta(updatedMeta);
+
+    const message = newRemoteCount > 0 
+      ? `Pack updated! Synced ${newRemoteCount} new questions from cloud.`
+      : `Your JAMB Offline Pack is up to date (${res.totalQuestions} questions across ${res.totalSubjects} subjects).`;
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('learndean-jamb-pack-updated', { detail: updatedMeta }));
+    }
+
+    return {
+      updated: true,
+      newQuestionsCount: newRemoteCount,
+      message,
+      packMeta: updatedMeta
+    };
+  }
+
+  /**
+   * Delete the JAMB Offline Pack and free device storage
+   */
+  async deleteOfflinePack(): Promise<void> {
+    const db = await this.getDb();
+    await new Promise<void>((resolve, reject) => {
+      try {
+        const tx = db.transaction(['offline_questions', 'downloaded_subjects', 'jamb_pack_meta'], 'readwrite');
+        tx.objectStore('offline_questions').clear();
+        tx.objectStore('downloaded_subjects').clear();
+        tx.objectStore('jamb_pack_meta').clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      } catch (e) {
+        reject(e);
+      }
+    });
+
+    try {
+      localStorage.removeItem('learndean_jamb_offline_pack_meta');
+    } catch {}
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('learndean-jamb-pack-deleted'));
+    }
+  }
+
+  // -------------------------------------------------------------
   // ANSWERED QUESTIONS TRACKING
   // -------------------------------------------------------------
 
@@ -594,6 +936,10 @@ class JambOfflineDatabase {
             const sig = normalizeQuestionText(q.question);
             if (!candidateMap.has(sig)) candidateMap.set(sig, q);
           }
+        });
+        getRealAvailableQuestionsForSubject(normSub).forEach(q => {
+          const sig = normalizeQuestionText(q.question);
+          if (!candidateMap.has(sig)) candidateMap.set(sig, q);
         });
 
         const allCandidates = Array.from(candidateMap.values());
@@ -771,6 +1117,10 @@ class JambOfflineDatabase {
         const sig = normalizeQuestionText(q.question);
         if (!candidateMap.has(sig)) candidateMap.set(sig, q);
       }
+    });
+    getRealAvailableQuestionsForSubject(targetSubject).forEach(q => {
+      const sig = normalizeQuestionText(q.question);
+      if (!candidateMap.has(sig)) candidateMap.set(sig, q);
     });
 
     const allCandidates = Array.from(candidateMap.values());

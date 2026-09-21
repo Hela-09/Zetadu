@@ -364,6 +364,40 @@ export default function Home({ setView }: HomeProps) {
         </div>
       </div>
 
+      {/* Five Main Feature Layouts */}
+      <div id="home-top-feature-layouts" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 w-full min-w-0">
+        <button id="quick-action-ai-tutor" onClick={() => setView('tutor')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-emerald-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
+          <div className="w-11 h-11 mb-2.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <MessageSquare size={24} />
+          </div>
+          <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">AI Tutor</h3>
+        </button>
+        <button id="quick-action-upload-notes" onClick={() => setView('upload_notes')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-blue-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
+          <div className="w-11 h-11 mb-2.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <FileUp size={24} />
+          </div>
+          <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Upload Notes</h3>
+        </button>
+        <button id="quick-action-study-journey" onClick={() => setView('journey')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-indigo-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
+          <div className="w-11 h-11 mb-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <Compass size={24} />
+          </div>
+          <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Study Journey</h3>
+        </button>
+        <button id="quick-action-library" onClick={() => setView('subjects')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-amber-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
+          <div className="w-11 h-11 mb-2.5 bg-amber-50 dark:bg-amber-900/30 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <BookOpen size={24} />
+          </div>
+          <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Library</h3>
+        </button>
+        <button id="quick-action-practice" onClick={() => setView('practice')} className="col-span-2 sm:col-span-1 lg:col-span-1 bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-rose-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
+          <div className="w-11 h-11 mb-2.5 bg-rose-50 dark:bg-rose-900/30 text-rose-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <PenTool size={24} />
+          </div>
+          <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Practice</h3>
+        </button>
+      </div>
+
       {/* Quick Search Bar Banner on Home */}
       <div 
         id="home-search-banner"
@@ -727,40 +761,6 @@ export default function Home({ setView }: HomeProps) {
               />
             </Suspense>
           )}
-          
-          {/* Quick Actions */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-            <button id="quick-action-upload-notes" onClick={() => setView('upload_notes')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-blue-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
-              <div className="w-11 h-11 mb-2.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <FileUp size={24} />
-              </div>
-              <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Upload Notes</h3>
-            </button>
-            <button onClick={() => setView('journey')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-indigo-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
-              <div className="w-11 h-11 mb-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Compass size={24} />
-              </div>
-              <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Study Journey</h3>
-            </button>
-            <button onClick={() => setView('tutor')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-emerald-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
-              <div className="w-11 h-11 mb-2.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <MessageSquare size={24} />
-              </div>
-              <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">AI Tutor</h3>
-            </button>
-            <button onClick={() => setView('subjects')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-amber-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
-              <div className="w-11 h-11 mb-2.5 bg-amber-50 dark:bg-amber-900/30 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <BookOpen size={24} />
-              </div>
-              <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Library</h3>
-            </button>
-            <button onClick={() => setView('practice')} className="col-span-2 sm:col-span-1 lg:col-span-1 bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-rose-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
-              <div className="w-11 h-11 mb-2.5 bg-rose-50 dark:bg-rose-900/30 text-rose-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                <PenTool size={24} />
-              </div>
-              <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Practice</h3>
-            </button>
-          </div>
         </div>
 
         {/* Right Sidebar */}

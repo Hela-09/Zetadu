@@ -74,6 +74,7 @@ export interface QuizProps {
     isUntimed?: boolean;
     questions?: Question[];
     examType?: 'JAMB' | 'WAEC' | 'General';
+    resumeSession?: any;
     reviewSession?: {
       id?: string;
       questions: Question[];
@@ -352,6 +353,29 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
         if (rs.topic) setTopic(rs.topic);
         if (rs.difficulty) setDifficulty(rs.difficulty);
         return;
+      }
+
+      // Check if continuing an unfinished active session
+      if (initialConfig.resumeSession) {
+        const sess = initialConfig.resumeSession;
+        const qList = sess.questions && Array.isArray(sess.questions) ? sess.questions : [];
+        if (qList.length > 0) {
+          setQuestions(qList);
+          setAnswers(sess.answers || {});
+          setMarkedForReview(sess.markedForReview || {});
+          setCurrentQIndex(typeof sess.currentQIndex === 'number' ? sess.currentQIndex : 0);
+          setTimerRemaining(typeof sess.timerRemaining === 'number' ? sess.timerRemaining : (sess.timerDuration ? sess.timerDuration * 60 : 1800));
+          setIsUntimed(!!sess.isUntimed);
+          setTimeUsedSeconds(typeof sess.timeUsedSeconds === 'number' ? sess.timeUsedSeconds : 0);
+          setIsSubmitted(false);
+          setViewMode('practice');
+          setSetupMode(false);
+          setHasRestored(true);
+          if (sess.subject) setSubject(sess.subject);
+          if (sess.subjectId) setSubjectId(sess.subjectId);
+          if (sess.topic) setTopic(sess.topic);
+          return;
+        }
       }
 
       let loadedQ: Question[] = [];

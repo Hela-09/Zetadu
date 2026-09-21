@@ -5,6 +5,8 @@ import { PHYSICS_QUESTIONS } from './jamb/physicsQuestions';
 import { CHEMISTRY_QUESTIONS } from './jamb/chemistryQuestions';
 import { BIOLOGY_QUESTIONS } from './jamb/biologyQuestions';
 import { ARTS_SOCIAL_QUESTIONS } from './jamb/artsSocialQuestions';
+import { EXTENDED_JAMB_QUESTIONS } from './jamb/extendedJambQuestions';
+import { APPROVED_SUBJECTS_QUESTIONS } from './jamb/approvedSubjectsQuestions';
 
 export interface JambQuestion {
   id: string;
@@ -1066,7 +1068,9 @@ for (const q of [
   ...PHYSICS_QUESTIONS,
   ...CHEMISTRY_QUESTIONS,
   ...BIOLOGY_QUESTIONS,
-  ...ARTS_SOCIAL_QUESTIONS
+  ...ARTS_SOCIAL_QUESTIONS,
+  ...EXTENDED_JAMB_QUESTIONS,
+  ...APPROVED_SUBJECTS_QUESTIONS
 ]) {
   if (q && q.id && !questionMap.has(q.id)) {
     questionMap.set(q.id, q);
@@ -1074,6 +1078,35 @@ for (const q of [
 }
 
 export const JAMB_QUESTIONS: JambQuestion[] = Array.from(questionMap.values());
+
+/**
+ * Returns the exact list of genuine available questions for a specific approved JAMB subject.
+ * Accurately matches against subjectId, subjectName, or code prefixes.
+ */
+export function getRealAvailableQuestionsForSubject(subjectIdOrName: string): JambQuestion[] {
+  if (!subjectIdOrName) return [];
+  const norm = subjectIdOrName.toLowerCase().trim();
+  return JAMB_QUESTIONS.filter(q => {
+    const qSub = (q.subject || '').toLowerCase().trim();
+    const qName = (q.subjectName || '').toLowerCase().trim();
+    const qId = (q.id || '').toLowerCase().trim();
+    return (
+      qSub === norm ||
+      qName === norm ||
+      qId.startsWith(`jamb-${norm}-`) ||
+      (norm === 'english' && (qSub.includes('english') || qName.includes('english'))) ||
+      (norm === 'mathematics' && (qSub.includes('math') || qName.includes('math'))) ||
+      (norm === 'agriculture' && (qSub.includes('agric') || qName.includes('agric'))) ||
+      (norm === 'computer' && (qSub.includes('computer') || qName.includes('computer'))) ||
+      (norm === 'accounts' && (qSub.includes('account') || qName.includes('account'))) ||
+      (norm === 'crs' && (qSub.includes('christ') || qSub.includes('crs') || qName.includes('christ'))) ||
+      (norm === 'irs' && (qSub.includes('islam') || qSub.includes('irs') || qName.includes('islam'))) ||
+      (norm === 'art' && (qSub.includes('art') || qName.includes('art'))) ||
+      (norm === 'phe' && (qSub.includes('phe') || qSub.includes('physical') || qName.includes('physical'))) ||
+      (norm === 'home_economics' && (qSub.includes('home') || qName.includes('home')))
+    );
+  });
+}
 
 export function getJambQuestionsByFilter(
   subject: string,

@@ -723,12 +723,39 @@ export const jambService = {
     } catch {
       return 0;
     }
+  },
+
+  /**
+   * Check for pack updates when online and sync
+   */
+  async checkForPackUpdates(onProgress?: (status: string) => void) {
+    return jambOfflineDb.checkAndUpdateOfflinePack(onProgress);
+  },
+
+  /**
+   * Download the complete JAMB Offline Pack
+   */
+  async downloadJambOfflinePack(onProgress?: (percent: number, stepText: string, current: number, total: number) => void) {
+    return jambOfflineDb.downloadJambOfflinePack(onProgress);
+  },
+
+  /**
+   * Get installed pack metadata
+   */
+  async getInstalledPackMeta() {
+    return jambOfflineDb.getInstalledPackMeta();
   }
 };
 
 // Automatic online event sync listener
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
-    jambService.syncPendingData().catch(() => {});
+    jambService.syncPendingData().then(() => {
+      jambOfflineDb.isPackInstalled().then(installed => {
+        if (installed) {
+          jambOfflineDb.checkAndUpdateOfflinePack().catch(() => {});
+        }
+      });
+    }).catch(() => {});
   });
 }
