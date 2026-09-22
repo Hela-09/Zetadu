@@ -12,6 +12,8 @@ import PasswordSecurityView from './PasswordSecurityView';
 import Quiz, { QuizProps } from './Quiz';
 import { jambService, JambExamAttempt } from '../services/jambService';
 import { practiceHistoryService, SavedPracticeSession } from '../services/practiceHistoryService';
+import UserAvatar from './UserAvatar';
+import ProfilePictureModal from './ProfilePictureModal';
 
 interface ProfileProps {
   setView: (view: ViewType) => void;
@@ -20,6 +22,7 @@ interface ProfileProps {
 export default function Profile({ setView }: ProfileProps) {
   const { user, userProfile, refreshProfile, settings, updateSettings, isSuperAdmin, signOut, getToken } = useAuth();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   React.useEffect(() => {
@@ -40,7 +43,17 @@ export default function Profile({ setView }: ProfileProps) {
     }
   };
 
-  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      if (window.location.pathname.startsWith('/settings')) return 'settings';
+      const saved = localStorage.getItem('zetadu_profile_section');
+      if (saved) {
+        localStorage.removeItem('zetadu_profile_section');
+        return saved;
+      }
+    }
+    return null;
+  });
   const [reviewingSessionConfig, setReviewingSessionConfig] = useState<QuizProps['initialConfig'] | null>(null);
 
   const navigateToSection = (section: string | null) => {
@@ -49,7 +62,29 @@ export default function Profile({ setView }: ProfileProps) {
 
   const closeSection = () => {
     setActiveSection(null);
+    localStorage.removeItem('zetadu_profile_section');
   };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (window.location.pathname.startsWith('/settings')) {
+        setActiveSection('settings');
+      }
+    }
+
+    const handleOpenProfileSection = (e: any) => {
+      const section = e?.detail?.section;
+      if (section !== undefined) {
+        setActiveSection(section);
+        window.scrollTo(0, 0);
+      }
+    };
+
+    window.addEventListener('open-profile-section', handleOpenProfileSection as EventListener);
+    return () => {
+      window.removeEventListener('open-profile-section', handleOpenProfileSection as EventListener);
+    };
+  }, []);
   
   // Stats state
   const [stats, setStats] = useState({
@@ -222,19 +257,40 @@ export default function Profile({ setView }: ProfileProps) {
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Edit Profile</h2>
         </div>
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 p-6">
-          <div className="flex justify-center mb-8">
-            <div className="relative">
-              {user?.photoURL ? (
-                <img src={user.photoURL} alt="Profile" className="w-24 h-24 rounded-full border-4 border-slate-50 dark:border-slate-700 object-cover" />
-              ) : (
-                <div className="w-24 h-24 rounded-full border-4 border-slate-50 dark:border-slate-700 bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-3xl font-bold text-white">
-                  {user?.displayName ? user.displayName.charAt(0).toUpperCase() : user?.email?.charAt(0).toUpperCase() || 'U'}
-                </div>
-              )}
-              <button className="absolute bottom-0 right-0 p-2 bg-blue-600 text-white rounded-full shadow-lg border-2 border-white dark:border-slate-800 hover:bg-blue-700 transition-colors">
+          <div className="flex flex-col items-center justify-center mb-8">
+            <div 
+              className="relative cursor-pointer group" 
+              onClick={() => setShowPhotoModal(true)}
+              title="Change profile picture"
+            >
+              <UserAvatar
+                photoURL={userProfile?.photoURL || user?.photoURL}
+                displayName={userProfile?.name || user?.displayName}
+                email={user?.email}
+                size="2xl"
+                className="border-4 border-slate-50 dark:border-slate-700 shadow-md group-hover:opacity-90 transition-opacity"
+              />
+              <button 
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowPhotoModal(true);
+                }}
+                className="absolute bottom-0 right-0 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg border-2 border-white dark:border-slate-800 transition-all scale-100 hover:scale-110 cursor-pointer"
+                aria-label="Change profile picture"
+                title="Upload or change picture"
+              >
                 <Camera size={16} />
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => setShowPhotoModal(true)}
+              className="mt-3 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1.5 cursor-pointer"
+            >
+              <Camera size={14} />
+              {userProfile?.photoURL || user?.photoURL ? 'Change Picture' : 'Upload Picture'}
+            </button>
           </div>
           {error && (
             <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl flex items-start gap-3 text-sm">
@@ -1409,14 +1465,30 @@ export default function Profile({ setView }: ProfileProps) {
         <div className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 border border-slate-100 dark:border-slate-700/50 shadow-sm flex flex-col md:flex-row items-center gap-6 mb-6 sm:mb-8 relative overflow-hidden min-w-0">
         <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-10"></div>
         
-        <div className="relative z-10">
-          {user?.photoURL ? (
-            <img src={user.photoURL} alt="Profile" className="w-24 h-24 rounded-full border-4 border-white dark:border-slate-800 shadow-md object-cover" />
-          ) : (
-            <div className="w-24 h-24 rounded-full border-4 border-white dark:border-slate-800 shadow-md bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-3xl font-bold text-white">
-              {user?.displayName ? user.displayName.charAt(0).toUpperCase() : user?.email?.charAt(0).toUpperCase() || 'U'}
-            </div>
-          )}
+        <div 
+          className="relative z-10 group cursor-pointer" 
+          onClick={() => setShowPhotoModal(true)}
+          title="Upload or change profile picture"
+        >
+          <UserAvatar
+            photoURL={userProfile?.photoURL || user?.photoURL}
+            displayName={userProfile?.name || user?.displayName}
+            email={user?.email}
+            size="2xl"
+            className="border-4 border-white dark:border-slate-800 shadow-md group-hover:opacity-90 transition-opacity"
+          />
+          <button 
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowPhotoModal(true);
+            }}
+            className="absolute bottom-0 right-0 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg border-2 border-white dark:border-slate-800 transition-all scale-100 hover:scale-110 cursor-pointer"
+            aria-label="Upload or change profile picture"
+            title="Upload or change picture"
+          >
+            <Camera size={16} />
+          </button>
         </div>
         
         <div className="text-center md:text-left flex-1 relative z-10 w-full">
@@ -1515,12 +1587,24 @@ export default function Profile({ setView }: ProfileProps) {
       <SectionHeading>Account & Settings</SectionHeading>
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm flex flex-col mb-8">
         <ActionRow 
+          icon={Camera} 
+          title="Profile Picture" 
+          value={userProfile?.photoURL || user?.photoURL ? "Change or remove picture" : "Upload picture from device"} 
+          onClick={() => setShowPhotoModal(true)} 
+        />
+        <ActionRow 
           icon={Lock} 
           title="Password & Security" 
           value={user?.providerData?.some(p => p.providerId === 'password') ? "Change Password" : "Google Managed"} 
           onClick={() => handleAction('password_security')} 
         />
         <ActionRow icon={Settings} title="General Settings & Preferences" value="Font Size, Study Preferences" onClick={() => handleAction('settings')} />
+        <ActionRow 
+          icon={LogOut} 
+          title="Log Out" 
+          value="Sign out of LearnDean" 
+          onClick={() => setShowLogoutConfirm(true)} 
+        />
       </div>
 
       <SectionHeading>Help & Support</SectionHeading>
@@ -1581,6 +1665,10 @@ export default function Profile({ setView }: ProfileProps) {
   return (
     <div className="max-w-3xl mx-auto w-full pb-16 sm:pb-20 px-3 sm:px-4 min-w-0">
       {renderProfileContent()}
+      <ProfilePictureModal
+        isOpen={showPhotoModal}
+        onClose={() => setShowPhotoModal(false)}
+      />
     </div>
   );
 }

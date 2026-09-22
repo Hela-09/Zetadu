@@ -1,5 +1,16 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { User, signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut, onAuthStateChanged, getIdToken } from 'firebase/auth';
+import {
+  User,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  getIdToken,
+  updateProfile,
+  getAdditionalUserInfo,
+  linkWithCredential,
+  EmailAuthProvider,
+} from 'firebase/auth';
 import { auth, googleProvider, db, isFirestoreQuotaExhausted } from '../lib/firebase';
 import { doc, getDoc, setDoc, updateDoc, increment, onSnapshot } from 'firebase/firestore';
 import { jambOfflineDb } from '../services/jambOfflineDb';
@@ -15,6 +26,7 @@ interface AuthContextType {
   userProfile: any | null;
   settings: UserSettings;
   updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>;
+  updatePhotoURL: (photoURL: string | null) => Promise<void>;
   awardQuestionProgress: (params: { xpToAdd: number; questionId?: string; isCorrect?: boolean; subject?: string }) => Promise<void>;
   refreshProfile: () => Promise<void>;
   isSuperAdmin: boolean;
@@ -26,6 +38,12 @@ interface AuthContextType {
   oauthToken: string | null;
   clearError: () => void;
   setError: (err: string | null) => void;
+  showGoogleBackupPrompt: boolean;
+  setShowGoogleBackupPrompt: (show: boolean) => void;
+  linkPasswordAccount: (password: string) => Promise<{ success: boolean; error?: string }>;
+  hasPasswordProvider: boolean;
+  hasGoogleProvider: boolean;
+  isGoogleUserWithoutPassword: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -45,6 +63,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [oauthToken, setOauthToken] = useState<string | null>(null);
+  const [showGoogleBackupPrompt, setShowGoogleBackupPrompt] = useState(false);
+
+  const hasPasswordProvider = user?.providerData?.some((p) => p.providerId === 'password') ?? false;
+  const hasGoogleProvider = user?.providerData?.some((p) => p.providerId === 'google.com') ?? false;
+  const isGoogleUserWithoutPassword = hasGoogleProvider && !hasPasswordProvider;
   
   // Keep track of our unsubscribe functions for cleanup
   const profileUnsubRef = useRef<(() => void) | null>(null);
@@ -373,6 +396,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updatePhotoURL = async (photoURL: string | null) => {
+    if (!user) return;
+    const finalPhotoURL = photoURL || '';
+
+    // 1. Update Firebase Auth currentUser profile if auth is ready
+    try {
+      if (auth?.currentUser) {
+        await updateProfile(auth.currentUser, { photoURL: finalPhotoURL });
+      }
+    } catch (authErr) {
+      console.warn('[Auth] updateProfile photoURL warning:', authErr);
+    }
+
+    // 2. Update user state (create shallow clone with updated photoURL)
+    setUser((prev) => {
+      if (!prev) return prev;
+      try {
+        return Object.assign(Object.create(Object.getPrototypeOf(prev)), prev, {
+          photoURL: finalPhotoURL || null
+        });
+      } catch (_) {
+        return { ...prev, photoURL: finalPhotoURL || null } as User;
+      }
+    });
+
+    // 3. Update userProfile in-memory state and localStorage
+    setUserProfile((prev: any) => {
+      const updated = { ...(prev || {}), photoURL: finalPhotoURL || '' };
+      try {
+        localStorage.setItem(`zetadu_profile_${user.uid}`, JSON.stringify(updated));
+        if (finalPhotoURL) {
+          localStorage.setItem(`zetadu_avatar_${user.uid}`, finalPhotoURL);
+        } else {
+          localStorage.removeItem(`zetadu_avatar_${user.uid}`);
+        }
+      } catch (_) {}
+      return updated;
+    });
+
+    // 4. Update Firestore user document
+    if (db && !isFirestoreQuotaExhausted()) {
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        await setDoc(userRef, { 
+          photoURL: finalPhotoURL || '', 
+          avatarUrl: finalPhotoURL || '', 
+          updatedAt: new Date().toISOString() 
+        }, { merge: true });
+      } catch (dbErr) {
+        console.warn('[Auth] Firestore photoURL update warning:', dbErr);
+      }
+    }
+
+    // 5. Broadcast global avatar update event
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('profile-picture-updated', { detail: { photoURL: finalPhotoURL } }));
+    }
+  };
+
   const updateSettings = async (newSettings: Partial<UserSettings>) => {
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
@@ -454,6 +536,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearError = () => setError(null);
 
+  const linkPasswordAccount = async (password: string): Promise<{ success: boolean; error?: string }> => {
+    if (!auth || !auth.currentUser || !auth.currentUser.email) {
+      return { success: false, error: 'No active user session found.' };
+    }
+
+    try {
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
+      const userCredential = await linkWithCredential(auth.currentUser, credential);
+      if (userCredential && userCredential.user) {
+        setUser(userCredential.user);
+        await setupUserProfile(userCredential.user);
+      }
+      return { success: true };
+    } catch (err: any) {
+      console.error('Firebase Account Linking Error:', err?.code, err?.message);
+      let msg = 'Failed to link password. Please try again.';
+      if (err.code === 'auth/weak-password') {
+        msg = 'Password must be at least 6 characters long.';
+      } else if (err.code === 'auth/credential-already-in-use' || err.code === 'auth/email-already-in-use') {
+        msg = 'An account with this email address already has credentials.';
+      } else if (err.code === 'auth/provider-already-linked') {
+        msg = 'A password is already linked to this account.';
+      } else if (err.code === 'auth/requires-recent-login') {
+        msg = 'For security, please sign in with Google again before creating a password.';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        msg = 'Email/Password authentication is disabled in Firebase Console.';
+      } else if (err.message) {
+        msg = err.message;
+      }
+      return { success: false, error: msg };
+    }
+  };
+
   const signInWithGoogle = async () => {
     if (!auth) {
       setError("Authentication server is currently unavailable. Please try again later.");
@@ -463,6 +578,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const result = await signInWithPopup(auth, googleProvider);
       if (result && result.user) {
+        const additionalInfo = getAdditionalUserInfo(result);
+        const isNewUser = additionalInfo?.isNewUser ?? false;
+
         const credential = GoogleAuthProvider.credentialFromResult(result);
         if (credential?.accessToken) {
           setOauthToken(credential.accessToken);
@@ -470,6 +588,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await setupUserProfile(result.user);
         setUser(result.user);
         setLoading(false);
+
+        // Check if user already has a password provider linked
+        const hasPassword = result.user.providerData.some((p) => p.providerId === 'password');
+        const skippedKey = `learndean_skipped_backup_prompt_${result.user.uid}`;
+        const hasSkipped = sessionStorage.getItem(skippedKey) === 'true';
+
+        // When a user signs up with Google, do NOT force them to create a password.
+        // Prompt them after successful Google signup:
+        // "Add a backup sign-in method?"
+        // "Create a password so you can sign in without Google on another device."
+        if (isNewUser && !hasPassword && !hasSkipped) {
+          setShowGoogleBackupPrompt(true);
+        }
       }
     } catch (err: any) {
       console.error("Firebase Google Sign-In Error:", err?.code, err?.message, err);
@@ -521,7 +652,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, refreshProfile, settings, updateSettings, awardQuestionProgress, isSuperAdmin, loading, error, signInWithGoogle, signOut, getToken, clearError, setError, oauthToken }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        userProfile,
+        refreshProfile,
+        settings,
+        updateSettings,
+        updatePhotoURL,
+        awardQuestionProgress,
+        isSuperAdmin,
+        loading,
+        error,
+        signInWithGoogle,
+        signOut,
+        getToken,
+        clearError,
+        setError,
+        oauthToken,
+        showGoogleBackupPrompt,
+        setShowGoogleBackupPrompt,
+        linkPasswordAccount,
+        hasPasswordProvider,
+        hasGoogleProvider,
+        isGoogleUserWithoutPassword,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

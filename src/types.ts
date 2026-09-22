@@ -1,4 +1,4 @@
-export type ViewType = 'home' | 'subjects' | 'practice' | 'tutor' | 'profile' | 'admin' | 'daily_challenge' | 'flashcards' | 'journey' | 'weak_topics' | 'upload_notes' | 'jamb' | 'novels';
+export type ViewType = 'home' | 'learn' | 'subjects' | 'practice' | 'tutor' | 'profile' | 'admin' | 'daily_challenge' | 'flashcards' | 'journey' | 'weak_topics' | 'upload_notes' | 'jamb' | 'novels';
 
 export interface StudyJourneyLearnData {
   mainConcept: string;
@@ -221,6 +221,10 @@ export interface NovelPracticeQuestion {
   explanation: string;
   topic?: string;
   year?: string;
+  chapterIndex?: number;
+  chapterNumber?: number;
+  chapterTitle?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
 }
 
 export interface NovelCharacter {
@@ -280,6 +284,7 @@ export interface NovelChapter {
   importantVocabulary?: NovelChapterVocabulary[];
   keyPoints?: string[];
   questions?: NovelChapterQuestion[];
+  practiceQuestions?: NovelPracticeQuestion[];
 }
 
 export interface Novel {
@@ -304,6 +309,9 @@ export interface Novel {
   estimatedReadingTime: string;
   chapters: NovelChapter[];
   isFullTextIncluded?: boolean;
+  distributionRights?: 'public_domain' | 'authorized_study_edition';
+  distributionRightsLabel?: string;
+  examSession?: string;
 }
 
 export interface NovelReadingProgress {
@@ -365,15 +373,17 @@ export interface NovelPracticeAttempt {
   uid: string;
   novelId: string;
   novelTitle: string;
-  mode: 'sequential' | 'random' | 'timed' | 'untimed' | 'cbt';
-  scope: 'chapter' | 'multi_chapter' | 'all_chapters';
-  selectedChapterIndices: number[];
+  mode?: 'sequential' | 'random' | 'timed' | 'untimed' | 'cbt';
+  scope?: 'chapter' | 'multi_chapter' | 'all_chapters';
+  selectedChapterIndices?: number[];
+  chapterIndex?: number;
+  chapterTitle?: string;
   totalQuestions: number;
   correctAnswers: number;
   scorePercentage: number;
   timeSpentSeconds: number;
-  weakChapters: ChapterPerformanceSummary[];
-  completedChapterIndices: number[];
+  weakChapters?: ChapterPerformanceSummary[];
+  completedChapterIndices?: number[];
   timestamp: number;
   syncStatus?: 'synced' | 'pending';
 }

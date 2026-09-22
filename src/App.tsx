@@ -2,8 +2,13 @@ import React, { useState, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import BottomNav from './components/BottomNav';
+import Logo from './components/Logo';
+import UserAvatar from './components/UserAvatar';
+import HeaderMoreMenu from './components/HeaderMoreMenu';
+import HelpModal from './components/HelpModal';
+import GoogleBackupPromptModal from './components/GoogleBackupPromptModal';
 import { ViewType } from './types';
-import { LogOut, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from './contexts/AuthContext';
 import { ThemeToggle } from './components/ThemeToggle';
@@ -26,10 +31,12 @@ const WeakTopics = React.lazy(() => import('./components/WeakTopics'));
 const UploadNotes = React.lazy(() => import('./components/UploadNotes'));
 const JambPrep = React.lazy(() => import('./components/jamb/JambPrep'));
 const NovelsLibrary = React.lazy(() => import('./components/novels/NovelsLibrary'));
+const LearnHub = React.lazy(() => import('./components/LearnHub'));
 
 function getEffectiveView(pathname: string): ViewType {
   if (pathname === '/ai-tutor' || pathname === '/tutor') return 'tutor';
-  if (pathname === '/learn' || pathname === '/subjects') return 'subjects';
+  if (pathname === '/learn') return 'learn';
+  if (pathname === '/library' || pathname === '/subjects') return 'subjects';
   if (pathname.startsWith('/novels') || pathname === '/learn/novels') return 'novels';
   if (pathname.startsWith('/jamb')) return 'jamb';
   if (pathname.startsWith('/practice')) return 'practice';
@@ -38,7 +45,7 @@ function getEffectiveView(pathname: string): ViewType {
   if (pathname.startsWith('/daily-challenge')) return 'daily_challenge';
   if (pathname.startsWith('/study-journey') || pathname.startsWith('/journey')) return 'journey';
   if (pathname.startsWith('/weak-topics')) return 'weak_topics';
-  if (pathname.startsWith('/upload-notes')) return 'upload_notes';
+  if (pathname.startsWith('/upload-notes') || pathname.startsWith('/upload')) return 'upload_notes';
   if (pathname.startsWith('/admin')) return 'admin';
   return 'home';
 }
@@ -48,9 +55,19 @@ export default function App() {
   const navigate = useNavigate();
 
   const currentView = getEffectiveView(location.pathname);
-  const { user, userProfile, settings, isSuperAdmin, loading, signOut } = useAuth();
+  const {
+    user,
+    userProfile,
+    settings,
+    isSuperAdmin,
+    loading,
+    signOut,
+    showGoogleBackupPrompt,
+    setShowGoogleBackupPrompt,
+  } = useAuth();
   const [adminChecked, setAdminChecked] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   // Centralized React Router navigation
   const setCurrentView = React.useCallback(
@@ -176,20 +193,34 @@ export default function App() {
         )}
 
         <main className={`flex-1 flex flex-col min-h-0 relative ${currentView === 'tutor' ? 'p-0 overflow-hidden' : 'p-3 sm:p-4 md:p-8 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-8 overflow-y-auto'}`}>
-          <header className={`flex justify-between items-center shrink-0 gap-2 sm:gap-3 md:gap-4 flex-wrap ${currentView === 'tutor' ? 'hidden' : 'mb-5 md:mb-8'}`}>
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <div className="space-y-0.5 sm:space-y-1 truncate">
-                <p className="text-blue-600 font-semibold text-[10px] sm:text-xs uppercase tracking-wider truncate">
-                  Adaptive Learning Engine
+          <header className={`flex justify-between items-center shrink-0 gap-2 sm:gap-3 md:gap-4 flex-wrap relative z-30 ${currentView === 'tutor' ? 'hidden' : 'mb-4 md:mb-7'}`}>
+            {/* LearnDean Logo & Name on the Left */}
+            <div 
+              id="header-brand-logo"
+              onClick={() => setCurrentView('home')}
+              className="flex items-center gap-2 sm:gap-2.5 cursor-pointer group shrink-0"
+              role="button"
+              tabIndex={0}
+              aria-label="LearnDean Home"
+            >
+              <Logo variant="icon" className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 group-hover:scale-105 transition-transform" />
+              <div className="flex flex-col">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-base sm:text-lg md:text-xl font-black tracking-tight text-slate-900 dark:text-white leading-none">
+                    LearnDean
+                  </span>
+                  <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300 leading-none">
+                    PRO
+                  </span>
+                </div>
+                <p className="hidden md:block text-[11px] text-slate-500 dark:text-slate-400 font-medium -mt-0.5">
+                  Smart Prep System
                 </p>
-                <h1 className="text-lg sm:text-xl md:text-3xl font-bold tracking-tight text-slate-800 dark:text-white truncate">
-                  Exam Readiness: <span className="text-blue-600">High</span>
-                </h1>
               </div>
             </div>
 
             {/* Global Search Bar Trigger (Desktop & Tablet) */}
-            <div className="flex-1 max-w-sm lg:max-w-md mx-2 hidden sm:block">
+            <div className="flex-1 max-w-xs md:max-w-sm lg:max-w-md mx-2 hidden sm:block">
               <button
                 id="header-global-search-btn"
                 onClick={() => setIsSearchOpen(true)}
@@ -198,7 +229,7 @@ export default function App() {
               >
                 <div className="flex items-center gap-2 text-xs truncate">
                   <Search size={15} className="group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors shrink-0" />
-                  <span className="truncate">Search subjects, topics, flashcards...</span>
+                  <span className="truncate">Search subjects, questions...</span>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <kbd className="hidden md:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded border border-slate-200 dark:border-slate-600">
@@ -208,14 +239,15 @@ export default function App() {
               </button>
             </div>
 
-            <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 ml-auto shrink-0">
+            {/* Right Header: Search (Mobile), ThemeToggle, Profile Avatar */}
+            <div className="flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
               {/* Mobile Search Button */}
               <button
                 id="mobile-header-search-btn"
                 onClick={() => setIsSearchOpen(true)}
                 className="sm:hidden p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
                 aria-label="Search"
-                title="Search Learndean"
+                title="Search LearnDean"
               >
                 <Search size={18} />
               </button>
@@ -223,23 +255,38 @@ export default function App() {
               {/* Theme Toggle Button */}
               <ThemeToggle />
 
-              <div className="hidden sm:block text-right">
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Welcome back,</p>
-                <p className="text-sm font-bold text-slate-800 dark:text-white">{user.displayName || 'Student'}</p>
-              </div>
-              <div 
-                className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden border-2 border-blue-100 dark:border-blue-800 flex items-center justify-center font-bold text-slate-600 dark:text-slate-300"
-                aria-hidden="true"
+              {/* Profile Avatar on the Right */}
+              <button
+                id="header-profile-btn"
+                onClick={() => {
+                  localStorage.removeItem('zetadu_profile_section');
+                  window.dispatchEvent(new CustomEvent('open-profile-section', { detail: { section: null } }));
+                  setCurrentView('profile');
+                }}
+                className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border border-slate-200/90 dark:border-slate-700 text-left transition-all cursor-pointer group shadow-2xs"
+                aria-label="Student Profile"
+                title="View Student Profile"
               >
-                {user.displayName ? user.displayName.charAt(0).toUpperCase() : 'S'}
-              </div>
-              <button 
-                onClick={signOut}
-                className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors text-slate-500 dark:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                aria-label="Sign out"
-              >
-                <LogOut size={20} />
+                <UserAvatar
+                  photoURL={userProfile?.photoURL || user?.photoURL}
+                  displayName={userProfile?.name || user?.displayName}
+                  email={user?.email}
+                  size="sm"
+                  className="ring-2 ring-blue-500/20"
+                />
+                <div className="hidden sm:block leading-tight text-left pr-0.5">
+                  <p className="text-[10px] text-slate-400 dark:text-slate-400 font-medium">Profile</p>
+                  <p className="text-xs font-bold text-slate-800 dark:text-white truncate max-w-[90px]">
+                    {userProfile?.name || user?.displayName || 'Student'}
+                  </p>
+                </div>
               </button>
+
+              {/* Three-dot (⋮) More Menu at the Top-Right */}
+              <HeaderMoreMenu
+                setCurrentView={setCurrentView}
+                onOpenHelp={() => setIsHelpOpen(true)}
+              />
             </div>
           </header>
 
@@ -263,8 +310,9 @@ export default function App() {
                     <Route path="/home" element={<Home setView={setCurrentView} />} />
                     <Route path="/ai-tutor" element={<Tutor setCurrentView={setCurrentView} />} />
                     <Route path="/tutor" element={<Navigate to="/ai-tutor" replace />} />
-                    <Route path="/learn" element={<Subjects setView={setCurrentView} />} />
-                    <Route path="/subjects" element={<Navigate to="/learn" replace />} />
+                    <Route path="/learn" element={<LearnHub setView={setCurrentView} />} />
+                    <Route path="/library" element={<Subjects setView={setCurrentView} />} />
+                    <Route path="/subjects" element={<Subjects setView={setCurrentView} />} />
                     <Route path="/novels" element={<NovelsLibrary />} />
                     <Route path="/learn/novels" element={<Subjects setView={setCurrentView} initialSection="novels" />} />
                     <Route path="/practice" element={<Practice setView={setCurrentView} />} />
@@ -279,6 +327,7 @@ export default function App() {
                     <Route path="/journey" element={<Navigate to="/study-journey" replace />} />
                     <Route path="/weak-topics" element={<WeakTopics setView={setCurrentView} />} />
                     <Route path="/upload-notes" element={<UploadNotes setView={setCurrentView} />} />
+                    <Route path="/upload" element={<Navigate to="/upload-notes" replace />} />
                     <Route path="/admin" element={<Admin />} />
                     <Route path="*" element={<Navigate to="/home" replace />} />
                   </Routes>
@@ -308,6 +357,17 @@ export default function App() {
               setView={setCurrentView} 
             />
           </Suspense>
+        )}
+
+        {/* Help & Support Modal */}
+        <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+
+        {/* Post-Google Signup Backup Password Prompt */}
+        {showGoogleBackupPrompt && (
+          <GoogleBackupPromptModal
+            isOpen={showGoogleBackupPrompt}
+            onClose={() => setShowGoogleBackupPrompt(false)}
+          />
         )}
       </div>
     </div>

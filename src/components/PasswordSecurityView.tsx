@@ -12,17 +12,26 @@ interface PasswordSecurityViewProps {
 }
 
 export default function PasswordSecurityView({ onBack }: PasswordSecurityViewProps) {
-  const { user } = useAuth();
+  const { user, linkPasswordAccount } = useAuth();
 
   const hasPasswordProvider = user?.providerData?.some(p => p.providerId === 'password') || false;
   const isGoogleUser = user?.providerData?.some(p => p.providerId === 'google.com') || false;
 
-  // Form states
+  // Form states for password change (existing password users)
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // Visibility toggles
+  // Form states for creating backup password (Google users)
+  const [createPassword, setCreatePassword] = useState('');
+  const [confirmCreatePassword, setConfirmCreatePassword] = useState('');
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [showConfirmCreatePassword, setShowConfirmCreatePassword] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+
+  // Visibility toggles for password change
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -36,6 +45,43 @@ export default function PasswordSecurityView({ onBack }: PasswordSecurityViewPro
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+
+  const handleCreateBackupPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError(null);
+    setCreateSuccess(null);
+
+    if (!createPassword.trim()) {
+      setCreateError('Please enter a password.');
+      return;
+    }
+
+    if (createPassword.length < 6) {
+      setCreateError('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (createPassword !== confirmCreatePassword) {
+      setCreateError('The passwords do not match. Please verify your confirmation password.');
+      return;
+    }
+
+    setCreateLoading(true);
+    try {
+      const res = await linkPasswordAccount(createPassword);
+      if (res.success) {
+        setCreateSuccess('Backup password successfully linked! You can now sign in using Google or your email and password.');
+        setCreatePassword('');
+        setConfirmCreatePassword('');
+      } else {
+        setCreateError(res.error || 'Failed to link backup password. Please try again.');
+      }
+    } catch (err: any) {
+      setCreateError(err?.message || 'An unexpected error occurred while linking your password.');
+    } finally {
+      setCreateLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,39 +222,123 @@ export default function PasswordSecurityView({ onBack }: PasswordSecurityViewPro
               </div>
             </div>
 
-            {/* Optional Setup Email */}
+            {/* Direct In-App Backup Password Creation */}
             <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-700/80">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
-                Want to add a password for email login?
-              </h4>
-              <p className="text-xs text-slate-600 dark:text-slate-300 mb-4">
-                You can set up a password so you can sign in with either your Google account or with your email and password.
+              <div className="flex items-center gap-2 mb-2">
+                <KeyRound size={16} className="text-blue-600 dark:text-blue-400" />
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Add a backup sign-in method
+                </h4>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">
+                Create a password so you can sign in without Google on another device. Your Google login will still work seamlessly.
               </p>
 
-              {resetEmailSent ? (
-                <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 rounded-xl border border-emerald-200 dark:border-emerald-800 text-xs flex items-center gap-2">
-                  <CheckCircle2 size={16} className="shrink-0" />
-                  <span>Password setup email sent to <strong>{user?.email}</strong>. Check your inbox to create your password.</span>
+              {createError && (
+                <div className="mb-4 p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-xs flex items-start gap-2.5">
+                  <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-500" />
+                  <span className="flex-1 font-medium">{createError}</span>
                 </div>
-              ) : (
+              )}
+
+              {createSuccess && (
+                <div className="mb-4 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs flex items-start gap-2.5">
+                  <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-emerald-500" />
+                  <span className="flex-1 font-medium">{createSuccess}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleCreateBackupPassword} className="space-y-3.5">
                 <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showCreatePassword ? 'text' : 'password'}
+                      value={createPassword}
+                      onChange={(e) => setCreatePassword(e.target.value)}
+                      placeholder="At least 6 characters"
+                      autoComplete="new-password"
+                      className="w-full px-3.5 py-2.5 pr-10 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCreatePassword(!showCreatePassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    >
+                      {showCreatePassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Confirm Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmCreatePassword ? 'text' : 'password'}
+                      value={confirmCreatePassword}
+                      onChange={(e) => setConfirmCreatePassword(e.target.value)}
+                      placeholder="Re-enter password"
+                      autoComplete="new-password"
+                      className="w-full px-3.5 py-2.5 pr-10 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmCreatePassword(!showConfirmCreatePassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    >
+                      {showConfirmCreatePassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-1">
+                  <button
+                    type="submit"
+                    disabled={createLoading}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-blue-500/20 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {createLoading ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin" />
+                        <span>Linking Password...</span>
+                      </>
+                    ) : (
+                      <>
+                        <KeyRound size={14} />
+                        <span>Save & Link Password</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+
+              {/* Alternative Email Option */}
+              <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700/60">
+                {resetEmailSent ? (
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 rounded-xl border border-emerald-200 dark:border-emerald-800 text-xs flex items-center gap-2">
+                    <CheckCircle2 size={14} className="shrink-0" />
+                    <span>Password setup email sent to <strong>{user?.email}</strong>. Check your inbox.</span>
+                  </div>
+                ) : (
                   <button
                     onClick={handleSendPasswordSetup}
                     disabled={resetLoading}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 font-medium transition-colors cursor-pointer"
                   >
-                    {resetLoading ? (
-                      <RefreshCw size={14} className="animate-spin" />
-                    ) : (
-                      <Mail size={14} />
-                    )}
-                    Send Password Creation Email
+                    <Mail size={13} />
+                    <span>Prefer an email link? Send password creation email instead</span>
                   </button>
-                  {resetError && (
-                    <p className="mt-2 text-xs text-red-600 dark:text-red-400">{resetError}</p>
-                  )}
-                </div>
-              )}
+                )}
+                {resetError && (
+                  <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{resetError}</p>
+                )}
+              </div>
             </div>
           </div>
         ) : (

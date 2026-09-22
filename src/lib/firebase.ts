@@ -1,6 +1,7 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, browserLocalPersistence, setPersistence, Auth } from "firebase/auth";
 import { initializeFirestore, memoryLocalCache, setLogLevel, getFirestore, Firestore } from "firebase/firestore";
+import { getStorage, FirebaseStorage } from "firebase/storage";
 
 // Suppress Firestore internal SDK logs for resource-exhaustion / backoff delays
 try {
@@ -49,7 +50,7 @@ export const FIRESTORE_DATABASE_ID = (typeof import.meta !== "undefined" && impo
 let app: FirebaseApp | undefined;
 let auth: Auth | any = null;
 let db: Firestore | any = null;
-let storage: any = null;
+let storage: FirebaseStorage | any = null;
 const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope('email');
 googleProvider.addScope('profile');
@@ -76,6 +77,12 @@ try {
       }, FIRESTORE_DATABASE_ID);
     } catch (_) {
       db = getFirestore(app, FIRESTORE_DATABASE_ID);
+    }
+
+    try {
+      storage = getStorage(app);
+    } catch (storageErr) {
+      console.warn("[Firebase Storage] Failed to initialize:", storageErr);
     }
   } else {
     console.warn("Firebase configuration is missing.");

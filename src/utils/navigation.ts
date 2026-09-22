@@ -2,7 +2,8 @@ import { ViewType } from '../types';
 
 export const VIEW_TO_PATH: Record<ViewType, string> = {
   home: '/home',
-  subjects: '/learn',
+  learn: '/learn',
+  subjects: '/library',
   practice: '/practice',
   tutor: '/ai-tutor',
   profile: '/profile',
@@ -22,7 +23,8 @@ export const PATH_TO_VIEW: Record<string, ViewType> = {
   '/home': 'home',
   '/ai-tutor': 'tutor',
   '/tutor': 'tutor',
-  '/learn': 'subjects',
+  '/learn': 'learn',
+  '/library': 'subjects',
   '/subjects': 'subjects',
   '/novels': 'novels',
   '/learn/novels': 'novels',
@@ -41,6 +43,7 @@ export const PATH_TO_VIEW: Record<string, ViewType> = {
   '/weak_topics': 'weak_topics',
   '/upload-notes': 'upload_notes',
   '/upload_notes': 'upload_notes',
+  '/upload': 'upload_notes',
   '/jamb': 'jamb',
   '/jamb-prep': 'jamb',
   '/jamb-cbt': 'jamb',

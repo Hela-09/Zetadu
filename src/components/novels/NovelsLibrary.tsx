@@ -51,6 +51,7 @@ export default function NovelsLibrary() {
   const [resumeChapterIndex, setResumeChapterIndex] = useState<number>(0);
 
   const [activeNovelForQuiz, setActiveNovelForQuiz] = useState<Novel | null>(null);
+  const [quizInitialChapterIndex, setQuizInitialChapterIndex] = useState<number | undefined>(undefined);
   const [activeNovelForStudyNotes, setActiveNovelForStudyNotes] = useState<Novel | null>(null);
 
   // States for offline and progress
@@ -218,16 +219,37 @@ export default function NovelsLibrary() {
   // If reader view is active, render NovelReader
   if (activeNovelForReading) {
     return (
-      <NovelReader
-        novel={activeNovelForReading}
-        initialChapterIndex={resumeChapterIndex}
-        onBack={() => {
-          setActiveNovelForReading(null);
-          refreshProgress();
-          refreshOfflineStatuses();
-          refreshAllBookmarks();
-        }}
-      />
+      <>
+        <NovelReader
+          novel={activeNovelForReading}
+          initialChapterIndex={resumeChapterIndex}
+          onBack={() => {
+            setActiveNovelForReading(null);
+            refreshProgress();
+            refreshOfflineStatuses();
+            refreshAllBookmarks();
+          }}
+          onOpenPractice={(chapterIndex) => {
+            setQuizInitialChapterIndex(chapterIndex);
+            setActiveNovelForQuiz(activeNovelForReading);
+          }}
+        />
+
+        {/* Practice quiz overlay accessible directly from reader */}
+        {activeNovelForQuiz && (
+          <NovelPracticeQuiz
+            novel={activeNovelForQuiz}
+            initialChapterIndex={quizInitialChapterIndex}
+            onClose={() => {
+              setActiveNovelForQuiz(null);
+              setQuizInitialChapterIndex(undefined);
+            }}
+            onSaveScore={() => {
+              refreshProgress();
+            }}
+          />
+        )}
+      </>
     );
   }
 
@@ -239,7 +261,8 @@ export default function NovelsLibrary() {
     const percentDone = userProgress?.percentage || 0;
     const completedCount = userProgress?.completedChapters?.length || 0;
     const novelBookmarks = allBookmarks.filter((b) => b.novelId === novel.id);
-    const questionsCount = novel.practiceQuestions?.length || 0;
+    const chapterQuestionsCount = novel.chapters?.reduce((sum, ch) => sum + (ch.practiceQuestions?.length || 0), 0) || 0;
+    const questionsCount = (novel.practiceQuestions?.length || 0) + chapterQuestionsCount;
 
     return (
       <div
@@ -297,9 +320,18 @@ export default function NovelsLibrary() {
               )}
             </div>
 
-            {/* Title & Author at bottom of image */}
+            {/* Title, Author, Year, and Exam Session at bottom of image */}
             <div className="absolute bottom-3 left-4 right-4">
-              <p className="text-white/90 text-xs font-semibold">{novel.author} ({novel.year})</p>
+              <div className="flex flex-wrap items-center gap-1.5 text-white/90 text-xs font-semibold mb-1">
+                <span>{novel.author}</span>
+                <span>•</span>
+                <span>{novel.year}</span>
+                {novel.examSession && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/90 text-slate-950 ml-1">
+                    {novel.examSession}
+                  </span>
+                )}
+              </div>
               <h4 className="text-lg font-black text-white leading-snug tracking-tight line-clamp-1">
                 {novel.title}
               </h4>
@@ -308,6 +340,16 @@ export default function NovelsLibrary() {
 
           {/* Body Content */}
           <div className="p-5 space-y-3.5">
+            {/* Distribution Rights & Authorized Study Edition Badge */}
+            {novel.distributionRightsLabel && (
+              <div className="px-3 py-1.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-800/60 text-blue-900 dark:text-blue-200 text-[11px] font-bold flex items-center justify-between">
+                <span className="line-clamp-1">{novel.distributionRightsLabel}</span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold flex items-center gap-0.5 shrink-0 ml-2">
+                  <CheckCircle2 size={11} /> Offline Ready
+                </span>
+              </div>
+            )}
+
             {/* Syllabus Relevance Callout */}
             {novel.syllabusRelevance && (
               <div className="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-850/60 text-amber-900 dark:text-amber-300 text-[11px] font-semibold flex items-center gap-1.5">

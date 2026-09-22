@@ -20,7 +20,8 @@ import {
   Trash2,
   X,
   Clock,
-  ExternalLink
+  ExternalLink,
+  HelpCircle
 } from 'lucide-react';
 import {
   getChapterContent,
@@ -40,11 +41,17 @@ interface NovelReaderProps {
   novel: Novel;
   initialChapterIndex?: number;
   onBack: () => void;
+  onOpenPractice?: (chapterIndex: number) => void;
 }
 
 type ReaderTheme = 'light' | 'sepia' | 'dark' | 'midnight';
 
-export default function NovelReader({ novel, initialChapterIndex = 0, onBack }: NovelReaderProps) {
+export default function NovelReader({
+  novel,
+  initialChapterIndex = 0,
+  onBack,
+  onOpenPractice
+}: NovelReaderProps) {
   const { user } = useAuth();
   const [currentChapterIndex, setCurrentChapterIndex] = useState<number>(initialChapterIndex);
   const [chapter, setChapter] = useState<NovelChapter | null>(null);
@@ -513,6 +520,18 @@ export default function NovelReader({ novel, initialChapterIndex = 0, onBack }: 
             <span className="hidden sm:inline">Chapters</span>
           </button>
 
+          {/* Chapter CBT Practice */}
+          {onOpenPractice && (
+            <button
+              onClick={() => onOpenPractice(currentChapterIndex)}
+              className="px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 transition-colors flex items-center gap-1.5 text-xs font-bold"
+              title="Practice Chapter CBT Questions"
+            >
+              <HelpCircle size={15} />
+              <span className="hidden md:inline">Practice Quiz</span>
+            </button>
+          )}
+
           {/* Settings (Font, Theme) */}
           <button
             onClick={() => setShowSettings(!showSettings)}
@@ -688,7 +707,17 @@ export default function NovelReader({ novel, initialChapterIndex = 0, onBack }: 
 
               {/* End of Chapter Section */}
               <div className="mt-16 pt-8 border-t border-current/20 flex flex-col items-center">
-                <div className="flex items-center gap-2 mb-6">
+                <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
+                  {onOpenPractice && (
+                    <button
+                      onClick={() => onOpenPractice(currentChapterIndex)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 transition-all shadow-sm"
+                    >
+                      <HelpCircle size={16} />
+                      <span>Practice Chapter {currentChapterIndex + 1} CBT Questions</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => handleMarkChapterCompleted(currentChapterIndex)}
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${

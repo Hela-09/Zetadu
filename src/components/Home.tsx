@@ -54,9 +54,24 @@ export default function Home({ setView }: HomeProps) {
 
   // Offline Learning Hub states
   const [isOffline, setIsOffline] = useState<boolean>(() => typeof navigator !== 'undefined' ? !navigator.onLine : false);
-  const [showOfflineHubPreview, setShowOfflineHubPreview] = useState<boolean>(false);
+  const [showOfflineHubPreview, setShowOfflineHubPreview] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('open_offline_hub') === 'true') {
+      sessionStorage.removeItem('open_offline_hub');
+      return true;
+    }
+    return false;
+  });
   const [isPrepareModalOpen, setIsPrepareModalOpen] = useState<boolean>(false);
   const [onlineNotification, setOnlineNotification] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleOpenOfflineHub = () => {
+      setShowOfflineHubPreview(true);
+      window.scrollTo(0, 0);
+    };
+    window.addEventListener('open-offline-hub', handleOpenOfflineHub);
+    return () => window.removeEventListener('open-offline-hub', handleOpenOfflineHub);
+  }, []);
 
   useEffect(() => {
     const handleOnline = () => {

@@ -565,3 +565,24 @@ export async function markPracticeAttemptSynced(id: string): Promise<void> {
     req.onerror = () => resolve();
   });
 }
+
+export async function getAllOfflineChaptersForNovel(novelId: string): Promise<OfflineStoredChapter[]> {
+  try {
+    const db = await getNovelOfflineDb();
+    return new Promise((resolve) => {
+      const tx = db.transaction('offline_chapters', 'readonly');
+      const store = tx.objectStore('offline_chapters');
+      const index = store.index('by_novel');
+      const req = index.getAll(IDBKeyRange.only(novelId));
+      req.onsuccess = () => {
+        const chapters = (req.result || []) as OfflineStoredChapter[];
+        chapters.sort((a, b) => a.chapterIndex - b.chapterIndex);
+        resolve(chapters);
+      };
+      req.onerror = () => resolve([]);
+    });
+  } catch (err) {
+    return [];
+  }
+}
+

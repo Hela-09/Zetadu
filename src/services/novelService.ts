@@ -35,6 +35,7 @@ import {
   getOfflinePracticeHistoryForUser,
   getPendingOfflinePracticeAttempts,
   markPracticeAttemptSynced,
+  getAllOfflineChaptersForNovel,
 } from './novelOfflineDb';
 
 let isSyncing = false;
@@ -406,6 +407,22 @@ export async function syncPendingNovelData(uid: string): Promise<{ syncedProgres
         console.warn(`Failed syncing bookmark ${bm.id}:`, err);
       }
     }
+
+    // 3. Sync pending practice attempts
+    const pendingAttempts = await getPendingOfflinePracticeAttempts(uid);
+    for (const attempt of pendingAttempts) {
+      try {
+        const docRef = doc(db, 'novel_practice_history', attempt.id);
+        await setDoc(docRef, {
+          ...attempt,
+          syncStatus: 'synced',
+        }, { merge: true });
+
+        await markPracticeAttemptSynced(attempt.id);
+      } catch (err) {
+        console.warn(`Failed syncing practice attempt ${attempt.id}:`, err);
+      }
+    }
   } catch (err) {
     console.error('Error during offline novel data sync:', err);
   } finally {
@@ -415,6 +432,148 @@ export async function syncPendingNovelData(uid: string): Promise<{ syncedProgres
   return { syncedProgress, syncedBookmarks };
 }
 
+// -------------------------------------------------------------
+// PRACTICE ATTEMPTS & SCORE HISTORY
+// -------------------------------------------------------------
+
+export async function savePracticeAttempt(attempt: NovelPracticeAttempt): Promise<void> {
+  const online = isOnline();
+  const attemptToStore: NovelPracticeAttempt = {
+    ...attempt,
+    syncStatus: online ? 'synced' : 'pending',
+  };
+
+  // 1. Always save to local IndexedDB (reliable offline capability)
+  await saveOfflinePracticeAttempt(attemptToStore);
+
+  // 2. If online and logged in, sync to Firestore
+  if (online && attempt.uid && db) {
+    try {
+      const docRef = doc(db, 'novel_practice_history', attempt.id);
+      await setDoc(docRef, {
+        id: attempt.id,
+        uid: attempt.uid,
+        novelId: attempt.novelId,
+        novelTitle: attempt.novelTitle,
+        mode: attempt.mode,
+        scope: attempt.scope,
+        selectedChapterIndices: attempt.selectedChapterIndices,
+        totalQuestions: attempt.totalQuestions,
+        correctAnswers: attempt.correctAnswers,
+        scorePercentage: attempt.scorePercentage,
+        timeSpentSeconds: attempt.timeSpentSeconds,
+        weakChapters: attempt.weakChapters,
+        completedChapterIndices: attempt.completedChapterIndices,
+        timestamp: attempt.timestamp,
+        syncStatus: 'synced',
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Firestore practice attempt save failed (persisted locally):', err);
+      await saveOfflinePracticeAttempt({ ...attemptToStore, syncStatus: 'pending' });
+    }
+  }
+}
+
+export async function getUserPracticeHistory(uid: string, novelId?: string): Promise<NovelPracticeAttempt[]> {
+  const localList = await getOfflinePracticeHistoryForUser(uid, novelId);
+  const attemptsMap = new Map<string, NovelPracticeAttempt>();
+
+  localList.forEach((att) => attemptsMap.set(att.id, att));
+
+  if (isOnline() && uid && db) {
+    try {
+      let q = query(collection(db, 'novel_practice_history'), where('uid', '==', uid));
+      if (novelId) {
+        q = query(collection(db, 'novel_practice_history'), where('uid', '==', uid), where('novelId', '==', novelId));
+      }
+      const snap = await getDocs(q);
+      snap.forEach((d) => {
+        const remote = d.data() as NovelPracticeAttempt;
+        attemptsMap.set(remote.id, remote);
+        saveOfflinePracticeAttempt({ ...remote, syncStatus: 'synced' }).catch(() => {});
+      });
+    } catch (err) {
+      console.warn('Failed to load practice history from Firestore, using offline cache:', err);
+    }
+  }
+
+  const merged = Array.from(attemptsMap.values());
+  merged.sort((a, b) => b.timestamp - a.timestamp);
+  return merged;
+}
+
+// -------------------------------------------------------------
+// QUESTIONS RETRIEVAL & AGGREGATION (ONLINE + OFFLINE)
+// -------------------------------------------------------------
+
+export async function getNovelPracticeQuestions(
+  novel: Novel,
+  selectedChapterIndices?: number[]
+): Promise<NovelChapterQuestion[]> {
+  const collectedQuestions: NovelChapterQuestion[] = [];
+  const seenIds = new Set<string>();
+
+  // Check if offline chapters are available
+  let chaptersToSearch = novel.chapters;
+  const isOffline = await isNovelDownloadedOffline(novel.id);
+  if (isOffline) {
+    const offlineChapters = await getAllOfflineChaptersForNovel(novel.id);
+    if (offlineChapters.length > 0) {
+      chaptersToSearch = offlineChapters as any;
+    }
+  }
+
+  // Filter chapters if specified
+  const targetChapters = selectedChapterIndices && selectedChapterIndices.length > 0
+    ? chaptersToSearch.filter((_, idx) => selectedChapterIndices.includes(idx))
+    : chaptersToSearch;
+
+  // 1. Collect questions defined directly on chapters
+  targetChapters.forEach((chap, idx) => {
+    const chapterIndex = (chap as any).chapterIndex !== undefined ? (chap as any).chapterIndex : idx;
+    if (chap.questions && chap.questions.length > 0) {
+      chap.questions.forEach((q) => {
+        if (!seenIds.has(q.id)) {
+          seenIds.add(q.id);
+          collectedQuestions.push({
+            ...q,
+            chapterIndex,
+            chapterNumber: chap.chapterNumber || chapterIndex + 1,
+            chapterTitle: chap.title || `Chapter ${chapterIndex + 1}`,
+          });
+        }
+      });
+    }
+  });
+
+  // 2. If no chapter-specific filter or if all chapters are selected, also add novel-level practice questions
+  if (!selectedChapterIndices || selectedChapterIndices.length === 0 || selectedChapterIndices.length === chaptersToSearch.length) {
+    if (novel.practiceQuestions && novel.practiceQuestions.length > 0) {
+      novel.practiceQuestions.forEach((pq, pqIdx) => {
+        if (!seenIds.has(pq.id)) {
+          seenIds.add(pq.id);
+          collectedQuestions.push({
+            id: pq.id,
+            novelId: novel.id,
+            chapterIndex: pqIdx % Math.max(1, novel.chapters.length),
+            chapterNumber: (pqIdx % Math.max(1, novel.chapters.length)) + 1,
+            chapterTitle: novel.chapters[pqIdx % Math.max(1, novel.chapters.length)]?.title || 'General Novel Comprehension',
+            question: pq.question,
+            options: pq.options,
+            correctAnswer: pq.correctAnswer,
+            explanation: pq.explanation,
+            difficulty: 'medium',
+            topic: pq.topic || 'General UTME Revision',
+            year: pq.year || 'Authentic JAMB UTME',
+          });
+        }
+      });
+    }
+  }
+
+  return collectedQuestions;
+}
+
 // Attach auto-sync listener when browser transitions to online
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
@@ -422,3 +581,4 @@ if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('learndean-novel-online-sync'));
   });
 }
+
