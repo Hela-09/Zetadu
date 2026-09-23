@@ -267,6 +267,9 @@ export interface NovelChapterQuestion {
   difficulty: 'easy' | 'medium' | 'hard';
   topic?: string;
   year?: string;
+  isAIgenerated?: boolean;
+  sourceType?: string;
+  fingerprint?: string;
 }
 
 export interface NovelChapter {

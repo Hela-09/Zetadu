@@ -381,9 +381,15 @@ export default function JambStudySection({
                   >
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 text-xs font-black">
-                          JAMB {q.year} • Q{q.questionNumber || (idx + 1)}
-                        </span>
+                        {(q as any).isAIgenerated || (q as any).sourceType === 'ai_generated' ? (
+                          <span className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 text-xs font-black inline-flex items-center gap-1 border border-indigo-200 dark:border-indigo-800/60">
+                            <Sparkles size={12} /> AI Drill • Q{q.questionNumber || (idx + 1)}
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 text-xs font-black border border-blue-200 dark:border-blue-800/60">
+                            JAMB {q.year || 'Past Paper'} • Q{q.questionNumber || (idx + 1)}
+                          </span>
+                        )}
                         <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                           {q.topic}
                         </span>

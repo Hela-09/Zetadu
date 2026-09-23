@@ -72,6 +72,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/jamb/generate-questions",
+      "destination": "/api/jamb-generate-questions"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },

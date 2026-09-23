@@ -206,5 +206,71 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
       allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isSuperAdmin());
     }
+
+    // Official JAMB Subjects Catalog
+    match /jambSubjects/{subjectId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // Official JAMB Topics Catalog
+    match /jambTopics/{topicId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // Discrete JAMB Questions Bank
+    match /jambQuestions/{questionId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['timesUsed', 'updatedAt']) || isSuperAdmin());
+      allow delete: if isSuperAdmin();
+    }
+
+    // Prescribed JAMB Literature Texts / Novels
+    match /jambNovels/{novelId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+
+      match /chapters/{chapterId} {
+        allow read: if true;
+        allow write: if isSuperAdmin();
+      }
+    }
+
+    // Discrete JAMB Novel Questions Bank
+    match /jambNovelQuestions/{questionId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['timesUsed', 'updatedAt']) || isSuperAdmin());
+      allow delete: if isSuperAdmin();
+    }
+
+    // User Question Tracking History (Seen and Answered Questions)
+    match /userQuestionHistory/{userId}/questions/{questionId} {
+      allow read, write: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin());
+    }
+
+    // Unified Practice Sessions
+    match /practiceSessions/{sessionId} {
+      allow get: if isAuthenticated() && (resource.data.userId == request.auth.uid || request.auth.uid == sessionId || isSuperAdmin());
+      allow list: if isAuthenticated() && (resource.data.userId == request.auth.uid || isSuperAdmin());
+      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isSuperAdmin());
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isSuperAdmin());
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isSuperAdmin());
+    }
+
+    // Question Generation Log
+    match /questionGeneration/{generationId} {
+      allow read, create: if isAuthenticated() && (request.auth.uid == request.resource.data.requestedBy || resource.data.requestedBy == request.auth.uid || isSuperAdmin());
+      allow update, delete: if isSuperAdmin();
+    }
+
+    // Question Bank Statistics
+    match /questionBankStats/{bankId} {
+      allow read: if true;
+      allow create, update: if isAuthenticated();
+      allow delete: if isSuperAdmin();
+    }
   }
 }

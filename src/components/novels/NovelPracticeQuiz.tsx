@@ -29,6 +29,7 @@ import {
   getUserPracticeHistory,
   isOnline
 } from '../../services/novelService';
+import { jambQuestionEngine } from '../../services/jambQuestionEngine';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface NovelPracticeQuizProps {
@@ -143,11 +144,11 @@ export default function NovelPracticeQuiz({
 
     let targetCount = pool.length;
     if (questionCountChoice === 'all') {
-      targetCount = pool.length;
+      targetCount = Math.min(100, pool.length);
     } else if (questionCountChoice === 'custom') {
-      targetCount = Math.max(1, Math.min(pool.length, customQuestionCount));
+      targetCount = Math.max(1, Math.min(100, Math.min(pool.length, customQuestionCount)));
     } else {
-      targetCount = Math.min(pool.length, questionCountChoice);
+      targetCount = Math.min(100, Math.min(pool.length, questionCountChoice));
     }
 
     const selectedList = pool.slice(0, targetCount);
@@ -198,6 +199,24 @@ export default function NovelPracticeQuiz({
     // In practice mode, show explanation immediately
     if (quizMode === 'practice') {
       setShowExplanationMap((prev) => ({ ...prev, [currentIndex]: true }));
+    }
+
+    // Track user answer in userQuestionHistory via unified JAMB engine
+    if (user && activeQuestions[currentIndex]) {
+      const q = activeQuestions[currentIndex];
+      const isCorrect = optIndex === q.correctAnswer;
+      jambQuestionEngine.recordQuestionAnswer(
+        user.uid,
+        'novel_practice_session',
+        q.id,
+        optIndex,
+        isCorrect,
+        10,
+        {
+          novelId: novel.id,
+          chapterId: typeof selectedChapterIndex === 'number' ? `chapter_${selectedChapterIndex + 1}` : undefined
+        }
+      ).catch(() => {});
     }
   };
 

@@ -12,6 +12,7 @@ import { getAuth } from "firebase-admin/auth";
 import fs from "fs";
 import { recordAiUsage, getUserAiUsage, getSuperAdminAiStats } from "./src/server/aiUsageTracker";
 import { disableUser, enableUser, isUserDisabled, getAllDisabledUsers } from "./src/server/disabledUsersStore";
+import { generateQuestionFingerprint, validateQuestionPayload } from "./src/utils/jambFingerprint";
 
 const SUPER_ADMIN_EMAIL = "emmanuelomojola07@gmail.com";
 
@@ -590,7 +591,6 @@ ${modeInstruction}
 
 Each question must be a multiple choice question with 4 options, one correct answer, and an explanation.`;
 
-      let response;
       const config = {
         responseMimeType: "application/json",
         responseSchema: {
@@ -608,25 +608,28 @@ Each question must be a multiple choice question with 4 options, one correct ans
         }
       };
 
-      let usedModel = 'gemini-3.8-flash';
-      try {
-        response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-          config
-        });
-      } catch (err: any) {
-        if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
-          console.warn("gemini-3.8-flash overloaded, falling back to gemini-3.1-flash-lite");
-          usedModel = 'gemini-3.1-flash-lite';
+      let usedModel = 'gemini-3.6-flash';
+      let response: any = null;
+      const modelCandidates = ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+      let lastModelError: any = null;
+
+      for (const m of modelCandidates) {
+        try {
+          usedModel = m;
           response = await ai.models.generateContent({
-            model: 'gemini-3.1-flash-lite',
+            model: m,
             contents: prompt,
             config
           });
-        } else {
-          throw err;
+          if (response?.text) break;
+        } catch (err: any) {
+          lastModelError = err;
+          console.warn(`Model ${m} failed in /api/generate-questions:`, err?.status || err?.message);
         }
+      }
+
+      if (!response?.text) {
+        throw lastModelError || new Error("No text from Gemini");
       }
 
       const text = response.text;
@@ -658,6 +661,207 @@ Each question must be a multiple choice question with 4 options, one correct ans
       } else {
          console.error("Generation API Error:", error);
          res.status(500).json({ error: "Failed to generate questions" });
+      }
+    }
+  });
+
+  // Dedicated JAMB Question Generation Engine (Server-side Gemini with strict deduplication)
+  app.post("/api/jamb/generate-questions", optionalAuth, async (req, res) => {
+    try {
+      const {
+        subjectId,
+        subjectName,
+        topicId,
+        topicName,
+        novelId,
+        novelTitle,
+        chapterId,
+        chapterTitle,
+        chapterIndex,
+        difficulty = 'medium',
+        amount = 5,
+        existingFingerprints = []
+      } = req.body;
+
+      const ai = getGeminiClient();
+      const count = Math.min(25, Math.max(1, Number(amount) || 5));
+      const isNovel = !!(novelId || novelTitle);
+
+      let prompt = "";
+      if (isNovel) {
+        prompt = `You are an expert Nigerian examiner and curriculum specialist for the JAMB UTME Use of English examination.
+Generate ${count} original, high-quality multiple choice practice questions for the prescribed JAMB novel/text:
+Novel Title: ${novelTitle || novelId}
+Chapter: ${chapterTitle || (chapterIndex !== undefined ? `Chapter ${Number(chapterIndex) + 1}` : 'Selected Chapter')}
+Focus: Deep comprehension of plot points, character actions, motivations, literary devices, themes, dialogue, and context as tested in authentic JAMB UTME examinations.
+Difficulty: ${difficulty}
+
+Strict Requirements:
+1. Every question must be original and clearly phrased.
+2. Provide exactly 4 plausible options (A, B, C, D).
+3. Exactly one unequivocally correct answer (0 for option A, 1 for B, 2 for C, 3 for D).
+4. Provide a thorough, pedagogically sound explanation referring directly to events in the novel.
+5. Do NOT prefix options with letters in the options array.`;
+      } else {
+        prompt = `You are a senior Nigerian test development specialist for the Joint Admissions and Matriculation Board (JAMB) Unified Tertiary Matriculation Examination (UTME).
+Generate ${count} original, high-calibre multiple choice practice questions for:
+Subject: ${subjectName || subjectId || 'Use of English'}
+Topic: ${topicName || topicId || 'General UTME Revision'}
+Difficulty: ${difficulty}
+
+Strict Requirements:
+1. Strictly follow the official JAMB UTME syllabus and curriculum specifications for Nigerian secondary schools.
+2. Questions must be rigorous, non-trivial, and test conceptual mastery, calculation, or lexis/structure.
+3. Provide exactly 4 plausible options (A, B, C, D).
+4. Exactly one unequivocally correct answer (0 for option A, 1 for B, 2 for C, 3 for D).
+5. Provide a step-by-step, thorough pedagogical explanation.
+6. Do NOT prefix options with letters in the options array.`;
+      }
+
+      const config = {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              question: { type: Type.STRING },
+              options: { type: Type.ARRAY, items: { type: Type.STRING } },
+              correctAnswer: { type: Type.INTEGER, description: "0-indexed correct option (0, 1, 2, or 3)" },
+              explanation: { type: Type.STRING },
+              difficulty: { type: Type.STRING, enum: ["easy", "medium", "hard"] }
+            },
+            required: ["question", "options", "correctAnswer", "explanation"]
+          }
+        }
+      };
+
+      let usedModel = 'gemini-3.6-flash';
+      let response: any = null;
+      const modelCandidates = ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+      let lastModelError: any = null;
+
+      for (const m of modelCandidates) {
+        try {
+          usedModel = m;
+          response = await ai.models.generateContent({
+            model: m,
+            contents: prompt,
+            config
+          });
+          if (response?.text) break;
+        } catch (err: any) {
+          lastModelError = err;
+          console.warn(`Model ${m} failed in /api/jamb/generate-questions:`, err?.status || err?.message);
+        }
+      }
+
+      if (!response?.text) {
+        throw lastModelError || new Error("No response received from AI models");
+      }
+
+      const text = response.text;
+      if (!text) throw new Error("No text response received from AI model");
+      const rawList = JSON.parse(text);
+
+      const existingFpSet = new Set<string>(Array.isArray(existingFingerprints) ? existingFingerprints : []);
+      const batchFpSet = new Set<string>();
+      const validatedQuestions: any[] = [];
+
+      const now = Date.now();
+
+      for (let i = 0; i < rawList.length; i++) {
+        const item = rawList[i];
+        const validated = validateQuestionPayload(item);
+        if (!validated) continue;
+
+        const fingerprint = generateQuestionFingerprint(validated.question, validated.options);
+        // Deduplicate against existing bank & current batch
+        if (existingFpSet.has(fingerprint) || batchFpSet.has(fingerprint)) {
+          continue;
+        }
+
+        batchFpSet.add(fingerprint);
+
+        const questionId = isNovel
+          ? `jamb_novel_q_${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${i}`
+          : `jamb_q_${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${i}`;
+
+        if (isNovel) {
+          validatedQuestions.push({
+            questionId,
+            novelId: novelId || 'unknown_novel',
+            chapterId: chapterId || `chap_${chapterIndex ?? 0}`,
+            chapterIndex: chapterIndex !== undefined ? Number(chapterIndex) : 0,
+            chapterTitle: chapterTitle || '',
+            novelTitle: novelTitle || '',
+            question: validated.question,
+            options: validated.options,
+            correctAnswer: validated.correctAnswer,
+            explanation: validated.explanation,
+            difficulty: validated.difficulty || difficulty,
+            sourceType: 'ai_generated', // Never labeled as official JAMB past question
+            isAIgenerated: true,
+            status: 'active',
+            fingerprint,
+            timesUsed: 0,
+            createdAt: now,
+            updatedAt: now
+          });
+        } else {
+          validatedQuestions.push({
+            questionId,
+            subjectId: (subjectId || 'english').toLowerCase(),
+            subjectName: subjectName || 'English Language',
+            topicId: (topicId || 'general').toLowerCase(),
+            topicName: topicName || 'General',
+            question: validated.question,
+            options: validated.options,
+            correctAnswer: validated.correctAnswer,
+            explanation: validated.explanation,
+            difficulty: validated.difficulty || difficulty,
+            sourceType: 'ai_generated', // Never labeled as official JAMB past question
+            isAIgenerated: true,
+            status: 'active',
+            fingerprint,
+            timesUsed: 0,
+            createdAt: now,
+            updatedAt: now
+          });
+        }
+      }
+
+      // Record AI usage token counts
+      const user = (req as any).user;
+      const uid = user?.uid || user?.user_id;
+      if (uid) {
+        const inputTokens = response.usageMetadata?.promptTokenCount ?? 0;
+        const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
+        const totalTokens = response.usageMetadata?.totalTokenCount ?? (inputTokens + outputTokens);
+        recordAiUsage({
+          uid,
+          email: user?.email,
+          displayName: user?.name,
+          category: 'practice',
+          model: usedModel,
+          inputTokens,
+          outputTokens,
+          totalTokens
+        });
+      }
+
+      res.json({
+        questions: validatedQuestions,
+        count: validatedQuestions.length,
+        duplicatesFiltered: rawList.length - validatedQuestions.length
+      });
+    } catch (error: any) {
+      const isOverloaded = error?.status === 503 || error?.message?.includes("503") || error?.status === "UNAVAILABLE" || error?.error?.code === 503 || error?.status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("resource_exhausted");
+      if (isOverloaded) {
+        res.status(503).json({ error: "The AI model is currently busy. Please retry in a moment." });
+      } else {
+        console.error("JAMB Question Generation Error:", error);
+        res.status(500).json({ error: error?.message || "Failed to generate JAMB questions" });
       }
     }
   });

@@ -1,5 +1,5 @@
 import { db } from '../lib/firebase';
-import { doc, getDoc, setDoc, getDocs, collection, query, where, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocs, collection, query, where, deleteDoc, limit } from 'firebase/firestore';
 import {
   Novel,
   NovelChapter,
@@ -568,6 +568,38 @@ export async function getNovelPracticeQuestions(
           });
         }
       });
+    }
+  }
+
+  // 3. Query centralized Firestore jambNovelQuestions if online
+  if (isOnline() && db) {
+    try {
+      const nqQuery = query(collection(db, 'jambNovelQuestions'), where('novelId', '==', novel.id), limit(50));
+      const nqSnap = await getDocs(nqQuery);
+      nqSnap.forEach(d => {
+        const data = d.data();
+        const qId = data.questionId || d.id;
+        if (!seenIds.has(qId)) {
+          seenIds.add(qId);
+          collectedQuestions.push({
+            id: qId,
+            novelId: novel.id,
+            chapterIndex: data.chapterIndex ?? 0,
+            chapterNumber: (data.chapterIndex ?? 0) + 1,
+            chapterTitle: data.chapterTitle || 'Novel Comprehension',
+            question: data.question,
+            options: data.options,
+            correctAnswer: data.correctAnswer,
+            explanation: data.explanation || '',
+            difficulty: data.difficulty || 'medium',
+            topic: data.topic || 'Novel Practice',
+            year: data.year || 'Authentic JAMB UTME',
+            isAIgenerated: data.isAIgenerated ?? false
+          });
+        }
+      });
+    } catch (e) {
+      console.warn("Could not query jambNovelQuestions from Firestore:", e);
     }
   }
 

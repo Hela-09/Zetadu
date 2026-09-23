@@ -2,6 +2,7 @@ import { db, auth } from '../lib/firebase';
 import { collection, doc, setDoc, getDoc, getDocs, query, where, orderBy, limit, deleteDoc } from 'firebase/firestore';
 import { JambQuestion, getJambQuestionsByFilter, JAMB_SUBJECTS } from '../data/jambQuestions';
 import { jambOfflineDb, DownloadedSubjectMeta, StoredOfflineAttempt, StoredOfflineBookmark, OfflinePracticeOptions } from './jambOfflineDb';
+import { jambQuestionEngine } from './jambQuestionEngine';
 
 export interface JambExamAttempt {
   id: string;
@@ -463,68 +464,75 @@ export const jambService = {
     shortfall?: number;
     requestedCount?: number;
     shortfallBySubject?: Record<string, number>;
+    sessionId?: string;
   }> {
-    let result = await jambOfflineDb.getOfflinePracticeQuestions(options);
+    const targetCount = Math.min(100, options.count || 20);
+    const uid = auth.currentUser?.uid;
 
-    const targetCount = options.count || 20;
-    const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+    try {
+      const session = await jambQuestionEngine.createPracticeSession({
+        userId: uid,
+        mode: (options.subjects && options.subjects.length > 1) ? 'jamb_cbt' : 'jamb_practice',
+        subjectId: options.subject,
+        subjects: options.subjects,
+        topicId: options.topic,
+        year: options.year,
+        count: targetCount,
+        ordering: options.order || 'random'
+      });
 
-    // If count is not satisfied and student is online, auto-replenish to reach the EXACT required count
-    if (result.questions.length < targetCount && isOnline && result.shortfallBySubject) {
-      try {
-        const subjectsShort = Object.entries(result.shortfallBySubject);
-        for (const [sub, shortAmount] of subjectsShort) {
-          if (shortAmount > 0) {
-            try {
-              await this.generateAndDownloadMoreQuestions(sub, options.topic || 'General', Math.min(20, shortAmount + 2));
-            } catch (genErr) {
-              console.warn(`Failed to auto-replenish questions for ${sub}:`, genErr);
-            }
-          }
-        }
-        // Re-query with replenished pool
-        result = await jambOfflineDb.getOfflinePracticeQuestions(options);
-      } catch (err) {
-        console.warn("Auto-replenishment attempt failed:", err);
-      }
+      const mapped = session.questions.map((q, idx) => jambQuestionEngine.toLegacyQuestion(q, idx));
+      const finalMapped = mapped.slice(0, targetCount);
+      const isPoolInsufficient = finalMapped.length < targetCount;
+
+      return {
+        questions: finalMapped,
+        totalAvailable: session.questions.length,
+        unansweredCount: session.questions.length,
+        isPoolLow: isPoolInsufficient,
+        isOfflineSource: false,
+        isPoolInsufficient,
+        shortfall: Math.max(0, targetCount - finalMapped.length),
+        requestedCount: targetCount,
+        sessionId: session.session.sessionId
+      };
+    } catch (e) {
+      console.warn("Unified engine fallback to offline cache:", e);
+      let result = await jambOfflineDb.getOfflinePracticeQuestions(options);
+      const mapped = result.questions.map((q, idx) => ({
+        id: q.id,
+        question: q.passage ? `${q.passage}\n\n${q.question}` : q.question,
+        options: q.options,
+        correctAnswerIndex: q.correctAnswer,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation || 'Review topic notes and syllabus for full derivation.',
+        difficulty: 'Medium',
+        topic: q.topic || 'General',
+        subject: q.subjectName || q.subject,
+        subjectId: q.subject,
+        year: q.year,
+        questionNumber: q.questionNumber || (idx + 1),
+        isAIgenerated: (q as any).isAIgenerated ?? false,
+        sourceType: (q as any).sourceType || 'official_past_question'
+      }));
+      const finalMapped = mapped.slice(0, targetCount);
+      return {
+        questions: finalMapped,
+        totalAvailable: result.totalAvailable,
+        unansweredCount: result.unansweredCount,
+        isPoolLow: result.isPoolLow || finalMapped.length < targetCount,
+        isOfflineSource: true,
+        isPoolInsufficient: finalMapped.length < targetCount,
+        shortfall: Math.max(0, targetCount - finalMapped.length),
+        requestedCount: targetCount,
+        shortfallBySubject: result.shortfallBySubject
+      };
     }
-
-    const mapped = result.questions.map((q, idx) => ({
-      id: q.id,
-      question: q.passage ? `${q.passage}\n\n${q.question}` : q.question,
-      options: q.options,
-      correctAnswerIndex: q.correctAnswer,
-      correctAnswer: q.correctAnswer,
-      explanation: q.explanation || 'Review topic notes and syllabus for full derivation.',
-      difficulty: 'Medium',
-      topic: q.topic || 'General',
-      subject: q.subjectName || q.subject,
-      subjectId: q.subject,
-      year: q.year,
-      questionNumber: q.questionNumber || (idx + 1)
-    }));
-
-    const finalMapped = mapped.length >= targetCount ? mapped.slice(0, targetCount) : mapped;
-    const isPoolInsufficient = finalMapped.length < targetCount;
-
-    return {
-      questions: finalMapped,
-      totalAvailable: result.totalAvailable,
-      unansweredCount: result.unansweredCount,
-      isPoolLow: result.isPoolLow || isPoolInsufficient,
-      isOfflineSource: result.isOfflineSource,
-      isPoolInsufficient,
-      shortfall: Math.max(0, targetCount - finalMapped.length),
-      requestedCount: targetCount,
-      shortfallBySubject: result.shortfallBySubject
-    };
   },
 
   /**
-   * Generates additional JAMB-style questions using AI and adds them to the offline bank.
-   * REQUIRES INTERNET CONNECTION.
-   * NEVER generates offline or simulates generation.
-   * Prevents duplicate questions.
+   * Generates additional JAMB-style questions using AI and adds them to the offline and Firestore bank.
+   * Uses fingerprint deduplication to guarantee no duplicates or near-duplicates.
    */
   async generateAndDownloadMoreQuestions(
     subjectId: string,
@@ -536,65 +544,25 @@ export const jambService = {
       throw new Error('Connect to the internet to get more questions.');
     }
 
-    const token = await auth.currentUser?.getIdToken().catch(() => null);
     const targetMeta = JAMB_SUBJECTS.find(s => s.id === subjectId || s.name.toLowerCase() === subjectId.toLowerCase());
     const subjectName = targetMeta?.name || subjectId;
+    const cleanSubjId = targetMeta?.id || subjectId.toLowerCase();
 
-    const response = await fetch('/api/generate-questions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify({
-        subject: subjectName,
-        topic: topic && topic !== 'All Topics' ? topic : 'General',
-        difficulty: 'Medium',
-        amount: Math.min(20, Math.max(1, amount)),
-        educationLevel: 'Secondary (JAMB UTME)',
-        country: 'Nigeria',
-        practiceMode: 'JAMB UTME Drill',
-        examType: 'JAMB'
-      })
+    // Use unified engine to generate, validate, fingerprint deduplicate, and persist to Firestore
+    const savedQuestions = await jambQuestionEngine.generateAndSaveOriginalQuestions({
+      subjectId: cleanSubjId,
+      subjectName,
+      topicId: topic && topic !== 'All Topics' ? topic.toLowerCase().replace(/\s+/g, '_') : 'general',
+      topicName: topic && topic !== 'All Topics' ? topic : 'General',
+      count: Math.min(20, Math.max(1, amount)),
+      existingFingerprints: []
     });
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error || `Server responded with status ${response.status}`);
-    }
+    const legacyQuestions = savedQuestions.map((q, idx) => jambQuestionEngine.toLegacyQuestion(q, idx));
 
-    const data = await response.json();
-    if (!data.questions || !Array.isArray(data.questions) || data.questions.length === 0) {
-      throw new Error('No questions were returned by the AI question generator.');
-    }
-
-    const newJambQuestions: JambQuestion[] = data.questions.map((q: any, idx: number) => {
-      let correctIdx = 0;
-      if (typeof q.correctAnswer === 'number') {
-        correctIdx = q.correctAnswer;
-      } else if (typeof q.correctAnswerIndex === 'number') {
-        correctIdx = q.correctAnswerIndex;
-      } else if (typeof q.correctAnswer === 'string') {
-        const charCode = q.correctAnswer.trim().toUpperCase().charCodeAt(0);
-        if (charCode >= 65 && charCode <= 68) correctIdx = charCode - 65;
-      }
-
-      return {
-        id: `jamb_ai_${subjectId.toLowerCase()}_${Date.now()}_${idx}`,
-        subject: subjectId.toLowerCase(),
-        subjectName: subjectName,
-        year: 2024,
-        questionNumber: 100 + idx + 1,
-        question: q.question,
-        options: Array.isArray(q.options) && q.options.length >= 4 ? q.options.slice(0, 4) : (q.options || ['A', 'B', 'C', 'D']),
-        correctAnswer: correctIdx,
-        explanation: q.explanation || 'Refer to the official JAMB syllabus for full derivation.',
-        topic: topic && topic !== 'All Topics' ? topic : (q.topic || 'General')
-      };
-    });
-
-    return await jambOfflineDb.addQuestionsToOfflineBank(subjectId, newJambQuestions);
+    // Add to offline IndexedDB store as well
+    const offlineResult = await jambOfflineDb.addQuestionsToOfflineBank(cleanSubjId, legacyQuestions);
+    return offlineResult;
   },
 
   // 5. UNFINISHED PRACTICE SESSIONS (LOCAL + INDEXEDDB PERSISTENCE)

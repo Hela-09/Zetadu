@@ -39,6 +39,7 @@ import { SUBJECT_DATA, ALL_SUBJECTS } from '../data/subjects';
 import JambCalculator from './jamb/JambCalculator';
 import { jambService } from '../services/jambService';
 import { jambOfflineDb } from '../services/jambOfflineDb';
+import { jambQuestionEngine } from '../services/jambQuestionEngine';
 import { getUnifiedQuestionsForPractice } from '../data/jambQuestions';
 import { practiceHistoryService, PracticeHistorySession } from '../services/practiceHistoryService';
 
@@ -56,6 +57,9 @@ export interface Question {
   subjectId?: string;
   year?: number | string;
   questionNumber?: number;
+  isAIgenerated?: boolean;
+  sourceType?: 'official_past_question' | 'ai_generated' | 'curated_bank';
+  fingerprint?: string;
 }
 
 export interface QuizProps {
@@ -1070,6 +1074,22 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     } else {
       // Instant background save for answer modification without duplicate XP award
       persistSessionToFirebase({ answers: newAnswers });
+    }
+
+    // Track every question the student answers in userQuestionHistory
+    if (user && q?.id) {
+      jambQuestionEngine.recordQuestionAnswer(
+        user.uid,
+        cachedInternalSession?.sessionId || 'active_practice_session',
+        q.id,
+        index,
+        isCorrect,
+        10,
+        {
+          subjectId: q.subjectId || subjectId,
+          topicId: q.topic || topic
+        }
+      ).catch(err => console.warn("Failed recording question answer:", err));
     }
   };
 
@@ -2289,7 +2309,16 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
                   </span>
                   {question.subject && (
                     <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 hidden sm:inline">
-                      {question.subject} {question.year ? `(${question.year})` : ''}
+                      {question.subject}
+                    </span>
+                  )}
+                  {question.isAIgenerated || (question as any).sourceType === 'ai_generated' ? (
+                    <span className="px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold border border-indigo-200 dark:border-indigo-800/60 inline-flex items-center gap-1">
+                      <Sparkles size={11} /> AI Practice Drill
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-[11px] font-bold border border-blue-200 dark:border-blue-800/60">
+                      JAMB {question.year || 'Past Paper'}
                     </span>
                   )}
                 </div>

@@ -244,9 +244,234 @@
         "syncStatus": { "type": "string" }
       },
       "required": ["uid", "selectedSubjects", "updatedAt"]
+    },
+    "JambSubjectDoc": {
+      "title": "JambSubjectDoc",
+      "description": "Official JAMB UTME Subject definition",
+      "type": "object",
+      "properties": {
+        "subjectId": { "type": "string" },
+        "name": { "type": "string" },
+        "code": { "type": "string" },
+        "category": { "type": "string" },
+        "hasCalculator": { "type": "boolean" },
+        "topicCount": { "type": "number" },
+        "questionCount": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["subjectId", "name"]
+    },
+    "JambTopicDoc": {
+      "title": "JambTopicDoc",
+      "description": "Topic within a JAMB subject syllabus",
+      "type": "object",
+      "properties": {
+        "topicId": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "name": { "type": "string" },
+        "order": { "type": "number" },
+        "questionCount": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["topicId", "subjectId", "name"]
+    },
+    "JambQuestionDoc": {
+      "title": "JambQuestionDoc",
+      "description": "Individual JAMB UTME question stored as a discrete document",
+      "type": "object",
+      "properties": {
+        "questionId": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "topicId": { "type": "string" },
+        "question": { "type": "string" },
+        "options": { "type": "array", "items": { "type": "string" } },
+        "correctAnswer": { "type": "number" },
+        "explanation": { "type": "string" },
+        "difficulty": { "type": "string", "enum": ["easy", "medium", "hard"] },
+        "sourceType": { "type": "string", "enum": ["past_question", "curriculum_derived", "ai_generated"] },
+        "isAIgenerated": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["active", "flagged", "archived"] },
+        "fingerprint": { "type": "string" },
+        "timesUsed": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["questionId", "subjectId", "question", "options", "correctAnswer", "fingerprint"]
+    },
+    "JambNovelDoc": {
+      "title": "JambNovelDoc",
+      "description": "Prescribed JAMB literature text/novel",
+      "type": "object",
+      "properties": {
+        "novelId": { "type": "string" },
+        "title": { "type": "string" },
+        "author": { "type": "string" },
+        "totalChapters": { "type": "number" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["novelId", "title", "author"]
+    },
+    "JambNovelChapterDoc": {
+      "title": "JambNovelChapterDoc",
+      "description": "Chapter of a prescribed JAMB novel",
+      "type": "object",
+      "properties": {
+        "chapterId": { "type": "string" },
+        "novelId": { "type": "string" },
+        "chapterIndex": { "type": "number" },
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "wordCount": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["chapterId", "novelId", "chapterIndex", "title"]
+    },
+    "JambNovelQuestionDoc": {
+      "title": "JambNovelQuestionDoc",
+      "description": "Discrete question for a prescribed JAMB novel chapter",
+      "type": "object",
+      "properties": {
+        "questionId": { "type": "string" },
+        "novelId": { "type": "string" },
+        "chapterId": { "type": "string" },
+        "question": { "type": "string" },
+        "options": { "type": "array", "items": { "type": "string" } },
+        "correctAnswer": { "type": "number" },
+        "explanation": { "type": "string" },
+        "difficulty": { "type": "string" },
+        "sourceType": { "type": "string" },
+        "isAIgenerated": { "type": "boolean" },
+        "status": { "type": "string" },
+        "fingerprint": { "type": "string" },
+        "timesUsed": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["questionId", "novelId", "chapterId", "question", "options", "correctAnswer", "fingerprint"]
+    },
+    "UserQuestionHistoryDoc": {
+      "title": "UserQuestionHistoryDoc",
+      "description": "Tracks every question a student has seen and answered",
+      "type": "object",
+      "properties": {
+        "questionId": { "type": "string" },
+        "userId": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "topicId": { "type": "string" },
+        "novelId": { "type": "string" },
+        "chapterId": { "type": "string" },
+        "selectedOption": { "type": "number" },
+        "isCorrect": { "type": "boolean" },
+        "timeSpentSeconds": { "type": "number" },
+        "seenAt": { "type": "number" },
+        "answeredAt": { "type": "number" },
+        "lastSessionId": { "type": "string" },
+        "attemptsCount": { "type": "number" }
+      },
+      "required": ["questionId", "userId", "seenAt"]
+    },
+    "UnifiedPracticeSessionDoc": {
+      "title": "UnifiedPracticeSessionDoc",
+      "description": "Active or completed practice session",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string" },
+        "userId": { "type": "string" },
+        "mode": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "topicId": { "type": "string" },
+        "novelId": { "type": "string" },
+        "chapterId": { "type": "string" },
+        "questionIds": { "type": "array", "items": { "type": "string" } },
+        "totalQuestions": { "type": "number" },
+        "currentIndex": { "type": "number" },
+        "answers": { "type": "object" },
+        "status": { "type": "string" },
+        "score": { "type": "number" },
+        "startedAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "completedAt": { "type": "number" }
+      },
+      "required": ["sessionId", "userId", "mode", "questionIds", "totalQuestions"]
+    },
+    "QuestionGenerationDoc": {
+      "title": "QuestionGenerationDoc",
+      "description": "Audit record of question generation requests",
+      "type": "object",
+      "properties": {
+        "generationId": { "type": "string" },
+        "requestedBy": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "topicId": { "type": "string" },
+        "novelId": { "type": "string" },
+        "chapterId": { "type": "string" },
+        "countRequested": { "type": "number" },
+        "countGenerated": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["generationId", "requestedBy", "countRequested", "createdAt"]
+    },
+    "QuestionBankStatsDoc": {
+      "title": "QuestionBankStatsDoc",
+      "description": "Statistics on the question bank size and composition",
+      "type": "object",
+      "properties": {
+        "bankId": { "type": "string" },
+        "totalQuestions": { "type": "number" },
+        "aiGeneratedCount": { "type": "number" },
+        "pastQuestionsCount": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["bankId", "totalQuestions", "updatedAt"]
     }
   },
   "firestore": {
+    "jambSubjects/{subjectId}": {
+      "schema": { "$ref": "#/entities/JambSubjectDoc" },
+      "description": "Official JAMB UTME Subjects catalog."
+    },
+    "jambTopics/{topicId}": {
+      "schema": { "$ref": "#/entities/JambTopicDoc" },
+      "description": "Topics within JAMB UTME subject syllabi."
+    },
+    "jambQuestions/{questionId}": {
+      "schema": { "$ref": "#/entities/JambQuestionDoc" },
+      "description": "Individual JAMB UTME questions bank with deduplication fingerprints."
+    },
+    "jambNovels/{novelId}": {
+      "schema": { "$ref": "#/entities/JambNovelDoc" },
+      "description": "Official JAMB prescribed literature texts and novels."
+    },
+    "jambNovels/{novelId}/chapters/{chapterId}": {
+      "schema": { "$ref": "#/entities/JambNovelChapterDoc" },
+      "description": "Chapters of prescribed JAMB literature texts."
+    },
+    "jambNovelQuestions/{questionId}": {
+      "schema": { "$ref": "#/entities/JambNovelQuestionDoc" },
+      "description": "Individual chapter questions for JAMB novels."
+    },
+    "userQuestionHistory/{userId}/questions/{questionId}": {
+      "schema": { "$ref": "#/entities/UserQuestionHistoryDoc" },
+      "description": "Per-user track record of seen and answered questions."
+    },
+    "practiceSessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/UnifiedPracticeSessionDoc" },
+      "description": "Practice and CBT exam sessions running on LearnDean question engine."
+    },
+    "questionGeneration/{generationId}": {
+      "schema": { "$ref": "#/entities/QuestionGenerationDoc" },
+      "description": "Log of server-side question generation requests and acceptance."
+    },
+    "questionBankStats/{bankId}": {
+      "schema": { "$ref": "#/entities/QuestionBankStatsDoc" },
+      "description": "Aggregated statistics of the LearnDean question bank."
+    },
     "user_jamb_profile/{docId}": {
       "schema": { "$ref": "#/entities/UserJambProfile" },
       "description": "User personal JAMB UTME subjects selection, protected by authenticated user UID."

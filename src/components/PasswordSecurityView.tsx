@@ -113,7 +113,8 @@ export default function PasswordSecurityView({ onBack }: PasswordSecurityViewPro
       return;
     }
 
-    if (!user || !user.email) {
+    const activeUser = auth?.currentUser || user;
+    if (!activeUser || !activeUser.email) {
       setError('You must be signed in to change your password.');
       return;
     }
@@ -121,12 +122,12 @@ export default function PasswordSecurityView({ onBack }: PasswordSecurityViewPro
     setLoading(true);
 
     try {
-      // Re-authenticate user with current password
-      const credential = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(user, credential);
+      // Re-authenticate active user with current password
+      const credential = EmailAuthProvider.credential(activeUser.email, currentPassword.trim());
+      await reauthenticateWithCredential(activeUser, credential);
 
       // Update password using Firebase Authentication (never stored in Firestore)
-      await updatePassword(user, newPassword);
+      await updatePassword(activeUser, newPassword.trim());
 
       setSuccess('Your password has been successfully updated.');
       setCurrentPassword('');
@@ -136,16 +137,16 @@ export default function PasswordSecurityView({ onBack }: PasswordSecurityViewPro
       setShowNewPassword(false);
       setShowConfirmPassword(false);
     } catch (err: any) {
-      console.error('Password change error:', err);
-      const code = err?.code;
+      const code = err?.code || '';
+      console.warn('Password change authentication response:', code || err?.message);
       if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
-        setError('The current password you entered is incorrect. Please try again.');
+        setError('The current password you entered is incorrect. If you forgot your password, you can reset it below.');
       } else if (code === 'auth/weak-password') {
         setError('The new password is too weak. Please use at least 6 characters including letters and numbers.');
       } else if (code === 'auth/too-many-requests') {
-        setError('Access temporarily blocked due to many failed attempts. Please try again in a few minutes.');
+        setError('Access temporarily blocked due to many failed attempts. Please try again in a few minutes or reset your password.');
       } else if (code === 'auth/requires-recent-login') {
-        setError('This operation requires recent authentication. Please log out and log back in, then try again.');
+        setError('This operation requires recent authentication. Please sign out and sign in again, then retry.');
       } else {
         setError(err?.message || 'Failed to update password. Please check your current password and try again.');
       }
@@ -377,9 +378,19 @@ export default function PasswordSecurityView({ onBack }: PasswordSecurityViewPro
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Current Password Field */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Current Password
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Current Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleSendPasswordSetup}
+                    disabled={resetLoading}
+                    className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
                 <div className="relative">
                   <input
                     type={showCurrentPassword ? 'text' : 'password'}
@@ -398,6 +409,12 @@ export default function PasswordSecurityView({ onBack }: PasswordSecurityViewPro
                     {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
+                {resetEmailSent && (
+                  <p className="mt-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                    <CheckCircle2 size={12} />
+                    Password reset email sent to {user?.email}! Check your inbox.
+                  </p>
+                )}
               </div>
 
               {/* New Password Field */}
