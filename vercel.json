@@ -1,7 +1,10 @@
 {
   "functions": {
-    "api/**": {
-      "includeFiles": "api/**"
+    "api/**/*.ts": {
+      "maxDuration": 60
+    },
+    "api/*.ts": {
+      "maxDuration": 60
     }
   },
   "headers": [
@@ -72,15 +75,7 @@
   ],
   "rewrites": [
     {
-      "source": "/api/jamb/generate-questions",
-      "destination": "/api/jamb-generate-questions"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/(.*)",
+      "source": "/((?!api/.*).*)",
       "destination": "/index.html"
     }
   ]

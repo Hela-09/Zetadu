@@ -122,6 +122,41 @@ async function startServer() {
     next();
   };
 
+  // Optional Authentication Middleware (allows guest access while enforcing security for authenticated users)
+  const optionalAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return next();
+    }
+    const idToken = authHeader.substring(7).trim();
+    if (!idToken) return next();
+    
+    try {
+      let decodedToken: any = null;
+      try {
+        decodedToken = await getAuth().verifyIdToken(idToken, true);
+      } catch (verifyErr: any) {
+        if (verifyErr?.code === 'auth/id-token-revoked' || verifyErr?.code === 'auth/user-disabled') {
+          return res.status(403).json({ error: "Account disabled or session revoked", disabled: true });
+        }
+        decodedToken = await getAuth().verifyIdToken(idToken);
+      }
+
+      const uid = decodedToken.uid || decodedToken.user_id || decodedToken.sub;
+      const email = decodedToken.email;
+
+      const disabledCheck = isUserDisabled(uid, email);
+      if (disabledCheck.disabled) {
+        return res.status(403).json({ error: disabledCheck.reason || "Your account has been disabled by an administrator.", disabled: true });
+      }
+
+      (req as any).user = decodedToken;
+    } catch {
+      // Continue as guest if token is invalid or expired
+    }
+    next();
+  };
+
   let _geminiClient: any = null;
   const getGeminiClient = () => {
     let apiKey = (process.env.GEMINI_API_KEY || '').trim();
@@ -349,7 +384,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/chat", requireAuth, async (req, res) => {
+  app.post("/api/chat", optionalAuth, async (req, res) => {
     try {
       const { message, history, context, stream } = req.body;
       const ai = getGeminiClient();
@@ -409,31 +444,39 @@ Your responsibilities include:
 * If the image contains sensitive or private information, handle it responsibly and only discuss what the user requests.
 Always prioritize accuracy, completeness, and clarity. Analyze the entire image before producing your answer.`;
 
+      const chatModelCandidates = [
+        'gemini-3-flash-preview',
+        'gemini-3.8-flash',
+        'gemini-flash-latest',
+        'gemini-3.1-flash-lite',
+        'gemini-3.6-flash'
+      ];
+
       if (stream) {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
         
-        let usedModel = 'gemini-3.8-flash';
-        let resultStream;
-        try {
-          resultStream = await ai.models.generateContentStream({
-            model: 'gemini-3.8-flash',
-            contents: contents,
-            config: { systemInstruction: systemInstruction }
-          });
-        } catch (err: any) {
-          if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
-            console.warn("gemini-3.8-flash overloaded, falling back to gemini-3.1-flash-lite");
-            usedModel = 'gemini-3.1-flash-lite';
+        let usedModel = chatModelCandidates[0];
+        let resultStream: any = null;
+        let lastStreamErr: any = null;
+
+        for (const m of chatModelCandidates) {
+          try {
+            usedModel = m;
             resultStream = await ai.models.generateContentStream({
-              model: 'gemini-3.1-flash-lite',
+              model: m,
               contents: contents,
               config: { systemInstruction: systemInstruction }
             });
-          } else {
-            throw err;
+            if (resultStream) break;
+          } catch (err: any) {
+            lastStreamErr = err;
           }
+        }
+
+        if (!resultStream) {
+          throw lastStreamErr || new Error("All chat models unavailable");
         }
         
         let streamUsage: any = null;
@@ -469,27 +512,28 @@ Always prioritize accuracy, completeness, and clarity. Analyze the entire image 
           });
         }
       } else {
-        let usedModel = 'gemini-3.8-flash';
-        let response;
-        try {
-          response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents: contents,
-            config: { systemInstruction: systemInstruction }
-          });
-        } catch (err: any) {
-          if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
-            console.warn("gemini-3.8-flash overloaded, falling back to gemini-3.1-flash-lite");
-            usedModel = 'gemini-3.1-flash-lite';
+        let usedModel = chatModelCandidates[0];
+        let response: any = null;
+        let lastGenErr: any = null;
+
+        for (const m of chatModelCandidates) {
+          try {
+            usedModel = m;
             response = await ai.models.generateContent({
-              model: 'gemini-3.1-flash-lite',
+              model: m,
               contents: contents,
               config: { systemInstruction: systemInstruction }
             });
-          } else {
-            throw err;
+            if (response?.text) break;
+          } catch (err: any) {
+            lastGenErr = err;
           }
         }
+
+        if (!response || !response.text) {
+          throw lastGenErr || new Error("Failed to generate response from AI models");
+        }
+
         res.json({ text: response.text });
 
         // Track usage only upon successful response using actual Gemini usage metadata
@@ -532,41 +576,6 @@ Always prioritize accuracy, completeness, and clarity. Analyze the entire image 
     }
   });
 
-  // Optional Authentication Middleware (allows guest practice while enforcing security for authenticated users)
-  const optionalAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return next();
-    }
-    const idToken = authHeader.substring(7).trim();
-    if (!idToken) return next();
-    
-    try {
-      let decodedToken: any = null;
-      try {
-        decodedToken = await getAuth().verifyIdToken(idToken, true);
-      } catch (verifyErr: any) {
-        if (verifyErr?.code === 'auth/id-token-revoked' || verifyErr?.code === 'auth/user-disabled') {
-          return res.status(403).json({ error: "Account disabled or session revoked", disabled: true });
-        }
-        decodedToken = await getAuth().verifyIdToken(idToken);
-      }
-
-      const uid = decodedToken.uid || decodedToken.user_id || decodedToken.sub;
-      const email = decodedToken.email;
-
-      const disabledCheck = isUserDisabled(uid, email);
-      if (disabledCheck.disabled) {
-        return res.status(403).json({ error: disabledCheck.reason || "Your account has been disabled by an administrator.", disabled: true });
-      }
-
-      (req as any).user = decodedToken;
-    } catch {
-      // Continue as guest if token is invalid or expired
-    }
-    next();
-  };
-
   app.post("/api/generate-questions", optionalAuth, async (req, res) => {
     try {
       const { subject, topic, difficulty, amount, educationLevel, country, practiceMode, examType } = req.body;
@@ -608,9 +617,15 @@ Each question must be a multiple choice question with 4 options, one correct ans
         }
       };
 
-      let usedModel = 'gemini-3.6-flash';
+      let usedModel = 'gemini-3-flash-preview';
       let response: any = null;
-      const modelCandidates = ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+      const modelCandidates = [
+        'gemini-3-flash-preview',
+        'gemini-3.8-flash',
+        'gemini-flash-latest',
+        'gemini-3.1-flash-lite',
+        'gemini-3.6-flash'
+      ];
       let lastModelError: any = null;
 
       for (const m of modelCandidates) {
@@ -624,7 +639,6 @@ Each question must be a multiple choice question with 4 options, one correct ans
           if (response?.text) break;
         } catch (err: any) {
           lastModelError = err;
-          console.warn(`Model ${m} failed in /api/generate-questions:`, err?.status || err?.message);
         }
       }
 
@@ -736,9 +750,15 @@ Strict Requirements:
         }
       };
 
-      let usedModel = 'gemini-3.6-flash';
+      let usedModel = 'gemini-3-flash-preview';
       let response: any = null;
-      const modelCandidates = ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+      const modelCandidates = [
+        'gemini-3-flash-preview',
+        'gemini-3.8-flash',
+        'gemini-flash-latest',
+        'gemini-3.1-flash-lite',
+        'gemini-3.6-flash'
+      ];
       let lastModelError: any = null;
 
       for (const m of modelCandidates) {
@@ -752,7 +772,6 @@ Strict Requirements:
           if (response?.text) break;
         } catch (err: any) {
           lastModelError = err;
-          console.warn(`Model ${m} failed in /api/jamb/generate-questions:`, err?.status || err?.message);
         }
       }
 

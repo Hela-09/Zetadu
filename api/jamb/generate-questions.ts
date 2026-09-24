@@ -85,7 +85,13 @@ Strict Requirements:
     };
 
     let response: any = null;
-    const modelCandidates = ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+    const modelCandidates = [
+      'gemini-3-flash-preview',
+      'gemini-3.8-flash',
+      'gemini-flash-latest',
+      'gemini-3.1-flash-lite',
+      'gemini-3.6-flash'
+    ];
     let lastError: any = null;
 
     for (const m of modelCandidates) {
@@ -98,7 +104,6 @@ Strict Requirements:
         if (response?.text) break;
       } catch (err: any) {
         lastError = err;
-        console.warn(`Model ${m} failed in api/jamb/generate-questions:`, err?.status || err?.message);
       }
     }
 

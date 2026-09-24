@@ -58,38 +58,41 @@ You are an advanced multimodal AI tutor with image understanding capabilities.
 When a user provides an image or document, thoroughly extract key information, solve problems step by step, and explain difficult concepts clearly and accurately.
 Always prioritize accuracy, completeness, and clarity.`;
 
+    const modelCandidates = [
+      'gemini-3-flash-preview',
+      'gemini-3.8-flash',
+      'gemini-flash-latest',
+      'gemini-3.1-flash-lite',
+      'gemini-3.6-flash'
+    ];
+
     if (stream) {
-      res.setHeader('Content-Type', 'text/event-stream');
+      let resultStream: any = null;
+      let lastStreamError: any = null;
+
+      for (const m of modelCandidates) {
+        try {
+          resultStream = await ai.models.generateContentStream({
+            model: m,
+            contents,
+            config: { systemInstruction }
+          });
+          if (resultStream) break;
+        } catch (err: any) {
+          lastStreamError = err;
+        }
+      }
+
+      if (!resultStream) {
+        throw lastStreamError || new Error("All AI models unavailable");
+      }
+
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('X-Accel-Buffering', 'no');
       if (typeof (res as any).flushHeaders === 'function') {
         (res as any).flushHeaders();
-      }
-
-      let resultStream;
-      try {
-        resultStream = await ai.models.generateContentStream({
-          model: 'gemini-3.8-flash',
-          contents,
-          config: { systemInstruction }
-        });
-      } catch (err: any) {
-        if (
-          err?.status === 503 ||
-          err?.message?.includes('503') ||
-          err?.status === 'UNAVAILABLE' ||
-          err?.error?.code === 503
-        ) {
-          console.warn('Primary model overloaded, falling back to gemini-3.1-flash-lite');
-          resultStream = await ai.models.generateContentStream({
-            model: 'gemini-3.1-flash-lite',
-            contents,
-            config: { systemInstruction }
-          });
-        } else {
-          throw err;
-        }
       }
 
       for await (const chunk of resultStream) {
@@ -104,29 +107,24 @@ Always prioritize accuracy, completeness, and clarity.`;
       res.write('data: [DONE]\n\n');
       return res.end();
     } else {
-      let response;
-      try {
-        response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents,
-          config: { systemInstruction }
-        });
-      } catch (err: any) {
-        if (
-          err?.status === 503 ||
-          err?.message?.includes('503') ||
-          err?.status === 'UNAVAILABLE' ||
-          err?.error?.code === 503
-        ) {
-          console.warn('Primary model overloaded, falling back to gemini-3.1-flash-lite');
+      let response: any = null;
+      let lastGenError: any = null;
+
+      for (const m of modelCandidates) {
+        try {
           response = await ai.models.generateContent({
-            model: 'gemini-3.1-flash-lite',
+            model: m,
             contents,
             config: { systemInstruction }
           });
-        } else {
-          throw err;
+          if (response?.text) break;
+        } catch (err: any) {
+          lastGenError = err;
         }
+      }
+
+      if (!response || !response.text) {
+        throw lastGenError || new Error("Failed to generate response from AI models");
       }
 
       return res.status(200).json({ text: response.text || '' });

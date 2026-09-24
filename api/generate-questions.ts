@@ -58,29 +58,31 @@ Each question must be a multiple choice question with 4 options, one correct ans
       }
     };
 
-    let response;
-    try {
-      response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config
-      });
-    } catch (err: any) {
-      if (
-        err?.status === 503 ||
-        err?.message?.includes('503') ||
-        err?.status === 'UNAVAILABLE' ||
-        err?.error?.code === 503
-      ) {
-        console.warn('Primary model overloaded, falling back to gemini-3.1-flash-lite');
+    let response: any = null;
+    let lastGenError: any = null;
+    const modelCandidates = [
+      'gemini-3-flash-preview',
+      'gemini-3.8-flash',
+      'gemini-flash-latest',
+      'gemini-3.1-flash-lite',
+      'gemini-3.6-flash'
+    ];
+
+    for (const m of modelCandidates) {
+      try {
         response = await ai.models.generateContent({
-          model: 'gemini-3.1-flash-lite',
+          model: m,
           contents: prompt,
           config
         });
-      } else {
-        throw err;
+        if (response?.text) break;
+      } catch (err: any) {
+        lastGenError = err;
       }
+    }
+
+    if (!response || !response.text) {
+      throw lastGenError || new Error('Failed to generate questions from AI models');
     }
 
     const text = response.text;

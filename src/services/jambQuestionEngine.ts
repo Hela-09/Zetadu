@@ -476,7 +476,6 @@ class JambQuestionEngine {
 
     const endpointsToTry = [
       '/api/jamb/generate-questions',
-      '/api/jamb-generate-questions',
       '/api/generate-questions'
     ];
 
