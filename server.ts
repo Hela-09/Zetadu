@@ -453,10 +453,6 @@ Always prioritize accuracy, completeness, and clarity. Analyze the entire image 
       ];
 
       if (stream) {
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-        
         let usedModel = chatModelCandidates[0];
         let resultStream: any = null;
         let lastStreamErr: any = null;
@@ -478,6 +474,10 @@ Always prioritize accuracy, completeness, and clarity. Analyze the entire image 
         if (!resultStream) {
           throw lastStreamErr || new Error("All chat models unavailable");
         }
+
+        res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
         
         let streamUsage: any = null;
         let streamText = "";
