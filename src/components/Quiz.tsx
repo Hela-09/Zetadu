@@ -33,7 +33,7 @@ import {
   History
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { db } from '../lib/firebase';
+import { db, cleanFirestoreData } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { SUBJECT_DATA, ALL_SUBJECTS } from '../data/subjects';
 import JambCalculator from './jamb/JambCalculator';
@@ -650,27 +650,36 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
   const persistSessionToFirebase = useCallback(async (overrides?: Partial<any>) => {
     if (setupMode || questions.length === 0 || isSubmitted) return;
 
-    const sessionData = {
-      uid: user?.uid,
+    const validQuestions = (questions || []).map(q => cleanFirestoreData(q));
+    const sessionData: Record<string, any> = {
       setupMode: false,
-      level,
-      selectedClass,
-      subjectId,
-      subject,
-      topic,
-      difficulty,
-      amount,
-      timerDuration,
-      timerRemaining,
-      questions,
-      currentQIndex,
-      answers,
-      markedForReview,
+      difficulty: difficulty || 'Medium',
+      amount: validQuestions.length || amount || 20,
+      timerDuration: timerDuration || 15,
+      timerRemaining: typeof timerRemaining === 'number' ? timerRemaining : (timerDuration || 15) * 60,
+      questions: validQuestions,
+      currentQIndex: typeof currentQIndex === 'number' ? currentQIndex : 0,
+      answers: answers || {},
+      markedForReview: markedForReview || {},
       isSubmitted: false,
-      score,
-      updatedAt: Date.now(),
-      ...overrides
+      score: typeof score === 'number' ? score : 0,
+      updatedAt: Date.now()
     };
+
+    if (user?.uid) sessionData.uid = user.uid;
+    if (level) sessionData.level = level;
+    if (selectedClass) sessionData.selectedClass = selectedClass;
+    if (subjectId) sessionData.subjectId = subjectId;
+    if (subject) sessionData.subject = subject;
+    if (topic) sessionData.topic = topic;
+
+    if (overrides) {
+      for (const [k, v] of Object.entries(overrides)) {
+        if (v !== undefined) {
+          sessionData[k] = v;
+        }
+      }
+    }
 
     cachedInternalSession = sessionData;
     
@@ -689,10 +698,11 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
 
     if (user && !isSubmitted && typeof navigator !== 'undefined' && navigator.onLine) {
       try {
-        await setDoc(doc(db, 'practice_sessions', user.uid), {
+        const firestorePayload = cleanFirestoreData({
           ...sessionData,
           updatedAt: serverTimestamp()
-        }, { merge: true });
+        });
+        await setDoc(doc(db, 'practice_sessions', user.uid), firestorePayload, { merge: true });
       } catch (err) {
         // Silently catch firestore errors to prevent popups/crashes
         console.warn("Silent save session to firestore warning", err);
@@ -914,20 +924,15 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
       setViewMode('practice');
 
       // Initialize persistent session immediately
-      const initialSession = {
-        uid: user?.uid,
+      const validLoadedQuestions = loadedQuestions.map(q => cleanFirestoreData(q));
+      const initialSession: Record<string, any> = {
         setupMode: false,
-        level,
-        selectedClass,
-        subjectId,
-        subject,
-        topic,
-        difficulty,
-        amount,
-        practiceMode,
-        timerDuration,
-        timerRemaining: timerDuration * 60,
-        questions: loadedQuestions,
+        difficulty: difficulty || 'Medium',
+        amount: validLoadedQuestions.length || amount || 20,
+        practiceMode: practiceMode || 'standard',
+        timerDuration: timerDuration || 15,
+        timerRemaining: (timerDuration || 15) * 60,
+        questions: validLoadedQuestions,
         currentQIndex: 0,
         answers: {},
         markedForReview: {},
@@ -935,6 +940,13 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
         score: 0,
         updatedAt: Date.now()
       };
+      if (user?.uid) initialSession.uid = user.uid;
+      if (level) initialSession.level = level;
+      if (selectedClass) initialSession.selectedClass = selectedClass;
+      if (subjectId) initialSession.subjectId = subjectId;
+      if (subject) initialSession.subject = subject;
+      if (topic) initialSession.topic = topic;
+
       cachedInternalSession = initialSession;
       try {
         localStorage.setItem('practice_session', JSON.stringify(initialSession));
@@ -942,28 +954,38 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
 
       if (user) {
         try {
-          await setDoc(doc(db, 'practice_sessions', user.uid), {
+          const firestoreInitial = cleanFirestoreData({
             ...initialSession,
             updatedAt: serverTimestamp()
           });
+          await setDoc(doc(db, 'practice_sessions', user.uid), firestoreInitial);
         } catch (dbErr) {
           console.warn("Silent initialize session in firestore warning", dbErr);
         }
 
         try {
-          await addDoc(collection(db, 'ai_history'), {
+          const metadata: Record<string, any> = {
+            amount: validLoadedQuestions.length,
+            questions: validLoadedQuestions
+          };
+          if (subject) metadata.subject = subject;
+          if (topic) metadata.topic = topic;
+          if (difficulty) metadata.difficulty = difficulty;
+
+          const resolvedSubject = subject || subjectId || 'JAMB Practice';
+          const aiHistoryPayload: Record<string, any> = {
             uid: user.uid,
             type: 'question_generation',
-            content: `Generated ${loadedQuestions.length} questions for ${subject}${topic ? ' - ' + topic : ''}`,
-            metadata: {
-              subject,
-              topic,
-              difficulty,
-              amount: loadedQuestions.length,
-              questions: loadedQuestions
-            },
-            createdAt: serverTimestamp()
-          });
+            subject: resolvedSubject,
+            content: `Generated ${validLoadedQuestions.length} questions for ${resolvedSubject}${topic ? ' - ' + topic : ''}`,
+            details: `Practice session generated with ${validLoadedQuestions.length} questions`,
+            metadata,
+            createdAt: serverTimestamp(),
+            timestamp: new Date().toISOString()
+          };
+          if (topic) aiHistoryPayload.topic = topic;
+
+          await addDoc(collection(db, 'ai_history'), cleanFirestoreData(aiHistoryPayload));
         } catch (dbErr) {
           console.warn("Silent log history warning", dbErr);
         }
@@ -1086,8 +1108,8 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
         isCorrect,
         10,
         {
-          subjectId: q.subjectId || subjectId,
-          topicId: q.topic || topic
+          ...(q.subjectId || subjectId ? { subjectId: q.subjectId || subjectId } : {}),
+          ...(q.topic || topic ? { topicId: q.topic || topic } : {})
         }
       ).catch(err => console.warn("Failed recording question answer:", err));
     }
@@ -1147,22 +1169,25 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     setViewMode('results');
     
     // Save practice attempt to unified practiceHistoryService (local + firestore)
+    const resolvedSub = subjectId || subject || 'general';
+    const resolvedSubName = subject || JAMB_SUBJECTS.find(s => s.id === resolvedSub)?.name || resolvedSub;
+
     try {
       await practiceHistoryService.saveSession({
         uid: user?.uid,
-        subject: subjectId || subject,
-        subjectName: subject,
+        subject: resolvedSub,
+        subjectName: resolvedSubName,
         topic: topic || 'General',
-        difficulty,
+        difficulty: difficulty || 'Medium',
         score: finalScore,
         totalQuestions: questions.length,
-        percentage: Math.round((finalScore / questions.length) * 100),
+        percentage: questions.length > 0 ? Math.round((finalScore / questions.length) * 100) : 0,
         timeUsedSeconds: usedSeconds,
-        answeredQuestions: questions.map((q, i) => ({
+        answeredQuestions: questions.map((q, i) => cleanFirestoreData({
           ...q,
           userAnswerIndex: answers[i] !== undefined ? answers[i] : null
         })),
-        answers,
+        answers: answers || {},
         examType: initialConfig?.examType || (initialMode?.startsWith('jamb') ? 'JAMB' : 'General')
       });
     } catch (practiceHistErr) {
@@ -1171,22 +1196,23 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
 
     if (user) {
       try {
-        await addDoc(collection(db, 'learning_data'), {
+        const learningDataPayload = cleanFirestoreData({
           uid: user.uid,
-          subject,
+          subject: resolvedSubName,
           topic: topic || 'General',
-          difficulty,
+          difficulty: difficulty || 'Medium',
           score: finalScore,
           totalQuestions: questions.length,
           answeredQuestionsCount: Object.keys(answers).length,
-          percentage: Math.round((finalScore / questions.length) * 100),
+          percentage: questions.length > 0 ? Math.round((finalScore / questions.length) * 100) : 0,
           timeUsedSeconds: usedSeconds,
-          answeredQuestions: questions.map((q, i) => ({
+          answeredQuestions: questions.map((q, i) => cleanFirestoreData({
             ...q,
             userAnswerIndex: answers[i] !== undefined ? answers[i] : null
           })),
           updatedAt: serverTimestamp()
         });
+        await addDoc(collection(db, 'learning_data'), learningDataPayload);
       } catch (err) {
         console.warn("Silent save learning data warning:", err);
       }
@@ -1195,15 +1221,15 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     if (initialMode?.startsWith('jamb') || initialConfig?.examType === 'JAMB') {
       try {
         await jambService.saveAttempt({
-          subject: subjectId || subject,
-          subjectName: subject,
+          subject: resolvedSub,
+          subjectName: resolvedSubName,
           year: typeof initialConfig?.year === 'number' ? initialConfig.year : 2024,
           score: finalScore,
           totalQuestions: questions.length,
-          percentage: Math.round((finalScore / questions.length) * 100),
+          percentage: questions.length > 0 ? Math.round((finalScore / questions.length) * 100) : 0,
           timeSpentSeconds: usedSeconds,
-          answers,
-          questions: questions as any
+          answers: answers || {},
+          questions: questions.map(q => cleanFirestoreData(q)) as any
         });
       } catch (err) {
         console.warn("Silent save jamb attempt warning:", err);

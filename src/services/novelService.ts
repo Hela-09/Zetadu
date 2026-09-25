@@ -1,4 +1,4 @@
-import { db } from '../lib/firebase';
+import { db, cleanFirestoreData } from '../lib/firebase';
 import { doc, getDoc, setDoc, getDocs, collection, query, where, deleteDoc, limit } from 'firebase/firestore';
 import {
   Novel,
@@ -177,19 +177,23 @@ export async function saveReadingProgress(progress: NovelReadingProgress, force 
   if (online && progress.uid && db) {
     try {
       const docRef = doc(db, 'user_reading_progress', `${progress.uid}_${progress.novelId}`);
-      await setDoc(docRef, {
+      const payload: Record<string, any> = {
         uid: progress.uid,
         novelId: progress.novelId,
-        novelTitle: progress.novelTitle,
-        currentChapterIndex: progress.currentChapterIndex,
-        currentChapterTitle: progress.currentChapterTitle,
-        scrollPercentage: progress.scrollPercentage,
-        completedChapters: progress.completedChapters,
-        totalChapters: progress.totalChapters,
-        percentage: progress.percentage,
+        novelTitle: progress.novelTitle || '',
+        currentChapterIndex: progress.currentChapterIndex || 0,
+        currentChapterTitle: progress.currentChapterTitle || '',
+        scrollPercentage: progress.scrollPercentage || 0,
+        completedChapters: progress.completedChapters || [],
+        totalChapters: progress.totalChapters || 1,
+        percentage: progress.percentage || 0,
         lastReadAt: progress.lastReadAt || now,
         updatedAt: now,
-      }, { merge: true });
+      };
+      if (progress.quizScore) {
+        payload.quizScore = cleanFirestoreData(progress.quizScore);
+      }
+      await setDoc(docRef, cleanFirestoreData(payload), { merge: true });
 
       // Update write cache on successful write
       progressWriteCache.set(cacheKey, {
@@ -283,18 +287,19 @@ export async function saveBookmark(bookmark: NovelBookmark): Promise<void> {
   if (online && bookmark.uid && db) {
     try {
       const docRef = doc(db, 'novel_bookmarks', bookmark.id);
-      await setDoc(docRef, {
+      const bPayload: Record<string, any> = {
         id: bookmark.id,
         uid: bookmark.uid,
         novelId: bookmark.novelId,
-        novelTitle: bookmark.novelTitle,
-        chapterIndex: bookmark.chapterIndex,
-        chapterTitle: bookmark.chapterTitle,
-        paragraphText: bookmark.paragraphText,
-        note: bookmark.note || '',
-        createdAt: bookmark.createdAt,
+        novelTitle: bookmark.novelTitle || '',
+        chapterIndex: bookmark.chapterIndex || 0,
+        chapterTitle: bookmark.chapterTitle || '',
+        paragraphText: bookmark.paragraphText || '',
+        createdAt: bookmark.createdAt || Date.now(),
         updatedAt: Date.now(),
-      }, { merge: true });
+      };
+      if (bookmark.note) bPayload.note = bookmark.note;
+      await setDoc(docRef, cleanFirestoreData(bPayload), { merge: true });
     } catch (err) {
       console.warn('Firestore bookmark save failed (stored locally):', err);
       await saveOfflineNovelBookmark({ ...bookmarkToStore, syncStatus: 'pending' });
@@ -362,19 +367,21 @@ export async function syncPendingNovelData(uid: string): Promise<{ syncedProgres
     for (const prog of pendingProg) {
       try {
         const docRef = doc(db, 'user_reading_progress', `${prog.uid}_${prog.novelId}`);
-        await setDoc(docRef, {
+        const pPayload: Record<string, any> = {
           uid: prog.uid,
           novelId: prog.novelId,
-          novelTitle: prog.novelTitle,
-          currentChapterIndex: prog.currentChapterIndex,
-          currentChapterTitle: prog.currentChapterTitle,
-          scrollPercentage: prog.scrollPercentage,
-          completedChapters: prog.completedChapters,
-          totalChapters: prog.totalChapters,
-          percentage: prog.percentage,
-          lastReadAt: prog.lastReadAt,
+          novelTitle: prog.novelTitle || '',
+          currentChapterIndex: prog.currentChapterIndex || 0,
+          currentChapterTitle: prog.currentChapterTitle || '',
+          scrollPercentage: prog.scrollPercentage || 0,
+          completedChapters: prog.completedChapters || [],
+          totalChapters: prog.totalChapters || 1,
+          percentage: prog.percentage || 0,
+          lastReadAt: prog.lastReadAt || Date.now(),
           updatedAt: prog.updatedAt || Date.now(),
-        }, { merge: true });
+        };
+        if (prog.quizScore) pPayload.quizScore = cleanFirestoreData(prog.quizScore);
+        await setDoc(docRef, cleanFirestoreData(pPayload), { merge: true });
 
         await markReadingProgressSynced(prog.uid, prog.novelId);
         syncedProgress++;
@@ -388,18 +395,19 @@ export async function syncPendingNovelData(uid: string): Promise<{ syncedProgres
     for (const bm of pendingBM) {
       try {
         const docRef = doc(db, 'novel_bookmarks', bm.id);
-        await setDoc(docRef, {
+        const bPayload: Record<string, any> = {
           id: bm.id,
           uid: bm.uid,
           novelId: bm.novelId,
-          novelTitle: bm.novelTitle,
-          chapterIndex: bm.chapterIndex,
-          chapterTitle: bm.chapterTitle,
-          paragraphText: bm.paragraphText,
-          note: bm.note || '',
-          createdAt: bm.createdAt,
+          novelTitle: bm.novelTitle || '',
+          chapterIndex: bm.chapterIndex || 0,
+          chapterTitle: bm.chapterTitle || '',
+          paragraphText: bm.paragraphText || '',
+          createdAt: bm.createdAt || Date.now(),
           updatedAt: bm.updatedAt || Date.now(),
-        }, { merge: true });
+        };
+        if (bm.note) bPayload.note = bm.note;
+        await setDoc(docRef, cleanFirestoreData(bPayload), { merge: true });
 
         await markBookmarkSynced(bm.id);
         syncedBookmarks++;
@@ -413,10 +421,10 @@ export async function syncPendingNovelData(uid: string): Promise<{ syncedProgres
     for (const attempt of pendingAttempts) {
       try {
         const docRef = doc(db, 'novel_practice_history', attempt.id);
-        await setDoc(docRef, {
+        await setDoc(docRef, cleanFirestoreData({
           ...attempt,
           syncStatus: 'synced',
-        }, { merge: true });
+        }), { merge: true });
 
         await markPracticeAttemptSynced(attempt.id);
       } catch (err) {
@@ -450,23 +458,27 @@ export async function savePracticeAttempt(attempt: NovelPracticeAttempt): Promis
   if (online && attempt.uid && db) {
     try {
       const docRef = doc(db, 'novel_practice_history', attempt.id);
-      await setDoc(docRef, {
+      const payload: Record<string, any> = {
         id: attempt.id,
         uid: attempt.uid,
         novelId: attempt.novelId,
-        novelTitle: attempt.novelTitle,
-        mode: attempt.mode,
-        scope: attempt.scope,
-        selectedChapterIndices: attempt.selectedChapterIndices,
-        totalQuestions: attempt.totalQuestions,
-        correctAnswers: attempt.correctAnswers,
-        scorePercentage: attempt.scorePercentage,
-        timeSpentSeconds: attempt.timeSpentSeconds,
-        weakChapters: attempt.weakChapters,
-        completedChapterIndices: attempt.completedChapterIndices,
-        timestamp: attempt.timestamp,
+        novelTitle: attempt.novelTitle || '',
+        totalQuestions: attempt.totalQuestions || 0,
+        correctAnswers: attempt.correctAnswers || 0,
+        scorePercentage: attempt.scorePercentage || 0,
+        timeSpentSeconds: attempt.timeSpentSeconds || 0,
+        timestamp: attempt.timestamp || Date.now(),
         syncStatus: 'synced',
-      }, { merge: true });
+      };
+      if (attempt.chapterTitle) payload.chapterTitle = attempt.chapterTitle;
+      if (typeof attempt.chapterIndex === 'number') payload.chapterIndex = attempt.chapterIndex;
+      if (attempt.mode) payload.mode = attempt.mode;
+      if (attempt.scope) payload.scope = attempt.scope;
+      if (attempt.selectedChapterIndices) payload.selectedChapterIndices = attempt.selectedChapterIndices;
+      if (attempt.weakChapters) payload.weakChapters = attempt.weakChapters;
+      if (attempt.completedChapterIndices) payload.completedChapterIndices = attempt.completedChapterIndices;
+
+      await setDoc(docRef, cleanFirestoreData(payload), { merge: true });
     } catch (err) {
       console.warn('Firestore practice attempt save failed (persisted locally):', err);
       await saveOfflinePracticeAttempt({ ...attemptToStore, syncStatus: 'pending' });
@@ -537,6 +549,7 @@ export async function getNovelPracticeQuestions(
           seenIds.add(q.id);
           collectedQuestions.push({
             ...q,
+            novelId: (q as any).novelId || novel.id,
             chapterIndex,
             chapterNumber: chap.chapterNumber || chapterIndex + 1,
             chapterTitle: chap.title || `Chapter ${chapterIndex + 1}`,

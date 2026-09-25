@@ -110,4 +110,51 @@ export function recordFirestoreQuotaExhausted(): void {
   } catch (_) {}
 }
 
+/**
+ * Recursively removes undefined fields from an object or array before writing to Firestore.
+ * Preserves Firestore FieldValue sentinels (serverTimestamp, increment, deleteField),
+ * Date instances, primitives, and null.
+ */
+export function cleanFirestoreData<T = any>(obj: T): T {
+  if (obj === undefined) {
+    return undefined as unknown as T;
+  }
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+
+  // Preserve Date instances
+  if (obj instanceof Date) {
+    return obj;
+  }
+
+  // Preserve Firestore FieldValue sentinels (e.g. serverTimestamp, increment, deleteField)
+  if (
+    (obj as any)._methodName !== undefined ||
+    (typeof (obj as any).constructor?.name === 'string' && (obj as any).constructor.name.includes('FieldValue'))
+  ) {
+    return obj;
+  }
+
+  // Handle Arrays
+  if (Array.isArray(obj)) {
+    const cleanedArr = obj
+      .map(item => cleanFirestoreData(item))
+      .filter(item => item !== undefined);
+    return cleanedArr as unknown as T;
+  }
+
+  // Handle plain Objects
+  const cleanedObj: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      const cleanedValue = cleanFirestoreData(value);
+      if (cleanedValue !== undefined) {
+        cleanedObj[key] = cleanedValue;
+      }
+    }
+  }
+  return cleanedObj as T;
+}
+
 export { app, auth, db, storage, googleProvider };

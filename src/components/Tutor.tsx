@@ -5,7 +5,7 @@ import { useGooglePicker } from '../hooks/useGooglePicker';
 import { ChatMessage, TutorConversation, ViewType } from '../types';
 import ReactMarkdown from 'react-markdown';
 import { useAuth } from '../contexts/AuthContext';
-import { db } from '../lib/firebase';
+import { db, cleanFirestoreData } from '../lib/firebase';
 import { collection, addDoc, doc, setDoc, getDoc, getDocs, deleteDoc, query, where, orderBy, updateDoc } from 'firebase/firestore';
 
 const formatAIResponse = (text: string) => {
@@ -311,16 +311,16 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
         uid: user.uid,
         title,
         subject: targetSubject || 'General',
-        messages: newMessages,
+        messages: newMessages.map(m => cleanFirestoreData(m)),
         updatedAt: Date.now(),
         lastOpened: Date.now()
       };
 
       if (isNew) {
-         const docRef = await addDoc(collection(db, 'tutor_conversations'), {
+         const docRef = await addDoc(collection(db, 'tutor_conversations'), cleanFirestoreData({
             ...convData,
             createdAt: Date.now()
-         });
+         }));
          convId = docRef.id;
          setActiveConversationId(convId);
          localStorage.setItem('tutor_active_conv', convId);
@@ -331,7 +331,7 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
             createdAt: Date.now()
          } as TutorConversation, ...prev]);
       } else {
-         await updateDoc(doc(db, 'tutor_conversations', convId!), convData);
+         await updateDoc(doc(db, 'tutor_conversations', convId!), cleanFirestoreData(convData));
          setConversations(prev => prev.map(c => c.id === convId ? { ...c, ...convData } : c).sort((a, b) => b.updatedAt - a.updatedAt));
       }
     } catch (err) {

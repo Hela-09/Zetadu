@@ -1,4 +1,4 @@
-import { db, auth } from '../lib/firebase';
+import { db, auth, cleanFirestoreData } from '../lib/firebase';
 import {
   collection,
   doc,
@@ -85,8 +85,8 @@ export interface UnifiedPracticeSessionDoc {
   sessionId: string;
   userId: string;
   mode: 'jamb_practice' | 'jamb_cbt' | 'jamb_study' | 'novel_practice';
-  subjectId?: string;
-  subjectName?: string;
+  subjectId: string;
+  subjectName: string;
   topicId?: string;
   topicName?: string;
   novelId?: string;
@@ -350,29 +350,38 @@ class JambQuestionEngine {
       const raw = localStorage.getItem(LOCAL_SEEN_KEY);
       const existing: string[] = raw ? JSON.parse(raw) : [];
       const set = new Set(existing);
-      questions.forEach(q => set.add(q.questionId));
+      questions.forEach(q => {
+        if (q?.questionId) set.add(q.questionId);
+      });
       localStorage.setItem(LOCAL_SEEN_KEY, JSON.stringify(Array.from(set).slice(-1000)));
     } catch {}
 
     // 2. Persist to Firestore: userQuestionHistory/{userId}/questions/{questionId}
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
-    if (userId && isOnline) {
+    if (userId && isOnline && questions.length > 0) {
       try {
         const batch = writeBatch(db);
         for (const q of questions) {
+          if (!q?.questionId) continue;
           const docRef = doc(db, 'userQuestionHistory', userId, 'questions', q.questionId);
-          const isNovelQ = 'novelId' in q;
-          batch.set(docRef, {
+          const isNovelQ = 'novelId' in q || 'chapterId' in q;
+          const historyRecord: Record<string, any> = {
             questionId: q.questionId,
             userId,
-            subjectId: !isNovelQ ? (q as JambQuestionDoc).subjectId : undefined,
-            topicId: !isNovelQ ? (q as JambQuestionDoc).topicId : undefined,
-            novelId: isNovelQ ? (q as JambNovelQuestionDoc).novelId : undefined,
-            chapterId: isNovelQ ? (q as JambNovelQuestionDoc).chapterId : undefined,
             seenAt: now,
             lastSessionId: sessionId,
             attemptsCount: 0
-          }, { merge: true });
+          };
+          if (isNovelQ) {
+            const novelQ = q as JambNovelQuestionDoc;
+            if (novelQ.novelId) historyRecord.novelId = novelQ.novelId;
+            if (novelQ.chapterId) historyRecord.chapterId = novelQ.chapterId;
+          } else {
+            const subjectQ = q as JambQuestionDoc;
+            if (subjectQ.subjectId) historyRecord.subjectId = subjectQ.subjectId;
+            if (subjectQ.topicId) historyRecord.topicId = subjectQ.topicId;
+          }
+          batch.set(docRef, cleanFirestoreData(historyRecord), { merge: true });
         }
         await batch.commit();
       } catch (e) {
@@ -394,21 +403,26 @@ class JambQuestionEngine {
     meta?: { subjectId?: string; topicId?: string; novelId?: string; chapterId?: string }
   ): Promise<void> {
     const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
-    if (!userId || !isOnline) return;
+    if (!userId || !isOnline || !questionId) return;
 
     try {
       const docRef = doc(db, 'userQuestionHistory', userId, 'questions', questionId);
-      await setDoc(docRef, {
+      const answerPayload: Record<string, any> = {
         questionId,
         userId,
-        selectedOption,
-        isCorrect,
-        timeSpentSeconds,
+        selectedOption: typeof selectedOption === 'number' ? selectedOption : -1,
+        isCorrect: Boolean(isCorrect),
+        timeSpentSeconds: Math.max(0, timeSpentSeconds || 0),
         answeredAt: Date.now(),
-        lastSessionId: sessionId,
-        attemptsCount: increment(1),
-        ...meta
-      }, { merge: true });
+        lastSessionId: sessionId || 'active_session',
+        attemptsCount: increment(1)
+      };
+      if (meta?.subjectId) answerPayload.subjectId = meta.subjectId;
+      if (meta?.topicId) answerPayload.topicId = meta.topicId;
+      if (meta?.novelId) answerPayload.novelId = meta.novelId;
+      if (meta?.chapterId) answerPayload.chapterId = meta.chapterId;
+
+      await setDoc(docRef, cleanFirestoreData(answerPayload), { merge: true });
     } catch (e) {
       console.warn('Failed recording question answer in userQuestionHistory:', e);
     }
@@ -426,9 +440,13 @@ class JambQuestionEngine {
     try {
       if (options.mode === 'novel_practice' || options.novelId) {
         const colRef = collection(db, 'jambNovelQuestions');
-        let q = query(colRef, where('novelId', '==', options.novelId), where('status', '==', 'active'), limit(200));
-        if (options.chapterId) {
+        let q;
+        if (options.novelId && options.chapterId) {
           q = query(colRef, where('novelId', '==', options.novelId), where('chapterId', '==', options.chapterId), where('status', '==', 'active'), limit(200));
+        } else if (options.novelId) {
+          q = query(colRef, where('novelId', '==', options.novelId), where('status', '==', 'active'), limit(200));
+        } else {
+          q = query(colRef, where('status', '==', 'active'), limit(200));
         }
         const snap = await getDocs(q);
         return snap.docs.map(d => d.data() as JambNovelQuestionDoc);
@@ -594,16 +612,16 @@ class JambQuestionEngine {
       // Save permanently to Firestore
       try {
         const collectionName = isNovel ? 'jambNovelQuestions' : 'jambQuestions';
-        await setDoc(doc(db, collectionName, acceptedDoc.questionId), acceptedDoc);
+        await setDoc(doc(db, collectionName, acceptedDoc.questionId), cleanFirestoreData(acceptedDoc));
 
         // Update stats
         const bankId = isNovel ? `novel_${options.novelId}` : `subject_${options.subjectId || 'general'}`;
-        await setDoc(doc(db, 'questionBankStats', bankId), {
+        await setDoc(doc(db, 'questionBankStats', bankId), cleanFirestoreData({
           bankId,
           totalQuestions: increment(1),
           aiGeneratedCount: increment(1),
           updatedAt: Date.now()
-        }, { merge: true });
+        }), { merge: true });
       } catch (saveErr) {
         console.warn('Could not persist accepted question to Firestore right now:', saveErr);
       }
@@ -613,18 +631,20 @@ class JambQuestionEngine {
     if (auth.currentUser && candidateList.length > 0) {
       try {
         const genId = `gen_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-        await setDoc(doc(db, 'questionGeneration', genId), {
+        const genDoc: Record<string, any> = {
           generationId: genId,
           requestedBy: auth.currentUser.uid,
-          subjectId: options.subjectId,
-          topicId: options.topicId,
-          novelId: options.novelId,
-          chapterId: options.chapterId,
           countRequested: options.count,
           countGenerated: acceptedQuestions.length,
           status: acceptedQuestions.length >= options.count ? 'success' : 'partial',
           createdAt: Date.now()
-        });
+        };
+        if (options.subjectId) genDoc.subjectId = options.subjectId;
+        if (options.topicId) genDoc.topicId = options.topicId;
+        if (options.novelId) genDoc.novelId = options.novelId;
+        if (options.chapterId) genDoc.chapterId = options.chapterId;
+
+        await setDoc(doc(db, 'questionGeneration', genId), cleanFirestoreData(genDoc));
       } catch {}
     }
 
@@ -782,16 +802,46 @@ class JambQuestionEngine {
     const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const now = Date.now();
 
+    // Correctly resolve subjectId and subjectName so it is NEVER undefined
+    let resolvedSubjectId: string = 'general';
+    let resolvedSubjectName: string = 'General Practice';
+
+    if (options.subjectId) {
+      resolvedSubjectId = options.subjectId;
+      const matched = JAMB_SUBJECTS.find(
+        s => s.id === options.subjectId || s.name.toLowerCase() === options.subjectId?.toLowerCase()
+      );
+      resolvedSubjectName = options.subjectName || matched?.name || options.subjectId;
+    } else if (options.subjectName) {
+      resolvedSubjectName = options.subjectName;
+      const matched = JAMB_SUBJECTS.find(
+        s => s.name.toLowerCase() === options.subjectName?.toLowerCase() || s.id === options.subjectName?.toLowerCase()
+      );
+      resolvedSubjectId = matched?.id || options.subjectName.toLowerCase().replace(/\s+/g, '_');
+    } else if (options.subjects && options.subjects.length > 1) {
+      resolvedSubjectId = 'jamb_cbt';
+      resolvedSubjectName = 'JAMB CBT Multi-Subject Mock';
+    } else if (isNovelMode || options.novelId) {
+      resolvedSubjectId = options.novelId || 'novel_study';
+      const novelObj = options.novelId ? NOVELS_COLLECTION.find(n => n.id === options.novelId) : null;
+      resolvedSubjectName = options.novelTitle || novelObj?.title || 'Prescribed Novel Study';
+    } else if (finalSelectedQuestions.length > 0) {
+      const firstQ = finalSelectedQuestions[0];
+      if ('subjectId' in firstQ && firstQ.subjectId) {
+        resolvedSubjectId = firstQ.subjectId;
+        resolvedSubjectName = (firstQ as any).subjectName || firstQ.subjectId;
+      } else if ('novelId' in firstQ && (firstQ as any).novelId) {
+        resolvedSubjectId = (firstQ as any).novelId;
+        resolvedSubjectName = (firstQ as any).novelTitle || 'Prescribed Novel Study';
+      }
+    }
+
     const session: UnifiedPracticeSessionDoc = {
       sessionId,
       userId: activeUserId,
       mode: options.mode,
-      subjectId: options.subjectId,
-      subjectName: options.subjectName,
-      topicId: options.topicId,
-      topicName: options.topicName,
-      novelId: options.novelId,
-      chapterId: options.chapterId,
+      subjectId: resolvedSubjectId,
+      subjectName: resolvedSubjectName,
       questionIds: finalSelectedQuestions.map(q => q.questionId),
       questions: finalSelectedQuestions,
       totalQuestions: finalSelectedQuestions.length,
@@ -801,6 +851,11 @@ class JambQuestionEngine {
       startedAt: now,
       updatedAt: now
     };
+
+    if (options.topicId) session.topicId = options.topicId;
+    if (options.topicName) session.topicName = options.topicName;
+    if (options.novelId) session.novelId = options.novelId;
+    if (options.chapterId) session.chapterId = options.chapterId;
 
     // Increment timesUsed on selected questions in Firestore
     if (typeof navigator !== 'undefined' && navigator.onLine) {
@@ -823,7 +878,7 @@ class JambQuestionEngine {
     // Persist practiceSession to Firestore
     if (activeUserId && activeUserId !== 'guest_user' && typeof navigator !== 'undefined' && navigator.onLine) {
       try {
-        await setDoc(doc(db, 'practiceSessions', sessionId), session);
+        await setDoc(doc(db, 'practiceSessions', sessionId), cleanFirestoreData(session));
       } catch (err) {
         console.warn('Practice session firestore save notice:', err);
       }
@@ -851,10 +906,11 @@ class JambQuestionEngine {
     if (!auth.currentUser) return;
 
     try {
-      await updateDoc(doc(db, 'practiceSessions', sessionId), {
+      const sanitizedUpdates = cleanFirestoreData({
         ...updates,
         updatedAt: Date.now()
       });
+      await updateDoc(doc(db, 'practiceSessions', sessionId), sanitizedUpdates);
     } catch (e) {
       console.warn('Session progress update notice:', e);
     }
@@ -864,29 +920,40 @@ class JambQuestionEngine {
    * Adapts a canonical doc to the legacy Question interface used by LearnDean's Practice Center components.
    */
   public toLegacyQuestion(q: JambQuestionDoc | JambNovelQuestionDoc, index: number = 0): any {
-    const isNovelQ = 'novelId' in q;
+    const isNovelQ = 'novelId' in q || 'chapterId' in q;
     const subjectQ = q as JambQuestionDoc;
     const novelQ = q as JambNovelQuestionDoc;
 
-    return {
+    const legacyQ: Record<string, any> = {
       id: q.questionId,
       questionId: q.questionId,
       question: subjectQ.passage ? `${subjectQ.passage}\n\n${q.question}` : q.question,
-      options: q.options,
+      options: q.options || [],
       correctAnswer: q.correctAnswer,
       correctAnswerIndex: q.correctAnswer,
       explanation: q.explanation || 'Refer to official syllabus and curriculum guide.',
       difficulty: q.difficulty || 'medium',
-      sourceType: q.sourceType,
+      sourceType: q.sourceType || 'past_question',
       isAIgenerated: !!q.isAIgenerated,
       fingerprint: q.fingerprint,
-      topic: isNovelQ ? novelQ.chapterTitle || 'Novel Study' : subjectQ.topicName || 'General',
-      subject: isNovelQ ? novelQ.novelTitle || 'Prescribed Novel' : subjectQ.subjectName || 'JAMB',
-      subjectId: isNovelQ ? novelQ.novelId : subjectQ.subjectId,
-      year: subjectQ.year,
-      questionNumber: subjectQ.questionNumber || (index + 1),
-      status: q.status
+      topic: isNovelQ ? (novelQ.chapterTitle || 'Novel Study') : (subjectQ.topicName || 'General'),
+      subject: isNovelQ ? (novelQ.novelTitle || 'Prescribed Novel') : (subjectQ.subjectName || 'JAMB'),
+      subjectId: isNovelQ ? (novelQ.novelId || 'novel') : (subjectQ.subjectId || 'general'),
+      subjectName: isNovelQ ? (novelQ.novelTitle || 'Prescribed Novel') : (subjectQ.subjectName || 'JAMB'),
+      status: q.status || 'active'
     };
+
+    if (isNovelQ) {
+      if (novelQ.novelId) legacyQ.novelId = novelQ.novelId;
+      if (novelQ.chapterId) legacyQ.chapterId = novelQ.chapterId;
+      if (typeof novelQ.chapterIndex === 'number') legacyQ.chapterIndex = novelQ.chapterIndex;
+    } else {
+      if (subjectQ.year) legacyQ.year = subjectQ.year;
+      if (subjectQ.questionNumber) legacyQ.questionNumber = subjectQ.questionNumber;
+      else legacyQ.questionNumber = index + 1;
+    }
+
+    return legacyQ;
   }
 }
 

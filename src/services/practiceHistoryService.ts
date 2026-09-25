@@ -1,4 +1,4 @@
-import { db, auth } from '../lib/firebase';
+import { db, auth, cleanFirestoreData } from '../lib/firebase';
 import { collection, addDoc, getDocs, query, where, orderBy, limit, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { Question } from '../components/Quiz';
 
@@ -73,24 +73,25 @@ export const practiceHistoryService = {
 
     if (isOnline && currentUser) {
       try {
-        const firestoreData = {
+        const firestoreData: Record<string, any> = {
           uid: currentUser.uid,
-          subject: fullSession.subject,
+          subject: fullSession.subject || 'general',
+          subjectName: fullSession.subjectName || fullSession.subject || 'General Practice',
           topic: fullSession.topic || 'General',
           difficulty: fullSession.difficulty || 'Medium',
-          score: fullSession.score,
-          totalQuestions: fullSession.totalQuestions,
+          score: typeof fullSession.score === 'number' ? fullSession.score : 0,
+          totalQuestions: typeof fullSession.totalQuestions === 'number' ? fullSession.totalQuestions : 0,
           answeredQuestionsCount: Object.keys(fullSession.answers || {}).length,
-          percentage: fullSession.percentage,
-          timeUsedSeconds: fullSession.timeUsedSeconds,
-          answeredQuestions: fullSession.answeredQuestions || [],
+          percentage: typeof fullSession.percentage === 'number' ? fullSession.percentage : 0,
+          timeUsedSeconds: typeof fullSession.timeUsedSeconds === 'number' ? fullSession.timeUsedSeconds : 0,
+          answeredQuestions: (fullSession.answeredQuestions || []).map(q => cleanFirestoreData(q)),
           answers: fullSession.answers || {},
           examType: fullSession.examType || 'General',
           updatedAt: serverTimestamp(),
-          completedAt: fullSession.completedAt
+          completedAt: fullSession.completedAt || Date.now()
         };
 
-        const docRef = await addDoc(collection(db, 'learning_data'), firestoreData);
+        const docRef = await addDoc(collection(db, 'learning_data'), cleanFirestoreData(firestoreData));
         fullSession.id = docRef.id;
         fullSession.syncStatus = 'synced';
         

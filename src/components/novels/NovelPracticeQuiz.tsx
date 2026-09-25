@@ -205,18 +205,21 @@ export default function NovelPracticeQuiz({
     if (user && activeQuestions[currentIndex]) {
       const q = activeQuestions[currentIndex];
       const isCorrect = optIndex === q.correctAnswer;
-      jambQuestionEngine.recordQuestionAnswer(
-        user.uid,
-        'novel_practice_session',
-        q.id,
-        optIndex,
-        isCorrect,
-        10,
-        {
-          novelId: novel.id,
-          chapterId: typeof selectedChapterIndex === 'number' ? `chapter_${selectedChapterIndex + 1}` : undefined
-        }
-      ).catch(() => {});
+      const targetNovelId = novel?.id || (q as any).novelId;
+      if (targetNovelId && q?.id) {
+        jambQuestionEngine.recordQuestionAnswer(
+          user.uid,
+          'novel_practice_session',
+          q.id,
+          optIndex,
+          isCorrect,
+          10,
+          {
+            novelId: targetNovelId,
+            ...(typeof selectedChapterIndex === 'number' ? { chapterId: `chapter_${selectedChapterIndex + 1}` } : {})
+          }
+        ).catch(() => {});
+      }
     }
   };
 
@@ -238,7 +241,8 @@ export default function NovelPracticeQuiz({
     }
 
     // Persist attempt locally & cloud
-    if (user) {
+    const targetNovelId = novel?.id || (activeQuestions[0] as any)?.novelId;
+    if (user && targetNovelId) {
       const chapterLabel =
         selectedChapterIndex === 'all'
           ? 'All Chapters'
@@ -247,9 +251,8 @@ export default function NovelPracticeQuiz({
       const attemptRecord: NovelPracticeAttempt = {
         id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         uid: user.uid,
-        novelId: novel.id,
-        novelTitle: novel.title,
-        chapterIndex: typeof selectedChapterIndex === 'number' ? selectedChapterIndex : undefined,
+        novelId: targetNovelId,
+        novelTitle: novel?.title || 'Prescribed Novel Study',
         chapterTitle: chapterLabel,
         totalQuestions: total,
         correctAnswers: correct,
@@ -257,6 +260,9 @@ export default function NovelPracticeQuiz({
         timeSpentSeconds: timeSpentSeconds,
         timestamp: Date.now()
       };
+      if (typeof selectedChapterIndex === 'number') {
+        attemptRecord.chapterIndex = selectedChapterIndex;
+      }
 
       try {
         await savePracticeAttempt(attemptRecord);
