@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getLevelInfo } from '../lib/achievements';
 import { motion, AnimatePresence } from 'motion/react';
@@ -17,12 +18,16 @@ import ProfilePictureModal from './ProfilePictureModal';
 
 interface ProfileProps {
   setView: (view: ViewType) => void;
+  initialSection?: string;
 }
 
-export default function Profile({ setView }: ProfileProps) {
+export default function Profile({ setView, initialSection }: ProfileProps) {
   const { user, userProfile, refreshProfile, settings, updateSettings, isSuperAdmin, signOut, getToken } = useAuth();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
+
+  const { section } = useParams<{ section?: string }>();
+  const navigate = useNavigate();
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   React.useEffect(() => {
@@ -44,6 +49,8 @@ export default function Profile({ setView }: ProfileProps) {
   };
 
   const [activeSection, setActiveSection] = useState<string | null>(() => {
+    if (initialSection) return initialSection;
+    if (section) return section;
     if (typeof window !== 'undefined') {
       if (window.location.pathname.startsWith('/settings')) return 'settings';
       const saved = localStorage.getItem('zetadu_profile_section');
@@ -56,13 +63,35 @@ export default function Profile({ setView }: ProfileProps) {
   });
   const [reviewingSessionConfig, setReviewingSessionConfig] = useState<QuizProps['initialConfig'] | null>(null);
 
-  const navigateToSection = (section: string | null) => {
-    setActiveSection(section);
+  useEffect(() => {
+    if (section) {
+      setActiveSection(section);
+    } else if (!initialSection && !window.location.pathname.startsWith('/settings')) {
+      setActiveSection(null);
+    }
+  }, [section, initialSection]);
+
+  const navigateToSection = (newSection: string | null) => {
+    setActiveSection(newSection);
+    if (newSection) {
+      navigate(`/profile/${newSection}`);
+    } else {
+      if (window.history.length > 1) {
+        navigate(-1);
+      } else {
+        navigate('/profile');
+      }
+    }
   };
 
   const closeSection = () => {
     setActiveSection(null);
     localStorage.removeItem('zetadu_profile_section');
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/profile');
+    }
   };
 
   useEffect(() => {

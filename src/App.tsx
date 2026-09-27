@@ -36,7 +36,7 @@ const LearnHub = React.lazy(() => import('./components/LearnHub'));
 function getEffectiveView(pathname: string): ViewType {
   if (pathname === '/ai-tutor' || pathname === '/tutor') return 'tutor';
   if (pathname === '/learn') return 'learn';
-  if (pathname === '/library' || pathname === '/subjects') return 'subjects';
+  if (pathname === '/library' || pathname === '/subjects' || pathname.startsWith('/subjects/') || pathname.startsWith('/library/')) return 'subjects';
   if (pathname.startsWith('/novels') || pathname === '/learn/novels') return 'novels';
   if (pathname.startsWith('/jamb')) return 'jamb';
   if (pathname.startsWith('/practice')) return 'practice';
@@ -130,12 +130,12 @@ export default function App() {
   React.useEffect(() => {
     if (user && !adminChecked) {
       setAdminChecked(true);
-      // Navigate to Home page upon successful authentication
-      if (location.pathname === '/' || location.pathname === '/login' || currentView === 'admin') {
+      // Navigate to Home page upon initial authentication only if landing at root or login
+      if (location.pathname === '/' || location.pathname === '/login') {
         setCurrentView('home', { replace: true });
       }
     }
-  }, [user, adminChecked, currentView, setCurrentView, location.pathname]);
+  }, [user, adminChecked, setCurrentView, location.pathname]);
 
   React.useEffect(() => {
     let size = '16px';
@@ -312,15 +312,22 @@ export default function App() {
                     <Route path="/tutor" element={<Navigate to="/ai-tutor" replace />} />
                     <Route path="/learn" element={<LearnHub setView={setCurrentView} />} />
                     <Route path="/library" element={<Subjects setView={setCurrentView} />} />
+                    <Route path="/library/:subjectId" element={<Subjects setView={setCurrentView} />} />
                     <Route path="/subjects" element={<Subjects setView={setCurrentView} />} />
+                    <Route path="/subjects/:subjectId" element={<Subjects setView={setCurrentView} />} />
                     <Route path="/novels" element={<NovelsLibrary />} />
+                    <Route path="/novels/:novelId" element={<NovelsLibrary />} />
                     <Route path="/learn/novels" element={<Subjects setView={setCurrentView} initialSection="novels" />} />
                     <Route path="/practice" element={<Practice setView={setCurrentView} />} />
+                    <Route path="/practice/:subjectId" element={<Practice setView={setCurrentView} />} />
                     <Route path="/jamb" element={<JambPrep setView={setCurrentView} />} />
-                    <Route path="/jamb-prep" element={<Navigate to="/jamb" replace />} />
-                    <Route path="/jamb-cbt" element={<Navigate to="/jamb" replace />} />
+                    <Route path="/jamb/:tab" element={<JambPrep setView={setCurrentView} />} />
+                    <Route path="/jamb-prep" element={<JambPrep setView={setCurrentView} />} />
+                    <Route path="/jamb-cbt" element={<JambPrep setView={setCurrentView} initialTab="cbt" />} />
                     <Route path="/flashcards" element={<Flashcards setView={setCurrentView} />} />
+                    <Route path="/flashcards/:subjectId" element={<Flashcards setView={setCurrentView} />} />
                     <Route path="/profile" element={<Profile setView={setCurrentView} />} />
+                    <Route path="/profile/:section" element={<Profile setView={setCurrentView} />} />
                     <Route path="/settings" element={<Profile setView={setCurrentView} />} />
                     <Route path="/daily-challenge" element={<DailyChallenge setView={setCurrentView} />} />
                     <Route path="/study-journey" element={<StudyJourney setView={setCurrentView} />} />

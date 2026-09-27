@@ -40,7 +40,7 @@ import JambCalculator from './jamb/JambCalculator';
 import { jambService } from '../services/jambService';
 import { jambOfflineDb } from '../services/jambOfflineDb';
 import { jambQuestionEngine } from '../services/jambQuestionEngine';
-import { getUnifiedQuestionsForPractice } from '../data/jambQuestions';
+import { getUnifiedQuestionsForPractice, JAMB_SUBJECTS } from '../data/jambQuestions';
 import { practiceHistoryService, PracticeHistorySession } from '../services/practiceHistoryService';
 
 export interface Question {
@@ -78,6 +78,7 @@ export interface QuizProps {
     isUntimed?: boolean;
     questions?: Question[];
     examType?: 'JAMB' | 'WAEC' | 'General';
+    isOfflineOnly?: boolean;
     resumeSession?: any;
     reviewSession?: {
       id?: string;
@@ -138,25 +139,45 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     return option.replace(/^[A-Da-d][.)\:\-]\s*/, '').trim();
   };
 
-  const [setupMode, setSetupMode] = useState(cachedInternalSession ? cachedInternalSession.setupMode : true);
+  const [setupMode, setSetupMode] = useState<boolean>(() => {
+    if (initialConfig) return false;
+    return cachedInternalSession ? cachedInternalSession.setupMode : true;
+  });
   const [setupStep, setSetupStep] = useState(() => {
     if (localStorage.getItem('zetadu_target_subject_id')) return 2;
     return 1;
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
-  const [questions, setQuestions] = useState<Question[]>(cachedInternalSession ? cachedInternalSession.questions : []);
-  const [currentQIndex, setCurrentQIndex] = useState(cachedInternalSession ? cachedInternalSession.currentQIndex : 0);
+  const [questions, setQuestions] = useState<Question[]>(() => {
+    if (initialConfig?.questions && initialConfig.questions.length > 0) {
+      return initialConfig.questions;
+    }
+    return cachedInternalSession ? cachedInternalSession.questions : [];
+  });
+  const [currentQIndex, setCurrentQIndex] = useState(() => {
+    if (initialConfig) return 0;
+    return cachedInternalSession ? cachedInternalSession.currentQIndex : 0;
+  });
   
   // View mode: 'practice' (taking quiz), 'results' (summary after submit), 'review' (stepping through answers)
-  const [viewMode, setViewMode] = useState<'practice' | 'results' | 'review'>(
-    cachedInternalSession?.isSubmitted ? 'results' : 'practice'
-  );
+  const [viewMode, setViewMode] = useState<'practice' | 'results' | 'review'>(() => {
+    if (initialConfig?.reviewSession) return 'results';
+    if (initialConfig) return 'practice';
+    return cachedInternalSession?.isSubmitted ? 'results' : 'practice';
+  });
 
   // CBT State
-  const [answers, setAnswers] = useState<Record<number, number>>(cachedInternalSession ? cachedInternalSession.answers : {});
-  const [markedForReview, setMarkedForReview] = useState<Record<number, boolean>>(cachedInternalSession ? cachedInternalSession.markedForReview : {});
+  const [answers, setAnswers] = useState<Record<number, number>>(() => {
+    if (initialConfig) return {};
+    return cachedInternalSession ? cachedInternalSession.answers : {};
+  });
+  const [markedForReview, setMarkedForReview] = useState<Record<number, boolean>>(() => {
+    if (initialConfig) return {};
+    return cachedInternalSession ? cachedInternalSession.markedForReview : {};
+  });
   const [awardedQuestionIndices, setAwardedQuestionIndices] = useState<Set<number>>(() => {
+    if (initialConfig) return new Set();
     if (cachedInternalSession?.awardedQuestionIndices && Array.isArray(cachedInternalSession.awardedQuestionIndices)) {
       return new Set(cachedInternalSession.awardedQuestionIndices);
     }
@@ -166,7 +187,10 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     if (initialConfig?.timerDuration !== undefined) return initialConfig.timerDuration;
     return cachedInternalSession ? cachedInternalSession.timerDuration : 30;
   }); // in minutes
-  const [timerRemaining, setTimerRemaining] = useState<number>(cachedInternalSession ? cachedInternalSession.timerRemaining : 1800); // in seconds
+  const [timerRemaining, setTimerRemaining] = useState<number>(() => {
+    if (initialConfig?.timerDuration !== undefined) return initialConfig.timerDuration * 60;
+    return cachedInternalSession ? cachedInternalSession.timerRemaining : 1800;
+  }); // in seconds
   const [isUntimed, setIsUntimed] = useState<boolean>(() => {
     if (initialConfig?.isUntimed !== undefined) return initialConfig.isUntimed;
     if (initialConfig?.timerDuration === 0) return true;
@@ -174,9 +198,19 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
   });
   const [isCalculatorOpen, setIsCalculatorOpen] = useState(false);
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
-  const [isSubmitted, setIsSubmitted] = useState(cachedInternalSession ? cachedInternalSession.isSubmitted : false);
-  const [score, setScore] = useState(cachedInternalSession ? cachedInternalSession.score : 0);
+  const [isSubmitted, setIsSubmitted] = useState<boolean>(() => {
+    if (initialConfig?.reviewSession) return true;
+    if (initialConfig) return false;
+    return cachedInternalSession ? cachedInternalSession.isSubmitted : false;
+  });
+  const [score, setScore] = useState<number>(() => {
+    if (initialConfig?.reviewSession) return initialConfig.reviewSession.score || 0;
+    if (initialConfig) return 0;
+    return cachedInternalSession ? cachedInternalSession.score : 0;
+  });
   const [timeUsedSeconds, setTimeUsedSeconds] = useState<number>(() => {
+    if (initialConfig?.reviewSession) return initialConfig.reviewSession.timeUsedSeconds || 0;
+    if (initialConfig) return 0;
     if (cachedInternalSession?.timeUsedSeconds) return cachedInternalSession.timeUsedSeconds;
     return 0;
   });
@@ -258,10 +292,17 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     return localStorage.getItem('zetadu_target_topic') || '';
   });
   const [difficulty, setDifficulty] = useState(cachedInternalSession ? cachedInternalSession.difficulty : (settings?.defaultPracticeDifficulty || 'Medium'));
-  const [amount, setAmount] = useState(initialConfig?.amount || (cachedInternalSession ? cachedInternalSession.amount : 60));
+  const [amount, setAmount] = useState<number>(() => {
+    if (initialConfig?.amount) return initialConfig.amount;
+    if (initialConfig?.questions && initialConfig.questions.length > 0) return initialConfig.questions.length;
+    return cachedInternalSession ? cachedInternalSession.amount : 60;
+  });
   const [practiceMode, setPracticeMode] = useState(cachedInternalSession ? cachedInternalSession.practiceMode || 'Custom Practice' : 'Custom Practice');
 
-  const [hasRestored, setHasRestored] = useState(!!cachedInternalSession);
+  const [hasRestored, setHasRestored] = useState<boolean>(() => {
+    if (initialConfig) return true;
+    return !!cachedInternalSession;
+  });
   const [showLeavePrompt, setShowLeavePrompt] = useState(false);
   const [showSubmitPrompt, setShowSubmitPrompt] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
@@ -390,6 +431,36 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
 
       if (initialConfig.questions && initialConfig.questions.length > 0) {
         loadedQ = initialConfig.questions;
+      } else if (initialConfig.isOfflineOnly) {
+        // Load ONLY from existing IndexedDB offline database!
+        try {
+          const res = await jambOfflineDb.getOfflinePracticeQuestions({
+            subjects: initialConfig.subjects,
+            subject: initialConfig.subjectId || initialConfig.subject,
+            topic: initialConfig.topic,
+            year: initialConfig.year,
+            count: reqCount,
+            order: initialConfig.ordering || 'random'
+          });
+          loadedQ = res.questions.map((q, idx) => ({
+            id: q.id,
+            question: q.passage ? `${q.passage}\n\n${q.question}` : q.question,
+            options: q.options,
+            correctAnswer: q.correctAnswer,
+            correctAnswerIndex: q.correctAnswer,
+            explanation: q.explanation || 'Refer to official syllabus and curriculum guide.',
+            difficulty: 'medium',
+            sourceType: (q as any).sourceType || 'past_question',
+            isAIgenerated: false,
+            topic: q.topic || 'General',
+            subject: q.subjectName || initialConfig.subject || 'JAMB',
+            subjectId: q.subject || initialConfig.subjectId || 'general',
+            year: q.year,
+            questionNumber: q.questionNumber || (idx + 1)
+          }));
+        } catch (err) {
+          console.warn('Failed to load offline questions from IndexedDB:', err);
+        }
       } else {
         try {
           // Use offline-first jambService to retrieve questions, respecting ordering and prioritizing unanswered
@@ -415,6 +486,41 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
             order: initialConfig.ordering || 'random'
           });
         }
+      }
+
+      // If offline mode is requested or questions were supplied directly from offline storage:
+      if (initialConfig.isOfflineOnly || (initialConfig.questions && initialConfig.questions.length > 0)) {
+        if (isCancelled) return;
+
+        if (loadedQ.length === 0) {
+          if (onBack) onBack();
+          else setSetupMode(true);
+          return;
+        }
+
+        // Use available questions immediately: never call AI, never block with shortfall
+        const finalQs = (reqCount && loadedQ.length >= reqCount) ? loadedQ.slice(0, reqCount) : loadedQ;
+        setAmount(finalQs.length);
+        setQuestions(finalQs);
+        setPoolShortfallState(null);
+        setSetupMode(false);
+        setIsSubmitted(false);
+        setViewMode('practice');
+        setCurrentQIndex(0);
+        setAnswers({});
+        setMarkedForReview({});
+        setAwardedQuestionIndices(new Set());
+        const dur = initialConfig.timerDuration !== undefined ? initialConfig.timerDuration : Math.max(5, Math.round(finalQs.length * 1.5));
+        setTimerDuration(dur);
+        const untimed = initialConfig.isUntimed || dur === 0;
+        setIsUntimed(untimed);
+        setTimerRemaining(dur * 60);
+        setTimeUsedSeconds(0);
+        if (initialConfig.subject) setSubject(initialConfig.subject);
+        if (initialConfig.subjectId) setSubjectId(initialConfig.subjectId);
+        if (initialConfig.topic) setTopic(initialConfig.topic);
+        setHasRestored(true);
+        return;
       }
 
       // If loaded questions is fewer than requested and online, attempt automated backfill replenishment
@@ -526,6 +632,9 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
   // Load session on mount (memory -> IndexedDB -> localStorage -> Firestore)
   useEffect(() => {
     const loadSession = async () => {
+      // If initialConfig is provided, do NOT restore an old unrelated session!
+      if (initialConfig) return;
+
       if (cachedInternalSession && !cachedInternalSession.setupMode && cachedInternalSession.questions?.length > 0) {
         setHasRestored(true);
         return;
@@ -761,6 +870,10 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
   }, [setupMode, isSubmitted, questions.length, viewMode, isUntimed, user]);
 
   const clearSession = async () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     cachedInternalSession = null;
     try {
       await jambOfflineDb.clearActiveSession();
@@ -780,12 +893,26 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
 
   const handleLeavePractice = async () => {
     setShowLeavePrompt(false);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     await clearSession();
+    setQuestions([]);
+    setAnswers({});
+    setMarkedForReview({});
+    setCurrentQIndex(0);
+    setScore(0);
+    setTimeUsedSeconds(0);
     setSetupMode(true);
     setViewMode('practice');
     setIsSubmitted(false);
     if (onBack) {
       onBack();
+    } else if (typeof window !== 'undefined' && window.history.length > 1) {
+      window.history.back();
+    } else if (setView) {
+      setView('learn');
     }
   };
 
@@ -850,61 +977,80 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
       let poolIsLow = false;
       let unanswered = 0;
 
-      // 1. First retrieve questions from offline/unified bank via jambService
-      try {
-        const res = await jambService.getPracticeQuestions({
-          subject: subjectId || subject.toLowerCase(),
-          topic: topic || undefined,
-          count: amount,
-          order: 'random'
-        });
-        loadedQuestions = res.questions;
-        poolIsLow = res.isPoolLow;
-        unanswered = res.unansweredCount;
-      } catch (err) {
-        console.warn("Failed to get practice questions from jambService, falling back:", err);
-        loadedQuestions = getUnifiedQuestionsForPractice({
-          subject: subjectId || subject.toLowerCase(),
-          topic: topic || undefined,
-          count: amount,
-          order: 'random'
-        });
-      }
+      const isOfflineEnv = typeof navigator === 'undefined' || !navigator.onLine;
 
-      // 2. If pool has fewer questions than requested and user is online, attempt replenishment
-      if (loadedQuestions.length < amount && typeof navigator !== 'undefined' && navigator.onLine) {
+      if (isOfflineEnv) {
+        // Load ONLY from existing IndexedDB offline database!
         try {
-          const missing = amount - loadedQuestions.length;
-          await jambService.generateAndDownloadMoreQuestions(
-            subjectId || subject.toLowerCase(),
-            topic || 'General',
-            missing
-          );
-          const refreshed = await jambService.getPracticeQuestions({
+          const res = await jambOfflineDb.getOfflinePracticeQuestions({
             subject: subjectId || subject.toLowerCase(),
             topic: topic || undefined,
             count: amount,
             order: 'random'
           });
-          loadedQuestions = refreshed.questions;
-          poolIsLow = refreshed.isPoolLow;
-          unanswered = refreshed.unansweredCount;
-        } catch (apiErr) {
-          console.warn("Question auto-replenish error:", apiErr);
+          const qList = res.questions || [];
+          if (qList.length === 0) {
+            setLoading(false);
+            return;
+          }
+          loadedQuestions = qList.map((q, idx) => ({
+            id: q.id,
+            question: q.passage ? `${q.passage}\n\n${q.question}` : q.question,
+            options: q.options,
+            correctAnswer: q.correctAnswer,
+            correctAnswerIndex: q.correctAnswer,
+            explanation: q.explanation || 'Refer to official syllabus and curriculum guide.',
+            difficulty: 'medium',
+            sourceType: (q as any).sourceType || 'past_question',
+            isAIgenerated: false,
+            topic: q.topic || 'General',
+            subject: q.subjectName || subject,
+            subjectId: q.subject || subjectId,
+            year: q.year,
+            questionNumber: q.questionNumber || (idx + 1)
+          }));
+        } catch (offlineErr) {
+          console.warn("Failed to load questions from offline DB:", offlineErr);
+        }
+      } else {
+        // 1. First retrieve questions from offline/unified bank via jambService
+        try {
+          const res = await jambService.getPracticeQuestions({
+            subject: subjectId || subject.toLowerCase(),
+            topic: topic || undefined,
+            count: amount,
+            order: 'random'
+          });
+          loadedQuestions = res.questions;
+          poolIsLow = res.isPoolLow;
+          unanswered = res.unansweredCount;
+        } catch (err) {
+          console.warn("Failed to get practice questions from jambService, falling back:", err);
+          loadedQuestions = getUnifiedQuestionsForPractice({
+            subject: subjectId || subject.toLowerCase(),
+            topic: topic || undefined,
+            count: amount,
+            order: 'random'
+          });
         }
       }
 
-      // 3. Strict exact count enforcement: never launch with fewer questions than requested
+      // 2. Strict exact count enforcement: when offline or questions available, start immediately!
       if (loadedQuestions.length < amount) {
-        setPoolShortfallState({
-          requested: amount,
-          available: loadedQuestions.length,
-          shortfall: amount - loadedQuestions.length,
-          subjects: [subjectId || subject],
-          pendingQuestions: loadedQuestions
-        });
-        setIsPoolLow(true);
-        return;
+        if (isOfflineEnv || loadedQuestions.length > 0) {
+          // Start immediately with all available downloaded questions
+          setAmount(loadedQuestions.length);
+        } else {
+          setPoolShortfallState({
+            requested: amount,
+            available: loadedQuestions.length,
+            shortfall: amount - loadedQuestions.length,
+            subjects: [subjectId || subject],
+            pendingQuestions: loadedQuestions
+          });
+          setIsPoolLow(true);
+          return;
+        }
       }
 
       const exactQuestions = loadedQuestions.slice(0, amount);
@@ -1100,6 +1246,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
 
     // Track every question the student answers in userQuestionHistory
     if (user && q?.id) {
+      const qAny = q as any;
       jambQuestionEngine.recordQuestionAnswer(
         user.uid,
         cachedInternalSession?.sessionId || 'active_practice_session',
@@ -1108,6 +1255,8 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
         isCorrect,
         10,
         {
+          ...(qAny.novelId ? { novelId: qAny.novelId } : {}),
+          ...(qAny.chapterId ? { chapterId: qAny.chapterId } : {}),
           ...(q.subjectId || subjectId ? { subjectId: q.subjectId || subjectId } : {}),
           ...(q.topic || topic ? { topicId: q.topic || topic } : {})
         }
@@ -1383,10 +1532,10 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
                 onClick={() => {
                   if (onBack) {
                     onBack();
-                  } else if (window.history.length > 1) {
+                  } else if (typeof window !== 'undefined' && window.history.length > 1) {
                     window.history.back();
                   } else if (setView) {
-                    setView('home');
+                    setView('learn');
                   }
                 }} 
                 className="p-2 sm:p-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors self-start cursor-pointer"

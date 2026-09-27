@@ -1,4 +1,4 @@
-import { db, auth } from '../lib/firebase';
+import { db, auth, cleanFirestoreData } from '../lib/firebase';
 import { collection, doc, setDoc, getDoc, getDocs, query, where, orderBy, limit, deleteDoc } from 'firebase/firestore';
 import { JambQuestion, getJambQuestionsByFilter, JAMB_SUBJECTS } from '../data/jambQuestions';
 import { jambOfflineDb, DownloadedSubjectMeta, StoredOfflineAttempt, StoredOfflineBookmark, OfflinePracticeOptions } from './jambOfflineDb';
@@ -90,12 +90,12 @@ export const jambService = {
     if (isOnline && auth.currentUser) {
       try {
         const userUid = auth.currentUser.uid;
-        await setDoc(doc(db, 'user_jamb_profile', userUid), {
+        await setDoc(doc(db, 'user_jamb_profile', userUid), cleanFirestoreData({
           uid: userUid,
           selectedSubjects: validSubjects,
           updatedAt: Date.now(),
           syncStatus: 'synced'
-        }, { merge: true });
+        }), { merge: true });
         
         // Clear pending flag once remote write completes
         try {
@@ -134,12 +134,12 @@ export const jambService = {
       // If there are pending changes saved while offline, sync them up first
       const hasPendingSync = typeof localStorage !== 'undefined' && localStorage.getItem(LOCAL_STORAGE_PENDING_SUBJECTS_KEY) === 'true';
       if (hasPendingSync) {
-        await setDoc(doc(db, 'user_jamb_profile', userUid), {
+        await setDoc(doc(db, 'user_jamb_profile', userUid), cleanFirestoreData({
           uid: userUid,
           selectedSubjects: localFallback,
           updatedAt: Date.now(),
           syncStatus: 'synced'
-        }, { merge: true });
+        }), { merge: true });
         localStorage.removeItem(LOCAL_STORAGE_PENDING_SUBJECTS_KEY);
         return localFallback;
       }
@@ -171,12 +171,12 @@ export const jambService = {
         }
       } else {
         // Document does not exist yet on remote: initialize with current user selection
-        await setDoc(doc(db, 'user_jamb_profile', userUid), {
+        await setDoc(doc(db, 'user_jamb_profile', userUid), cleanFirestoreData({
           uid: userUid,
           selectedSubjects: localFallback,
           updatedAt: Date.now(),
           syncStatus: 'synced'
-        }, { merge: true });
+        }), { merge: true });
         localStorage.removeItem(LOCAL_STORAGE_PENDING_SUBJECTS_KEY);
         return localFallback;
       }
@@ -223,12 +223,12 @@ export const jambService = {
     // 3. Sync immediately to Firestore if online & logged in
     if (isOnline && auth.currentUser) {
       try {
-        const firestorePayload = {
+        const firestorePayload = cleanFirestoreData({
           ...fullAttempt,
           uid: auth.currentUser.uid,
           syncStatus: 'synced',
           syncedAt: Date.now()
-        };
+        });
         await setDoc(doc(db, 'jamb_history', attemptId), firestorePayload);
         // Mark as synced in IndexedDB
         await jambOfflineDb.markAttemptSynced(attemptId);
@@ -346,14 +346,14 @@ export const jambService = {
       const bookmarkDocId = `${auth.currentUser.uid}_${question.id}`;
       try {
         if (isNowBookmarked) {
-          await setDoc(doc(db, 'jamb_bookmarks', bookmarkDocId), {
+          await setDoc(doc(db, 'jamb_bookmarks', bookmarkDocId), cleanFirestoreData({
             uid: auth.currentUser.uid,
             questionId: question.id,
             subject: question.subject,
             savedAt: bookmarkData.savedAt,
             question,
             syncStatus: 'synced'
-          });
+          }));
           await jambOfflineDb.markBookmarkSynced(question.id);
         } else {
           await deleteDoc(doc(db, 'jamb_bookmarks', bookmarkDocId));
@@ -609,12 +609,12 @@ export const jambService = {
       if (hasPendingSubjects) {
         try {
           const localSubjects = this.getUserJambSubjects();
-          await setDoc(doc(db, 'user_jamb_profile', userUid), {
+          await setDoc(doc(db, 'user_jamb_profile', userUid), cleanFirestoreData({
             uid: userUid,
             selectedSubjects: localSubjects,
             updatedAt: Date.now(),
             syncStatus: 'synced'
-          }, { merge: true });
+          }), { merge: true });
           localStorage.removeItem(LOCAL_STORAGE_PENDING_SUBJECTS_KEY);
           syncedSubjectsCount++;
         } catch (err) {
@@ -634,7 +634,7 @@ export const jambService = {
             syncedAt: Date.now()
           };
           // Write idempotently with merge to Firestore
-          await setDoc(doc(db, 'jamb_history', attempt.id), remoteDoc, { merge: true });
+          await setDoc(doc(db, 'jamb_history', attempt.id), cleanFirestoreData(remoteDoc), { merge: true });
           // Mark as synced in IndexedDB
           await jambOfflineDb.markAttemptSynced(attempt.id);
           syncedAttemptsCount++;
@@ -649,7 +649,7 @@ export const jambService = {
       for (const b of pendingBookmarks) {
         try {
           const bookmarkDocId = `${userUid}_${b.questionId}`;
-          await setDoc(doc(db, 'jamb_bookmarks', bookmarkDocId), {
+          await setDoc(doc(db, 'jamb_bookmarks', bookmarkDocId), cleanFirestoreData({
             uid: userUid,
             questionId: b.questionId,
             subject: b.subject,
@@ -657,7 +657,7 @@ export const jambService = {
             question: b.question,
             syncStatus: 'synced',
             syncedAt: Date.now()
-          }, { merge: true });
+          }), { merge: true });
           await jambOfflineDb.markBookmarkSynced(b.questionId);
           syncedBookmarksCount++;
         } catch (err) {

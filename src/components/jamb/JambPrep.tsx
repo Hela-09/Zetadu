@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   BookOpen, 
   GraduationCap, 
@@ -36,6 +37,7 @@ import { JambCourseCombinationSection } from './JambCourseCombinationSection';
 interface JambPrepProps {
   onBack?: () => void;
   setView?: (v: any) => void;
+  initialTab?: MainTab;
 }
 
 export type MainTab = 
@@ -46,11 +48,32 @@ export type MainTab =
   | 'practice' 
   | 'cbt';
 
-export default function JambPrep({ onBack, setView }: JambPrepProps) {
+export default function JambPrep({ onBack, setView, initialTab }: JambPrepProps) {
   const { user } = useAuth();
+  const { tab } = useParams<{ tab?: string }>();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Top-level Navigation: MY SUBJECTS | ALL SUBJECTS | COURSE COMBO | STUDY | PRACTICE | JAMB CBT
-  const [mainTab, setMainTab] = useState<MainTab>('my-subjects');
+  const [mainTab, setMainTab] = useState<MainTab>(() => {
+    if (initialTab) return initialTab;
+    if (tab && ['my-subjects', 'all-subjects', 'course-combination', 'study', 'practice', 'cbt'].includes(tab)) {
+      return tab as MainTab;
+    }
+    return 'my-subjects';
+  });
+
+  useEffect(() => {
+    if (tab && ['my-subjects', 'all-subjects', 'course-combination', 'study', 'practice', 'cbt'].includes(tab)) {
+      setMainTab(tab as MainTab);
+    }
+  }, [tab]);
+
+  const handleTabChange = (newTab: MainTab) => {
+    setMainTab(newTab);
+    navigate(`/jamb/${newTab}`);
+  };
+
   const [targetedSubjectId, setTargetedSubjectId] = useState<string>('english');
   const [targetedStudySubTab, setTargetedStudySubTab] = useState<StudySubTab>('subjects');
   const [targetedCbtSubjects, setTargetedCbtSubjects] = useState<string[]>([]);
@@ -427,6 +450,11 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
         onBack={() => {
           setActiveQuizConfig(null);
           loadHistoryAndBookmarks();
+          if (window.history.length > 1) {
+            navigate(-1);
+          } else {
+            navigate(`/jamb/${mainTab}`);
+          }
         }}
         setView={setView}
       />
@@ -696,7 +724,7 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
         <button
           id="jamb-main-tab-my-subjects"
           type="button"
-          onClick={() => setMainTab('my-subjects')}
+          onClick={() => handleTabChange('my-subjects')}
           className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
             mainTab === 'my-subjects'
               ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
@@ -710,7 +738,7 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
         <button
           id="jamb-main-tab-all-subjects"
           type="button"
-          onClick={() => setMainTab('all-subjects')}
+          onClick={() => handleTabChange('all-subjects')}
           className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
             mainTab === 'all-subjects'
               ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
@@ -724,7 +752,7 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
         <button
           id="jamb-main-tab-course-combination"
           type="button"
-          onClick={() => setMainTab('course-combination')}
+          onClick={() => handleTabChange('course-combination')}
           className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
             mainTab === 'course-combination'
               ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
@@ -738,7 +766,7 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
         <button
           id="jamb-main-tab-study"
           type="button"
-          onClick={() => setMainTab('study')}
+          onClick={() => handleTabChange('study')}
           className={`flex-1 min-w-[90px] py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
             mainTab === 'study'
               ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
@@ -752,7 +780,7 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
         <button
           id="jamb-main-tab-practice"
           type="button"
-          onClick={() => setMainTab('practice')}
+          onClick={() => handleTabChange('practice')}
           className={`flex-1 min-w-[95px] py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
             mainTab === 'practice'
               ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
@@ -766,7 +794,7 @@ export default function JambPrep({ onBack, setView }: JambPrepProps) {
         <button
           id="jamb-main-tab-cbt"
           type="button"
-          onClick={() => setMainTab('cbt')}
+          onClick={() => handleTabChange('cbt')}
           className={`flex-1 min-w-[100px] py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
             mainTab === 'cbt'
               ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'

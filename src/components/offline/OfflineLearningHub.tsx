@@ -52,8 +52,10 @@ import {
 } from '../../services/jambService';
 import { OFFICIAL_JAMB_SUBJECTS, JambSubject } from '../../data/jambSubjects';
 import { getRealAvailableQuestionsForSubject } from '../../data/jambQuestions';
-import { FlashcardDeck } from '../../types';
-import Quiz, { QuizProps } from '../Quiz';
+import { FlashcardDeck, Novel } from '../../types';
+import Quiz, { QuizProps, Question } from '../Quiz';
+import NovelReader from '../novels/NovelReader';
+import { NOVELS_COLLECTION } from '../../data/novels';
 import PrepareForOfflineModal from './PrepareForOfflineModal';
 
 interface OfflineLearningHubProps {
@@ -88,6 +90,7 @@ export default function OfflineLearningHub({
   // Active offline quiz / CBT session
   const [activeQuizConfig, setActiveQuizConfig] = useState<QuizProps['initialConfig'] | null>(null);
   const [activeQuizMode, setActiveQuizMode] = useState<QuizProps['initialMode']>('jamb-practice');
+  const [activeReadingNovel, setActiveReadingNovel] = useState<{ novel: Novel; chapterIndex: number } | null>(null);
 
   // History & Bookmarks list for offline review
   const [offlineHistory, setOfflineHistory] = useState<JambExamAttempt[]>([]);
@@ -290,41 +293,114 @@ export default function OfflineLearningHub({
   };
 
   // Launch offline JAMB Practice
-  const handleLaunchPractice = (subjectId: string, subjectName: string) => {
-    const downloadedMeta = downloadedMap.get(subjectId.toLowerCase());
-    const count = downloadedMeta ? Math.min(downloadedMeta.questionCount, 40) : 20;
+  const handleLaunchPractice = async (subjectId: string, subjectName: string) => {
+    try {
+      const downloadedMeta = downloadedMap.get(subjectId.toLowerCase());
+      const count = downloadedMeta?.questionCount ? Math.min(downloadedMeta.questionCount, 40) : 40;
 
-    setActiveQuizMode('jamb-practice');
-    setActiveQuizConfig({
-      subject: subjectName,
-      subjectId: subjectId,
-      amount: count,
-      ordering: 'random',
-      isUntimed: false,
-      timerDuration: Math.round(count * 1.5),
-      examType: 'JAMB'
-    });
+      // Load questions ONLY from existing IndexedDB offline database
+      const res = await jambOfflineDb.getOfflinePracticeQuestions({
+        subject: subjectId,
+        count: count,
+        order: 'random'
+      });
+
+      const qList = res.questions || [];
+      if (qList.length === 0) {
+        setToastMessage(`No questions found in offline storage for ${subjectName}. Please download the subject first.`);
+        return;
+      }
+
+      const formattedQuestions: Question[] = qList.map((q, idx) => ({
+        id: q.id,
+        question: q.passage ? `${q.passage}\n\n${q.question}` : q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        correctAnswerIndex: q.correctAnswer,
+        explanation: q.explanation || 'Refer to official syllabus and curriculum guide.',
+        difficulty: 'medium',
+        sourceType: (q as any).sourceType || 'past_question',
+        isAIgenerated: false,
+        topic: q.topic || 'General',
+        subject: q.subjectName || subjectName,
+        subjectId: q.subject || subjectId,
+        year: q.year,
+        questionNumber: q.questionNumber || (idx + 1)
+      }));
+
+      setActiveQuizMode('jamb-practice');
+      setActiveQuizConfig({
+        subject: subjectName,
+        subjectId: subjectId,
+        amount: formattedQuestions.length,
+        ordering: 'random',
+        isUntimed: false,
+        timerDuration: Math.max(5, Math.round(formattedQuestions.length * 1.5)),
+        examType: 'JAMB',
+        isOfflineOnly: true,
+        questions: formattedQuestions
+      });
+    } catch (err) {
+      console.error('Error starting offline practice:', err);
+      setToastMessage('Could not load offline questions. Please try again.');
+    }
   };
 
   // Launch offline JAMB CBT Exam
-  const handleLaunchCbt = (subjectId: string, subjectName: string) => {
-    const downloadedMeta = downloadedMap.get(subjectId.toLowerCase());
-    const count = downloadedMeta ? Math.min(downloadedMeta.questionCount, 40) : 40;
+  const handleLaunchCbt = async (subjectId: string, subjectName: string) => {
+    try {
+      const downloadedMeta = downloadedMap.get(subjectId.toLowerCase());
+      const count = downloadedMeta?.questionCount ? Math.min(downloadedMeta.questionCount, 40) : 40;
 
-    setActiveQuizMode('jamb-cbt');
-    setActiveQuizConfig({
-      subject: subjectName,
-      subjectId: subjectId,
-      amount: count,
-      ordering: 'random',
-      isUntimed: false,
-      timerDuration: 40,
-      examType: 'JAMB'
-    });
+      const res = await jambOfflineDb.getOfflinePracticeQuestions({
+        subject: subjectId,
+        count: count,
+        order: 'random'
+      });
+
+      const qList = res.questions || [];
+      if (qList.length === 0) {
+        setToastMessage(`No questions found in offline storage for ${subjectName}. Please download the subject first.`);
+        return;
+      }
+
+      const formattedQuestions: Question[] = qList.map((q, idx) => ({
+        id: q.id,
+        question: q.passage ? `${q.passage}\n\n${q.question}` : q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        correctAnswerIndex: q.correctAnswer,
+        explanation: q.explanation || 'Refer to official syllabus and curriculum guide.',
+        difficulty: 'medium',
+        sourceType: (q as any).sourceType || 'past_question',
+        isAIgenerated: false,
+        topic: q.topic || 'General',
+        subject: q.subjectName || subjectName,
+        subjectId: q.subject || subjectId,
+        year: q.year,
+        questionNumber: q.questionNumber || (idx + 1)
+      }));
+
+      setActiveQuizMode('jamb-cbt');
+      setActiveQuizConfig({
+        subject: subjectName,
+        subjectId: subjectId,
+        amount: formattedQuestions.length,
+        ordering: 'random',
+        isUntimed: false,
+        timerDuration: Math.max(5, Math.round(formattedQuestions.length * 1.0)),
+        examType: 'JAMB',
+        isOfflineOnly: true,
+        questions: formattedQuestions
+      });
+    } catch (err) {
+      console.error('Error starting offline CBT:', err);
+      setToastMessage('Could not load offline CBT questions. Please try again.');
+    }
   };
 
   // Launch multi-subject offline CBT Mock Exam
-  const handleLaunchMultiSubjectCbt = () => {
+  const handleLaunchMultiSubjectCbt = async () => {
     if (selectedCbtSubjects.length === 0) {
       setToastMessage('Please select at least one subject for the CBT mock.');
       return;
@@ -337,16 +413,52 @@ export default function OfflineLearningHub({
 
     const totalQuestions = selectedCbtSubjects.length * 40;
 
-    setActiveQuizMode('jamb-cbt');
-    setActiveQuizConfig({
-      subjects: subjectNames,
-      amount: totalQuestions,
-      ordering: 'random',
-      isUntimed: false,
-      timerDuration: cbtDurationMinutes,
-      examType: 'JAMB'
-    });
-    setIsMultiCbtModalOpen(false);
+    try {
+      const res = await jambOfflineDb.getOfflinePracticeQuestions({
+        subjects: selectedCbtSubjects,
+        count: totalQuestions,
+        order: 'random'
+      });
+
+      const qList = res.questions || [];
+      if (qList.length === 0) {
+        setToastMessage('No offline questions found for the selected subjects. Please download them first.');
+        return;
+      }
+
+      const formattedQuestions: Question[] = qList.map((q, idx) => ({
+        id: q.id,
+        question: q.passage ? `${q.passage}\n\n${q.question}` : q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        correctAnswerIndex: q.correctAnswer,
+        explanation: q.explanation || 'Refer to official syllabus and curriculum guide.',
+        difficulty: 'medium',
+        sourceType: (q as any).sourceType || 'past_question',
+        isAIgenerated: false,
+        topic: q.topic || 'General',
+        subject: q.subjectName || subjectNames[0],
+        subjectId: q.subject || selectedCbtSubjects[0],
+        year: q.year,
+        questionNumber: q.questionNumber || (idx + 1)
+      }));
+
+      setActiveQuizMode('jamb-cbt');
+      setActiveQuizConfig({
+        subjects: subjectNames,
+        amount: formattedQuestions.length,
+        ordering: 'random',
+        isUntimed: false,
+        timerDuration: cbtDurationMinutes,
+        examType: 'JAMB',
+        isOfflineOnly: true,
+        questions: formattedQuestions
+      });
+      setIsMultiCbtModalOpen(false);
+    } catch (err) {
+      console.error('Error launching multi-subject CBT:', err);
+      setToastMessage('Could not load offline multi-subject questions.');
+    }
   };
 
   // Review answers for a completed attempt offline
@@ -375,8 +487,22 @@ export default function OfflineLearningHub({
     });
   };
 
-  // Launch Novel Reading
+  // Launch Novel Reading directly with exact downloaded novel
   const handleReadNovel = (novelId: string) => {
+    const novelObj = NOVELS_COLLECTION.find(
+      (n) => n.id === novelId || n.id.toLowerCase() === novelId.toLowerCase()
+    );
+    if (novelObj) {
+      const prog = data?.downloadedSubjects; // keep consistent
+      setActiveReadingNovel({
+        novel: novelObj,
+        chapterIndex: 0
+      });
+      return;
+    }
+    try {
+      localStorage.setItem('learndean_target_novel_id', novelId);
+    } catch (_) {}
     setView('novels');
   };
 
@@ -416,6 +542,22 @@ export default function OfflineLearningHub({
     if (!data?.downloadedSubjects) return 0;
     return data.downloadedSubjects.reduce((acc, s) => acc + s.questionCount, 0);
   }, [data?.downloadedSubjects]);
+
+  // If a Novel reading session is active, render NovelReader directly
+  if (activeReadingNovel) {
+    return (
+      <div className="w-full max-w-5xl mx-auto py-2">
+        <NovelReader
+          novel={activeReadingNovel.novel}
+          initialChapterIndex={activeReadingNovel.chapterIndex}
+          onBack={() => {
+            setActiveReadingNovel(null);
+            loadData();
+          }}
+        />
+      </div>
+    );
+  }
 
   // If a Quiz session is active (Practice, CBT, or Review), render the Quiz engine directly
   if (activeQuizConfig) {

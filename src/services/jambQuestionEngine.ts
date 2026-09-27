@@ -16,6 +16,7 @@ import { generateQuestionFingerprint, validateQuestionPayload } from '../utils/j
 import { JAMB_QUESTIONS, JAMB_SUBJECTS, JambQuestion } from '../data/jambQuestions';
 import { NOVELS_COLLECTION } from '../data/novels';
 import { JAMB_SYLLABUS_DATA } from '../data/jambSyllabus';
+import { jambOfflineDb } from './jambOfflineDb';
 
 export type JambQuestionDifficulty = 'easy' | 'medium' | 'hard';
 export type JambQuestionSourceType = 'past_question' | 'curriculum_derived' | 'ai_generated';
@@ -364,7 +365,8 @@ class JambQuestionEngine {
         for (const q of questions) {
           if (!q?.questionId) continue;
           const docRef = doc(db, 'userQuestionHistory', userId, 'questions', q.questionId);
-          const isNovelQ = 'novelId' in q || 'chapterId' in q;
+          const anyQ = q as any;
+          const isNovelQ = 'novelId' in q || 'chapterId' in q || !!anyQ.novelId;
           const historyRecord: Record<string, any> = {
             questionId: q.questionId,
             userId,
@@ -372,14 +374,14 @@ class JambQuestionEngine {
             lastSessionId: sessionId,
             attemptsCount: 0
           };
-          if (isNovelQ) {
-            const novelQ = q as JambNovelQuestionDoc;
-            if (novelQ.novelId) historyRecord.novelId = novelQ.novelId;
-            if (novelQ.chapterId) historyRecord.chapterId = novelQ.chapterId;
+          if (isNovelQ && anyQ.novelId) {
+            historyRecord.novelId = anyQ.novelId;
+            if (anyQ.chapterId) historyRecord.chapterId = anyQ.chapterId;
           } else {
-            const subjectQ = q as JambQuestionDoc;
-            if (subjectQ.subjectId) historyRecord.subjectId = subjectQ.subjectId;
-            if (subjectQ.topicId) historyRecord.topicId = subjectQ.topicId;
+            const subId = anyQ.subjectId || anyQ.subject;
+            if (subId) historyRecord.subjectId = subId;
+            const topId = anyQ.topicId || anyQ.topic;
+            if (topId) historyRecord.topicId = topId;
           }
           batch.set(docRef, cleanFirestoreData(historyRecord), { merge: true });
         }
@@ -591,7 +593,7 @@ class JambQuestionEngine {
       if (options.existingFingerprints.includes(fp)) continue;
 
       // Assign required fields
-      const acceptedDoc = {
+      const acceptedDoc: any = {
         ...q,
         question: validated.question,
         options: validated.options,
@@ -606,6 +608,19 @@ class JambQuestionEngine {
         createdAt: Date.now(),
         updatedAt: Date.now()
       };
+
+      if (isNovel) {
+        if (options.novelId) acceptedDoc.novelId = options.novelId;
+        if (options.novelTitle) acceptedDoc.novelTitle = options.novelTitle;
+        if (options.chapterId) acceptedDoc.chapterId = options.chapterId;
+        if (options.chapterTitle) acceptedDoc.chapterTitle = options.chapterTitle;
+        if (typeof options.chapterIndex === 'number') acceptedDoc.chapterIndex = options.chapterIndex;
+      } else {
+        if (options.subjectId) acceptedDoc.subjectId = options.subjectId;
+        if (options.subjectName) acceptedDoc.subjectName = options.subjectName;
+        if (options.topicId) acceptedDoc.topicId = options.topicId;
+        if (options.topicName) acceptedDoc.topicName = options.topicName;
+      }
 
       acceptedQuestions.push(acceptedDoc);
 
@@ -701,6 +716,39 @@ class JambQuestionEngine {
 
       if (neededForSubject <= 0) break;
 
+      // 1. Fetch downloaded offline questions from IndexedDB (works completely offline)
+      let offlineCandidates: (JambQuestionDoc | JambNovelQuestionDoc)[] = [];
+      try {
+        if (!isNovelMode) {
+          const targetYear = options.year === 'all' || !options.year ? 'all' : (typeof options.year === 'number' ? options.year : parseInt(String(options.year), 10) || 'all');
+          const offlineQuestions = await jambOfflineDb.getOfflineQuestions(currentSubjectId, targetYear as number | 'all', 200);
+          offlineCandidates = offlineQuestions.map(q => ({
+            questionId: q.id,
+            subjectId: q.subject.toLowerCase().replace(/\s+/g, '_'),
+            subjectName: q.subjectName || q.subject,
+            topicId: q.topic ? q.topic.toLowerCase().replace(/\s+/g, '_') : 'general',
+            topicName: q.topic || 'General',
+            question: q.question,
+            passage: q.passage,
+            options: q.options,
+            correctAnswer: q.correctAnswer,
+            explanation: q.explanation || 'Refer to official syllabus and curriculum guide.',
+            difficulty: 'medium',
+            sourceType: (q as any).sourceType || 'past_question',
+            isAIgenerated: (q as any).isAIgenerated ?? false,
+            status: 'active',
+            fingerprint: generateQuestionFingerprint(q.question, q.options),
+            timesUsed: 0,
+            year: q.year,
+            questionNumber: q.questionNumber,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          }));
+        }
+      } catch (err) {
+        console.warn('Error reading offline questions from IndexedDB:', err);
+      }
+
       // 2. Fetch candidate questions from Firestore bank
       const remoteCandidates = await this.queryFirestoreBank({
         ...options,
@@ -714,6 +762,7 @@ class JambQuestionEngine {
 
       const allCandidatesMap = new Map<string, JambQuestionDoc | JambNovelQuestionDoc>();
       for (const q of curatedCandidates) allCandidatesMap.set(q.questionId, q);
+      for (const q of offlineCandidates) allCandidatesMap.set(q.questionId, q);
       for (const q of remoteCandidates) allCandidatesMap.set(q.questionId, q);
 
       const candidateList = Array.from(allCandidatesMap.values());
@@ -743,9 +792,20 @@ class JambQuestionEngine {
       }
       subjectSelected.push(...unseenQuestions.slice(0, neededForSubject));
 
-      // 5. If the available bank is too small, generate additional ORIGINAL questions
+      // 5. Use all available seen questions from downloaded bank BEFORE any generation!
+      if (subjectSelected.length < neededForSubject && seenQuestions.length > 0) {
+        if (options.ordering === 'random') {
+          seenQuestions.sort(() => 0.5 - Math.random());
+        } else {
+          seenQuestions.sort((a, b) => a.timesUsed - b.timesUsed);
+        }
+        const backfill = seenQuestions.slice(0, neededForSubject - subjectSelected.length);
+        subjectSelected.push(...backfill);
+      }
+
+      // 6. Only generate additional questions if bank is genuinely empty AND user is online
       const remainingNeeded = neededForSubject - subjectSelected.length;
-      if (remainingNeeded > 0 && typeof navigator !== 'undefined' && navigator.onLine) {
+      if (remainingNeeded > 0 && typeof navigator !== 'undefined' && navigator.onLine && !(options as any).isOfflineOnly) {
         try {
           const existingFps = Array.from(usedFingerprints).concat(
             availableUnique.map(q => q.fingerprint).filter(Boolean)
@@ -776,14 +836,6 @@ class JambQuestionEngine {
         } catch (genErr) {
           console.warn('AI question auto-replenishment attempt notification:', genErr);
         }
-      }
-
-      // 6. Never repeat a question while unused questions are available.
-      // If still short, fallback to previously seen questions (oldest seen or lowest attempts first)
-      if (subjectSelected.length < neededForSubject && seenQuestions.length > 0) {
-        seenQuestions.sort((a, b) => a.timesUsed - b.timesUsed);
-        const backfill = seenQuestions.slice(0, neededForSubject - subjectSelected.length);
-        subjectSelected.push(...backfill);
       }
 
       // Register used fingerprints
@@ -944,8 +996,10 @@ class JambQuestionEngine {
     };
 
     if (isNovelQ) {
-      if (novelQ.novelId) legacyQ.novelId = novelQ.novelId;
-      if (novelQ.chapterId) legacyQ.chapterId = novelQ.chapterId;
+      const nId = novelQ.novelId || (q as any).novelId;
+      if (nId) legacyQ.novelId = nId;
+      const cId = novelQ.chapterId || (q as any).chapterId;
+      if (cId) legacyQ.chapterId = cId;
       if (typeof novelQ.chapterIndex === 'number') legacyQ.chapterIndex = novelQ.chapterIndex;
     } else {
       if (subjectQ.year) legacyQ.year = subjectQ.year;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { BookOpen, ChevronRight, Search, ChevronLeft, Star, Play, MessageSquare, BookMarked, BarChart3, FileText, Settings, Compass } from 'lucide-react';
 import { db } from '../lib/firebase';
@@ -26,14 +27,28 @@ export default function Subjects({ setView, initialSection }: { setView?: (view:
     }
   }, [initialSection]);
 
+  const { subjectId } = useParams<{ subjectId?: string }>();
+  const navigate = useNavigate();
+
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<any>(null);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [progressData, setProgressData] = useState<Record<string, number>>({});
 
+  // Route-driven subject resolution
+  const routeSubject = React.useMemo(() => {
+    if (!subjectId) return null;
+    return ALL_SUBJECTS.find(
+      s => s.id.toLowerCase() === subjectId.toLowerCase() || s.name.toLowerCase() === subjectId.toLowerCase()
+    ) || null;
+  }, [subjectId]);
+
+  const activeSubject = routeSubject || selectedSubject;
+
   const handleSelectSubject = async (subject: any) => {
     setSelectedSubject(subject);
+    navigate(`/subjects/${subject.id}`);
     if (user) {
        try {
           const snap = await getDocs(query(collection(db, 'subject_history'), where('uid', '==', user.uid), where('subjectId', '==', subject.id)));
@@ -58,19 +73,27 @@ export default function Subjects({ setView, initialSection }: { setView?: (view:
     }
   };
 
+  const handleBackToLibrary = () => {
+    setSelectedSubject(null);
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/subjects');
+    }
+  };
+
   const categories = ['All', ...Array.from(new Set(ALL_SUBJECTS.map(s => s.category))).sort()];
 
-  
   useEffect(() => {
     const targetId = localStorage.getItem('zetadu_target_subject_id');
-    if (targetId) {
+    if (targetId && !subjectId) {
       localStorage.removeItem('zetadu_target_subject_id');
       const target = ALL_SUBJECTS.find(s => s.id === targetId);
       if (target) {
-        setSelectedSubject(target); // Note: we don't call handleSelectSubject to avoid an infinite loop of saving
+        setSelectedSubject(target);
       }
     }
-  }, []);
+  }, [subjectId]);
 
   useEffect(() => {
     const saved = localStorage.getItem('zetadu_favorite_subjects');
@@ -106,18 +129,19 @@ export default function Subjects({ setView, initialSection }: { setView?: (view:
   };
 
   const handleAction = (action: string) => {
-    if (!setView) return;
+    const currentSub = activeSubject;
+    if (!currentSub) return;
     
-    localStorage.setItem('zetadu_target_subject_id', selectedSubject.id);
-    localStorage.setItem('zetadu_target_subject', selectedSubject.name); // Keep for Tutor.tsx backwards compatibility
+    localStorage.setItem('zetadu_target_subject_id', currentSub.id);
+    localStorage.setItem('zetadu_target_subject', currentSub.name); // Keep for Tutor.tsx backwards compatibility
     
     if (action === 'practice') {
-      setView('practice');
+      navigate(`/practice/${currentSub.id}`);
     } else if (action === 'tutor') {
-      setView('tutor');
+      navigate(`/ai-tutor?subject=${currentSub.id}`);
     } else if (action === 'journey') {
-      localStorage.setItem('zetadu_journey_preselect_subject', selectedSubject.name);
-      setView('journey');
+      localStorage.setItem('zetadu_journey_preselect_subject', currentSub.name);
+      navigate('/study-journey');
     }
   };
 
@@ -136,31 +160,31 @@ export default function Subjects({ setView, initialSection }: { setView?: (view:
     return a.name.localeCompare(b.name);
   });
 
-  if (selectedSubject) {
+  if (activeSubject) {
     return (
       <div className="w-full max-w-5xl mx-auto pb-28 sm:pb-32 flex flex-col">
         <button 
-          onClick={() => setSelectedSubject(null)} 
+          onClick={handleBackToLibrary} 
           className="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1 mb-6 transition-colors bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 w-fit shadow-sm hover:shadow-md cursor-pointer"
         >
           <ChevronLeft size={16} /> Back to Library
         </button>
         
         <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 md:p-8 border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden mb-10">
-          <div className={`absolute top-0 left-0 w-full h-2 ${selectedSubject.color}`}></div>
+          <div className={`absolute top-0 left-0 w-full h-2 ${activeSubject.color}`}></div>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
             <div className="flex items-center gap-4 md:gap-6">
-              <div className={`p-4 md:p-6 rounded-2xl text-white shadow-lg ${selectedSubject.color} shrink-0`}>
+              <div className={`p-4 md:p-6 rounded-2xl text-white shadow-lg ${activeSubject.color} shrink-0`}>
                 <BookOpen size={48} className="w-10 h-10 md:w-12 md:h-12" />
               </div>
               <div>
                 <div className="flex items-center gap-3 mb-2">
                   <span className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-3 py-1 rounded-lg text-xs md:text-sm font-bold tracking-wide uppercase">
-                    {selectedSubject.category}
+                    {activeSubject.category}
                   </span>
                 </div>
                 <h2 className="text-2xl md:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight mb-2">
-                  {selectedSubject.name}
+                  {activeSubject.name}
                 </h2>
                 <div className="flex items-center gap-3">
                   <span className="text-slate-500 dark:text-slate-400 font-medium">
@@ -169,21 +193,21 @@ export default function Subjects({ setView, initialSection }: { setView?: (view:
                   <div className="flex items-center gap-2">
                     <div className="w-32 md:w-48 bg-slate-100 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
                       <div 
-                        className={`h-2.5 rounded-full ${selectedSubject.color} transition-all duration-1000`} 
-                        style={{ width: `${progressData[selectedSubject.id] || 0}%` }}
+                        className={`h-2.5 rounded-full ${activeSubject.color} transition-all duration-1000`} 
+                        style={{ width: `${progressData[activeSubject.id] || 0}%` }}
                       ></div>
                     </div>
-                    <span className="font-bold text-slate-700 dark:text-slate-300">{progressData[selectedSubject.id] || 0}%</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300">{progressData[activeSubject.id] || 0}%</span>
                   </div>
                 </div>
               </div>
             </div>
             <button 
-              onClick={(e) => toggleFavorite(e, selectedSubject.id)}
-              className={`p-3 md:p-4 rounded-xl md:rounded-full transition-colors shrink-0 flex items-center justify-center gap-2 font-bold ${favorites.includes(selectedSubject.id) ? 'text-amber-600 bg-amber-50 border-2 border-amber-200 dark:text-amber-400 dark:bg-amber-900/30 dark:border-amber-800/50' : 'text-slate-500 hover:text-amber-500 bg-white hover:bg-slate-50 border-2 border-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:border-slate-600'}`}
+              onClick={(e) => toggleFavorite(e, activeSubject.id)}
+              className={`p-3 md:p-4 rounded-xl md:rounded-full transition-colors shrink-0 flex items-center justify-center gap-2 font-bold ${favorites.includes(activeSubject.id) ? 'text-amber-600 bg-amber-50 border-2 border-amber-200 dark:text-amber-400 dark:bg-amber-900/30 dark:border-amber-800/50' : 'text-slate-500 hover:text-amber-500 bg-white hover:bg-slate-50 border-2 border-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:hover:border-slate-600'}`}
             >
-              <Star size={20} className={favorites.includes(selectedSubject.id) ? 'fill-current' : ''} />
-              <span className="inline md:hidden lg:inline">{favorites.includes(selectedSubject.id) ? 'Favorited' : 'Add to Favorites'}</span>
+              <Star size={20} className={favorites.includes(activeSubject.id) ? 'fill-current' : ''} />
+              <span className="inline md:hidden lg:inline">{favorites.includes(activeSubject.id) ? 'Favorited' : 'Add to Favorites'}</span>
             </button>
           </div>
         </div>

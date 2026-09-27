@@ -255,7 +255,13 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
         </div>
         
         <button 
-          onClick={() => setView('home')}
+          onClick={() => {
+            if (window.history.length > 1) {
+              window.history.back();
+            } else {
+              setView('home');
+            }
+          }}
           className="mt-8 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white px-8 py-3 rounded-xl font-bold transition-colors"
         >
           Back to Dashboard
@@ -384,7 +390,17 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
       {/* Header */}
       <div className="bg-white dark:bg-slate-800 p-4 md:rounded-3xl md:border-2 border-b-2 md:border-b-2 border-slate-100 dark:border-slate-700 flex justify-between items-center shrink-0 mb-0 md:mb-6 z-10 sticky top-0 md:relative shadow-sm md:shadow-none">
         <div className="flex items-center gap-3">
-          <button onClick={() => setView('home')} className="p-2 -ml-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500">
+          <button 
+            onClick={() => {
+              if (window.history.length > 1) {
+                window.history.back();
+              } else {
+                setView('home');
+              }
+            }} 
+            className="p-2 -ml-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 cursor-pointer"
+            aria-label="Close Daily Challenge"
+          >
             <X size={20} />
           </button>
           <div>

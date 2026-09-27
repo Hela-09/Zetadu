@@ -13,6 +13,8 @@ import { getDailyStudyPlan, markMistakesReviewed } from '../utils/dailyStudyPlan
 import { DailyStudyPlan } from '../types';
 import OfflineLearningHub from './offline/OfflineLearningHub';
 import PrepareForOfflineModal from './offline/PrepareForOfflineModal';
+import MasterySummaryBanner from './MasterySummaryBanner';
+import MasteryDetailedBreakdown from './MasteryDetailedBreakdown';
 
 const WeakTopicActionModal = lazy(() => import('./WeakTopicActionModal'));
 const ReviewMistakesModal = lazy(() => import('./ReviewMistakesModal'));
@@ -63,6 +65,7 @@ export default function Home({ setView }: HomeProps) {
   });
   const [isPrepareModalOpen, setIsPrepareModalOpen] = useState<boolean>(false);
   const [onlineNotification, setOnlineNotification] = useState<string | null>(null);
+  const [showDetailedBreakdown, setShowDetailedBreakdown] = useState<boolean>(false);
 
   useEffect(() => {
     const handleOpenOfflineHub = () => {
@@ -529,213 +532,45 @@ export default function Home({ setView }: HomeProps) {
           </div>
 
           {/* Weak Topics & Performance Diagnostics */}
-          <div id="weak-topics-home-card" className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 w-full min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div id="weak-topics-home-card" className="bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 w-full min-w-0 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-rose-50 dark:bg-rose-950/40 text-rose-600 rounded-2xl flex items-center justify-center border border-rose-100 dark:border-rose-900/50">
                   <Target size={24} />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Weak Topics & Mastery</h2>
-                  <p className="text-slate-500 text-sm">Real-time analysis from your practice results.</p>
+                  <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Weak Topics & Mastery</h2>
+                  <p className="text-slate-500 text-xs sm:text-sm">Real-time analysis from your practice results.</p>
                 </div>
               </div>
               <button
                 id="view-all-weak-topics-btn"
-                onClick={() => setView('weak_topics')}
-                className="self-start sm:self-auto px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                onClick={() => setShowDetailedBreakdown(prev => !prev)}
+                className="self-start sm:self-auto px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title={showDetailedBreakdown ? "Collapse detailed breakdown" : "View granular subject analysis"}
               >
-                <span>View Full Analysis</span>
-                <ChevronRight size={14} />
+                <span>{showDetailedBreakdown ? 'Hide Full Analysis' : 'Full Analysis'}</span>
+                <ChevronRight size={14} className={showDetailedBreakdown ? 'rotate-90 transition-transform' : 'transition-transform'} />
               </button>
             </div>
 
-            {/* Metric Tabs */}
-            <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1">
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-300 flex items-center gap-1.5 shrink-0">
-                <AlertTriangle size={13} />
-                <span>Weak: {topicAnalysis?.weakTopics.length || 0}</span>
-              </span>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 flex items-center gap-1.5 shrink-0">
-                <Activity size={13} />
-                <span>Average: {topicAnalysis?.averageTopics.length || 0}</span>
-              </span>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 shrink-0">
-                <CheckCircle size={13} />
-                <span>Strong: {topicAnalysis?.strongTopics.length || 0}</span>
-              </span>
-            </div>
+            {/* High-Level Mastery Summary & Indicator Banner (Clean default state) */}
+            <MasterySummaryBanner
+              topicAnalysis={topicAnalysis}
+              showDetailedBreakdown={showDetailedBreakdown}
+              onToggleDetailedBreakdown={() => setShowDetailedBreakdown(prev => !prev)}
+            />
 
-            <div className="flex flex-col gap-8">
-              
-              {/* Weak Topics */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                    <Target size={18} className="text-rose-500" />
-                    <span>Weak Topics</span>
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900">
-                      &lt; 50%
-                    </span>
-                  </h3>
-                  <span className="text-xs text-slate-400 hidden sm:inline">Click any weak topic to practice, review cards, or ask tutor</span>
-                </div>
-
-                {topicAnalysis && topicAnalysis.weakTopics.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {topicAnalysis.weakTopics.map((topic, i) => (
-                      <div
-                        key={`weak-${i}`}
-                        id={`weak-topic-item-${i}`}
-                        onClick={() => setSelectedWeakTopic(topic)}
-                        className="group flex flex-col justify-between bg-rose-50/40 dark:bg-rose-950/20 hover:bg-rose-50 dark:hover:bg-rose-950/40 p-4 rounded-2xl border-2 border-rose-200/80 dark:border-rose-900/60 hover:border-rose-500 dark:hover:border-rose-500 transition-all cursor-pointer shadow-xs"
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="flex-1 min-w-0">
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block truncate">
-                              {topic.subject}
-                            </span>
-                            <span className="font-bold text-slate-900 dark:text-white truncate block text-sm group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors" title={topic.topic}>
-                              {topic.topic}
-                            </span>
-                          </div>
-                          <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800 shrink-0">
-                            {topic.accuracy}%
-                          </span>
-                        </div>
-
-                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mb-2 overflow-hidden">
-                          <div className="h-full bg-rose-500 rounded-full" style={{ width: `${Math.max(6, topic.accuracy)}%` }} />
-                        </div>
-
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                          <span>{topic.correctCount}/{topic.totalQuestions} correct ({topic.incorrectCount} missed)</span>
-                          <span className="font-bold text-rose-600 dark:text-rose-400 inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                            <span>Take Action</span>
-                            <ChevronRight size={13} />
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 text-slate-500 text-xs italic">
-                    {topicAnalysis?.hasResults
-                      ? 'No weak topics identified! You are performing at or above 50% in all tested topics.'
-                      : 'No practice results yet. Complete a quiz to analyze weak topics.'}
-                  </div>
-                )}
-              </div>
-
-              {/* Average Topics */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                    <Activity size={18} className="text-amber-500" />
-                    <span>Average Topics</span>
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900">
-                      50% - 74%
-                    </span>
-                  </h3>
-                </div>
-
-                {topicAnalysis && topicAnalysis.averageTopics.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {topicAnalysis.averageTopics.map((topic, i) => (
-                      <div
-                        key={`avg-${i}`}
-                        id={`avg-topic-item-${i}`}
-                        onClick={() => setSelectedWeakTopic(topic)}
-                        className="group flex flex-col justify-between bg-slate-50/70 dark:bg-slate-900/50 hover:bg-slate-100/70 dark:hover:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-amber-400 transition-all cursor-pointer"
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="flex-1 min-w-0">
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block truncate">
-                              {topic.subject}
-                            </span>
-                            <span className="font-bold text-slate-800 dark:text-white truncate block text-sm" title={topic.topic}>
-                              {topic.topic}
-                            </span>
-                          </div>
-                          <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
-                            {topic.accuracy}%
-                          </span>
-                        </div>
-
-                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mb-2 overflow-hidden">
-                          <div className="h-full bg-amber-500 rounded-full" style={{ width: `${topic.accuracy}%` }} />
-                        </div>
-
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                          <span>{topic.correctCount}/{topic.totalQuestions} questions correct</span>
-                          <span className="font-semibold text-amber-600 dark:text-amber-400">Review</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 text-slate-500 text-xs italic">
-                    No average topics identified yet.
-                  </div>
-                )}
-              </div>
-
-              {/* Strong Topics */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                    <CheckCircle size={18} className="text-emerald-500" />
-                    <span>Strong Topics</span>
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900">
-                      &ge; 75%
-                    </span>
-                  </h3>
-                </div>
-
-                {topicAnalysis && topicAnalysis.strongTopics.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {topicAnalysis.strongTopics.map((topic, i) => (
-                      <div
-                        key={`strong-${i}`}
-                        id={`strong-topic-item-${i}`}
-                        onClick={() => setSelectedWeakTopic(topic)}
-                        className="group flex flex-col justify-between bg-slate-50/70 dark:bg-slate-900/50 hover:bg-slate-100/70 dark:hover:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-emerald-400 transition-all cursor-pointer"
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="flex-1 min-w-0">
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block truncate">
-                              {topic.subject}
-                            </span>
-                            <span className="font-bold text-slate-800 dark:text-white truncate block text-sm" title={topic.topic}>
-                              {topic.topic}
-                            </span>
-                          </div>
-                          <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shrink-0">
-                            {topic.accuracy}%
-                          </span>
-                        </div>
-
-                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mb-2 overflow-hidden">
-                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${topic.accuracy}%` }} />
-                        </div>
-
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                          <span>{topic.correctCount}/{topic.totalQuestions} questions correct</span>
-                          <span className="font-semibold text-emerald-600 dark:text-emerald-400">Mastered</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 text-slate-500 text-xs italic">
-                    No strong topics identified yet.
-                  </div>
-                )}
-              </div>
-
-            </div>
+            {/* Granular Subject Analysis (Hidden by default, revealed only when Full Analysis is clicked) */}
+            {showDetailedBreakdown && (
+              <MasteryDetailedBreakdown
+                topicAnalysis={topicAnalysis}
+                onSelectTopic={(topic) => setSelectedWeakTopic(topic)}
+              />
+            )}
             
-            <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            {/* Bottom Actions */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               <button 
                 id="start-recommended-practice-btn"
                 onClick={startRecommendedPractice}

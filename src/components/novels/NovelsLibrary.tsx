@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Novel, NovelReadingProgress, NovelBookmark } from '../../types';
 import {
   Search,
@@ -22,6 +23,7 @@ import {
 import {
   getAllNovels,
   getAllUserReadingProgress,
+  getNovelReadingProgress,
   checkIsNovelOffline,
   downloadNovel,
   removeDownloadedNovel,
@@ -37,9 +39,16 @@ import NovelReader from './NovelReader';
 import NovelPracticeQuiz from './NovelPracticeQuiz';
 import NovelStudyMaterialsModal from './NovelStudyMaterialsModal';
 
-export default function NovelsLibrary() {
+interface NovelsLibraryProps {
+  initialNovelId?: string;
+}
+
+export default function NovelsLibrary({ initialNovelId }: NovelsLibraryProps = {}) {
   const { user } = useAuth();
   const novels = useMemo(() => getAllNovels(), []);
+
+  const { novelId } = useParams<{ novelId?: string }>();
+  const navigate = useNavigate();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('All Subjects');
@@ -61,6 +70,22 @@ export default function NovelsLibrary() {
   const [syncNotice, setSyncNotice] = useState<string>('');
   const [showBookmarksDrawer, setShowBookmarksDrawer] = useState<boolean>(false);
   const [allBookmarks, setAllBookmarks] = useState<NovelBookmark[]>([]);
+
+  const targetNovelId = novelId || initialNovelId;
+
+  // Sync route param with active reading state
+  useEffect(() => {
+    if (targetNovelId && (!activeNovelForReading || activeNovelForReading.id !== targetNovelId)) {
+      const target = novels.find(
+        (n) => n.id === targetNovelId || n.id.toLowerCase() === targetNovelId.toLowerCase()
+      );
+      if (target) {
+        handleReadOffline(target.id, false);
+      }
+    } else if (!targetNovelId && activeNovelForReading) {
+      setActiveNovelForReading(null);
+    }
+  }, [targetNovelId, novels]);
 
   // Load offline statuses
   const refreshOfflineStatuses = async () => {
@@ -115,6 +140,24 @@ export default function NovelsLibrary() {
     };
   }, [user]);
 
+  // Auto-open target novel if requested from Offline Hub or deep-link
+  useEffect(() => {
+    try {
+      const targetId = initialNovelId || localStorage.getItem('learndean_target_novel_id');
+      if (targetId) {
+        localStorage.removeItem('learndean_target_novel_id');
+        const found = novels.find(
+          (n) => n.id === targetId || n.id.toLowerCase() === targetId.toLowerCase()
+        );
+        if (found) {
+          setActiveNovelForReading(found);
+          const prog = progressMap[found.id];
+          setResumeChapterIndex(prog?.currentChapterIndex || 0);
+        }
+      }
+    } catch (_) {}
+  }, [initialNovelId, novels, progressMap]);
+
   // Handler: Download novel for offline
   const handleDownloadNovel = async (e: React.MouseEvent, novelId: string) => {
     e.stopPropagation();
@@ -150,6 +193,33 @@ export default function NovelsLibrary() {
       delete copy[novelId];
       return copy;
     });
+  };
+
+  // Open exact downloaded novel using its real novel ID
+  const handleReadOffline = async (targetId: string, pushRoute = true) => {
+    const target = novels.find(
+      (n) => n.id === targetId || n.id.toLowerCase() === targetId.toLowerCase()
+    );
+    if (target) {
+      if (pushRoute && window.location.pathname !== `/novels/${target.id}`) {
+        navigate(`/novels/${target.id}`);
+      }
+      let chapterIdx = 0;
+      if (user) {
+        try {
+          const prog = await getNovelReadingProgress(user.uid, target.id);
+          if (prog && typeof prog.currentChapterIndex === 'number') {
+            chapterIdx = prog.currentChapterIndex;
+          }
+        } catch (_) {
+          chapterIdx = progressMap[target.id]?.currentChapterIndex || 0;
+        }
+      } else {
+        chapterIdx = progressMap[target.id]?.currentChapterIndex || 0;
+      }
+      setResumeChapterIndex(chapterIdx);
+      setActiveNovelForReading(target);
+    }
   };
 
   // Find most recently read text for "Continue Reading" banner
@@ -228,6 +298,11 @@ export default function NovelsLibrary() {
             refreshProgress();
             refreshOfflineStatuses();
             refreshAllBookmarks();
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate('/novels');
+            }
           }}
           onOpenPractice={(chapterIndex) => {
             setQuizInitialChapterIndex(chapterIndex);
@@ -294,12 +369,21 @@ export default function NovelsLibrary() {
 
               {/* Offline download trigger */}
               {isDownloaded ? (
-                <div className="flex items-center gap-1 bg-emerald-500 text-white px-2.5 py-1 rounded-lg text-[10px] font-extrabold shadow-md shrink-0">
+                <div className="flex items-center gap-1.5 bg-emerald-500 text-white px-2.5 py-1 rounded-lg text-[10px] font-extrabold shadow-md shrink-0">
                   <CheckCircle2 size={12} />
-                  <span>Offline</span>
+                  <button
+                    onClick={() => {
+                      setActiveNovelForReading(novel);
+                      setResumeChapterIndex(userProgress?.currentChapterIndex || 0);
+                    }}
+                    className="hover:underline cursor-pointer font-bold"
+                    title={`Read ${novel.title} offline`}
+                  >
+                    Read Offline
+                  </button>
                   <button
                     onClick={(e) => handleRemoveOffline(e, novel.id)}
-                    className="ml-1 hover:text-red-200"
+                    className="ml-1 hover:text-red-200 cursor-pointer"
                     title="Remove offline download"
                   >
                     <Trash2 size={11} />
@@ -441,10 +525,18 @@ export default function NovelsLibrary() {
               setActiveNovelForReading(novel);
               setResumeChapterIndex(userProgress?.currentChapterIndex || 0);
             }}
-            className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm transition-all"
+            className={`w-full py-2.5 rounded-xl text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer ${
+              isDownloaded
+                ? 'bg-emerald-600 hover:bg-emerald-500'
+                : 'bg-blue-600 hover:bg-blue-500'
+            }`}
           >
             <BookOpen size={14} />
-            <span>{percentDone > 0 ? 'Continue Reading' : 'Start Reading Material'}</span>
+            <span>
+              {isDownloaded
+                ? (percentDone > 0 ? 'Continue Reading (Offline)' : 'Read Offline')
+                : (percentDone > 0 ? 'Continue Reading' : 'Start Reading Material')}
+            </span>
             <ChevronRight size={14} />
           </button>
         </div>

@@ -77,6 +77,18 @@ export function getViewFromLocation(): ViewType {
     return PATH_TO_VIEW[cleanPath];
   }
 
+  // Check prefix routes for deep links
+  if (cleanPath.startsWith('/subjects') || cleanPath.startsWith('/library')) return 'subjects';
+  if (cleanPath.startsWith('/practice')) return 'practice';
+  if (cleanPath.startsWith('/novels')) return 'novels';
+  if (cleanPath.startsWith('/jamb')) return 'jamb';
+  if (cleanPath.startsWith('/flashcards')) return 'flashcards';
+  if (cleanPath.startsWith('/profile') || cleanPath.startsWith('/settings')) return 'profile';
+  if (cleanPath.startsWith('/study-journey') || cleanPath.startsWith('/journey')) return 'journey';
+  if (cleanPath.startsWith('/daily-challenge')) return 'daily_challenge';
+  if (cleanPath.startsWith('/weak-topics')) return 'weak_topics';
+  if (cleanPath.startsWith('/upload-notes') || cleanPath.startsWith('/upload')) return 'upload_notes';
+
   // 3. Check window.location.hash (e.g. #/tutor or #tutor)
   if (window.location.hash) {
     const hash = window.location.hash.replace(/^#\/?/, '').replace(/\/+$/, '');
