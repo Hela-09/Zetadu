@@ -216,6 +216,29 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
   });
 
   // Shortfall / Exact Question Count modal state
+  const timerRemainingRef = useRef<number>(timerRemaining);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Keep timerRemainingRef in sync
+  useEffect(() => {
+    timerRemainingRef.current = timerRemaining;
+  }, [timerRemaining]);
+
+  // Clean up timers, abort controllers, and internal session on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      cachedInternalSession = null;
+    };
+  }, []);
+
   const [poolShortfallState, setPoolShortfallState] = useState<{
     requested: number;
     available: number;
@@ -765,7 +788,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
       difficulty: difficulty || 'Medium',
       amount: validQuestions.length || amount || 20,
       timerDuration: timerDuration || 15,
-      timerRemaining: typeof timerRemaining === 'number' ? timerRemaining : (timerDuration || 15) * 60,
+      timerRemaining: typeof timerRemainingRef.current === 'number' ? timerRemainingRef.current : (timerDuration || 15) * 60,
       questions: validQuestions,
       currentQIndex: typeof currentQIndex === 'number' ? currentQIndex : 0,
       answers: answers || {},
@@ -817,7 +840,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
         console.warn("Silent save session to firestore warning", err);
       }
     }
-  }, [setupMode, questions, isSubmitted, user, level, selectedClass, subjectId, subject, topic, difficulty, amount, timerDuration, timerRemaining, currentQIndex, answers, markedForReview, score]);
+  }, [setupMode, questions, isSubmitted, user, level, selectedClass, subjectId, subject, topic, difficulty, amount, timerDuration, currentQIndex, answers, markedForReview, score]);
 
   // Save on significant state changes (answers, marked-for-review, question index change)
   useEffect(() => {
@@ -844,11 +867,15 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     timerRef.current = setInterval(() => {
       setTimerRemaining(prev => {
         if (prev <= 1) {
-          clearInterval(timerRef.current!);
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
           handleTimeUp();
           return 0;
         }
         const updated = prev - 1;
+        timerRemainingRef.current = updated;
         
         // Save to localStorage every second (instant and quota-free)
         try {
@@ -869,35 +896,34 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     };
   }, [setupMode, isSubmitted, questions.length, viewMode, isUntimed, user]);
 
-  const clearSession = async () => {
+  const clearSession = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
+    }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
     }
     cachedInternalSession = null;
     try {
-      await jambOfflineDb.clearActiveSession();
-    } catch (e) {}
-    localStorage.removeItem('practice_session');
-    localStorage.removeItem('zetadu_target_subject_id');
-    localStorage.removeItem('zetadu_target_subject');
-    localStorage.removeItem('zetadu_target_topic');
+      localStorage.removeItem('practice_session');
+      localStorage.removeItem('zetadu_target_subject_id');
+      localStorage.removeItem('zetadu_target_subject');
+      localStorage.removeItem('zetadu_target_topic');
+    } catch (_) {}
+
+    jambOfflineDb.clearActiveSession().catch(() => {});
     if (user && typeof navigator !== 'undefined' && navigator.onLine) {
-      try {
-        await deleteDoc(doc(db, 'practice_sessions', user.uid));
-      } catch(e) {
+      deleteDoc(doc(db, 'practice_sessions', user.uid)).catch(e => {
         console.warn("Silent delete session warning", e);
-      }
+      });
     }
   };
 
-  const handleLeavePractice = async () => {
+  const handleLeavePractice = () => {
     setShowLeavePrompt(false);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    await clearSession();
+    clearSession();
     setQuestions([]);
     setAnswers({});
     setMarkedForReview({});
@@ -909,7 +935,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     setIsSubmitted(false);
     if (onBack) {
       onBack();
-    } else if (typeof window !== 'undefined' && window.history.length > 1) {
+    } else if (typeof window !== 'undefined' && window.history.state && window.history.state.idx > 0) {
       window.history.back();
     } else if (setView) {
       setView('learn');
@@ -970,6 +996,11 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
 
     setLoading(true);
     try {
@@ -1146,6 +1177,10 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
 
   const handleGenerateShortfall = async () => {
     if (!poolShortfallState) return;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
     setIsGeneratingShortfall(true);
     try {
       const { shortfall, subjects, requested } = poolShortfallState;

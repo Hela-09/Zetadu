@@ -47,32 +47,85 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const ai = getGeminiClient();
-    const uploadedAttachments = [];
+    const uploadedAttachments: any[] = [];
+    const extractedTexts: string[] = [];
 
     for (const file of files) {
-      const ext = path.extname(file.originalname);
+      const ext = path.extname(file.originalname).toLowerCase();
       const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
       const localPath = path.join('/tmp/uploads', filename);
 
       fs.renameSync(file.path, localPath);
 
+      const fileBuffer = fs.readFileSync(localPath);
+      const base64Data = fileBuffer.toString('base64');
+      const isImage = file.mimetype.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(file.originalname);
+      const isPdf = file.mimetype === 'application/pdf' || /\.pdf$/i.test(file.originalname);
+      const isTextOrMd = file.mimetype.startsWith('text/') || /\.(txt|md)$/i.test(file.originalname);
+
       let fileUri = null;
-      try {
-        const fileResponse = await ai.files.upload({ file: localPath, config: { mimeType: file.mimetype } });
-        fileUri = fileResponse.uri;
-      } catch (err) {
-        console.warn('Gemini file upload failed for', file.originalname, err);
+
+      let extractedText = '';
+      if (isTextOrMd) {
+        extractedText = fileBuffer.toString('utf-8');
+      } else if (isImage || isPdf) {
+        try {
+          const mimeType = isPdf ? 'application/pdf' : (file.mimetype || 'image/jpeg');
+          const prompt = isImage
+            ? "You are an expert OCR and study assistant. Transcribe and extract all handwritten notes, typed text, headings, formulas, equations, and diagrams text from this image accurately into clean, readable Markdown. Do not add conversational commentary; output only the transcribed notes."
+            : "You are an expert document parser. Extract and transcribe all text, notes, equations, and structured study content from this document accurately into clean, readable Markdown. Do not add conversational commentary; output only the extracted notes.";
+
+          let ocrResponse: any = null;
+          const modelsToTry = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+          for (const model of modelsToTry) {
+            try {
+              ocrResponse = await ai.models.generateContent({
+                model,
+                contents: [
+                  {
+                    role: 'user',
+                    parts: [
+                      {
+                        inlineData: {
+                          mimeType,
+                          data: base64Data
+                        }
+                      },
+                      { text: prompt }
+                    ]
+                  }
+                ]
+              });
+              if (ocrResponse?.text) break;
+            } catch (err) {
+              console.warn(`OCR attempt with model ${model} failed:`, err);
+            }
+          }
+          if (ocrResponse?.text) {
+            extractedText = ocrResponse.text.trim();
+          }
+        } catch (ocrErr) {
+          console.warn('OCR extraction error:', ocrErr);
+        }
+      }
+
+      if (extractedText) {
+        extractedTexts.push(extractedText);
       }
 
       uploadedAttachments.push({
-        url: `data:${file.mimetype};base64,${fs.readFileSync(localPath).toString('base64')}`,
+        url: `data:${file.mimetype};base64,${base64Data}`,
         name: file.originalname,
         mimeType: file.mimetype,
-        fileUri: fileUri || null
+        fileUri: fileUri || null,
+        extractedText: extractedText || undefined
       });
     }
 
-    return res.status(200).json({ attachments: uploadedAttachments });
+    return res.status(200).json({
+      attachments: uploadedAttachments,
+      extractedText: extractedTexts.join('\n\n')
+    });
   } catch (error: any) {
     const formatted = formatGeminiError(error);
     console.error('Upload API Error:', formatted.status, formatted.message);

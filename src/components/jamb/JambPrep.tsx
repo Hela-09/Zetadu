@@ -450,11 +450,6 @@ export default function JambPrep({ onBack, setView, initialTab }: JambPrepProps)
         onBack={() => {
           setActiveQuizConfig(null);
           loadHistoryAndBookmarks();
-          if (window.history.length > 1) {
-            navigate(-1);
-          } else {
-            navigate(`/jamb/${mainTab}`);
-          }
         }}
         setView={setView}
       />

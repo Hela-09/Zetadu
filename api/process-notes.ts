@@ -2,6 +2,48 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Type } from '@google/genai';
 import { getGeminiClient, formatGeminiError, setCorsHeaders } from './_gemini.js';
 
+async function generateWithFallback(ai: any, parts: any[], config?: any) {
+  const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+  let lastError: any = null;
+
+  for (const model of models) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: [{ role: 'user', parts }],
+        config
+      });
+      if (response?.text) return response;
+    } catch (err: any) {
+      lastError = err;
+      const errMsg = err?.message || String(err || '');
+      // If 403 (Permission denied on File URI), strip fileData parts and retry immediately with text / inlineData
+      if (
+        errMsg.includes('403') ||
+        errMsg.includes('PERMISSION_DENIED') ||
+        errMsg.includes('permission to access the File')
+      ) {
+        console.warn('File URI permission denied, retrying without fileData parts...');
+        const cleanParts = parts.filter(p => !p.fileData);
+        if (cleanParts.length > 0) {
+          try {
+            const fallbackResp = await ai.models.generateContent({
+              model,
+              contents: [{ role: 'user', parts: cleanParts }],
+              config
+            });
+            if (fallbackResp?.text) return fallbackResp;
+          } catch (cleanErr) {
+            lastError = cleanErr;
+          }
+        }
+      }
+    }
+  }
+
+  throw lastError || new Error('Failed to generate response from Gemini AI');
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
 
@@ -29,6 +71,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const parts: any[] = [];
     if (attachments && Array.isArray(attachments)) {
       for (const att of attachments) {
+        if (att.url && att.url.startsWith('data:')) {
+          const match = att.url.match(/^data:([^;]+);base64,(.+)$/);
+          if (match) {
+            parts.push({
+              inlineData: {
+                mimeType: match[1],
+                data: match[2]
+              }
+            });
+            continue;
+          }
+        }
         if (att.fileUri) {
           parts.push({
             fileData: {
@@ -61,29 +115,7 @@ Formatting & Content Guidelines:
   4. ## 💡 High-Yield Exam Memory Tips (frequent examiner traps, key test hooks, and mnemonics)`;
 
       parts.push({ text: prompt });
-
-      let response;
-      try {
-        response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: [{ role: 'user', parts }]
-        });
-      } catch (err: any) {
-        if (
-          err?.status === 503 ||
-          err?.message?.includes('503') ||
-          err?.status === 'UNAVAILABLE' ||
-          err?.error?.code === 503
-        ) {
-          response = await ai.models.generateContent({
-            model: 'gemini-3.1-flash-lite',
-            contents: [{ role: 'user', parts }]
-          });
-        } else {
-          throw err;
-        }
-      }
-
+      const response = await generateWithFallback(ai, parts);
       return res.status(200).json({ summary: response.text });
     } else if (action === 'explain') {
       const prompt = `You are an engaging, world-class personal tutor. Provide a crystal-clear, deep pedagogical explanation of the concepts in these study notes.
@@ -106,29 +138,7 @@ Formatting & Content Guidelines:
   5. ## 🧪 Quick Self-Check Challenge (a conceptual question with clear answer breakdown to verify understanding)`;
 
       parts.push({ text: prompt });
-
-      let response;
-      try {
-        response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: [{ role: 'user', parts }]
-        });
-      } catch (err: any) {
-        if (
-          err?.status === 503 ||
-          err?.message?.includes('503') ||
-          err?.status === 'UNAVAILABLE' ||
-          err?.error?.code === 503
-        ) {
-          response = await ai.models.generateContent({
-            model: 'gemini-3.1-flash-lite',
-            contents: [{ role: 'user', parts }]
-          });
-        } else {
-          throw err;
-        }
-      }
-
+      const response = await generateWithFallback(ai, parts);
       return res.status(200).json({ explanation: response.text });
     } else if (action === 'flashcards') {
       const prompt = `You are an expert tutor. Generate an array of ${count || 8} interactive flashcards from the provided study notes.
@@ -160,30 +170,7 @@ Make questions concise and answers precise and clear.`;
         }
       };
 
-      let response;
-      try {
-        response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: [{ role: 'user', parts }],
-          config
-        });
-      } catch (err: any) {
-        if (
-          err?.status === 503 ||
-          err?.message?.includes('503') ||
-          err?.status === 'UNAVAILABLE' ||
-          err?.error?.code === 503
-        ) {
-          response = await ai.models.generateContent({
-            model: 'gemini-3.1-flash-lite',
-            contents: [{ role: 'user', parts }],
-            config
-          });
-        } else {
-          throw err;
-        }
-      }
-
+      const response = await generateWithFallback(ai, parts, config);
       const textRes = response.text;
       if (!textRes) throw new Error('No flashcard data received from Gemini');
       const flashcards = JSON.parse(textRes);
@@ -219,30 +206,7 @@ Each question must test an important concept from the notes. Provide 4 distinct 
         }
       };
 
-      let response;
-      try {
-        response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: [{ role: 'user', parts }],
-          config
-        });
-      } catch (err: any) {
-        if (
-          err?.status === 503 ||
-          err?.message?.includes('503') ||
-          err?.status === 'UNAVAILABLE' ||
-          err?.error?.code === 503
-        ) {
-          response = await ai.models.generateContent({
-            model: 'gemini-3.1-flash-lite',
-            contents: [{ role: 'user', parts }],
-            config
-          });
-        } else {
-          throw err;
-        }
-      }
-
+      const response = await generateWithFallback(ai, parts, config);
       const textRes = response.text;
       if (!textRes) throw new Error('No questions data received from Gemini');
       const questions = JSON.parse(textRes);

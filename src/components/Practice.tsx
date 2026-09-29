@@ -30,7 +30,7 @@ export default function Practice({ setView }: { setView?: (v: any) => void }) {
   }, [matchedSubject]);
 
   const handleBack = () => {
-    if (window.history.length > 1) {
+    if (window.history.state && window.history.state.idx > 0) {
       navigate(-1);
     } else if (matchedSubject) {
       navigate(`/subjects/${matchedSubject.id}`);

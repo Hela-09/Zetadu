@@ -182,15 +182,22 @@ async function startServer() {
       }
 
       const ai = getGeminiClient();
-      const uploadedAttachments = [];
+      const uploadedAttachments: any[] = [];
+      const extractedTexts: string[] = [];
 
       for (const file of files) {
-        const ext = path.extname(file.originalname);
+        const ext = path.extname(file.originalname).toLowerCase();
         const filename = `${Date.now()}-${Math.round(Math.random() * 1E9)}${ext}`;
         const localPath = `/tmp/uploads/${filename}`;
 
         // Rename the file to have the correct extension
         fs.renameSync(file.path, localPath);
+
+        const fileBuffer = fs.readFileSync(localPath);
+        const base64Data = fileBuffer.toString('base64');
+        const isImage = file.mimetype.startsWith('image/') || /\.(jpg|jpeg|png|webp)$/i.test(file.originalname);
+        const isPdf = file.mimetype === 'application/pdf' || /\.pdf$/i.test(file.originalname);
+        const isTextOrMd = file.mimetype.startsWith('text/') || /\.(txt|md)$/i.test(file.originalname);
 
         let fileUri = null;
         try {
@@ -200,15 +207,67 @@ async function startServer() {
           console.warn("Gemini upload failed for", file.originalname, err);
         }
 
+        let extractedText = '';
+        if (isTextOrMd) {
+          extractedText = fileBuffer.toString('utf-8');
+        } else if (isImage || isPdf) {
+          try {
+            const mimeType = isPdf ? 'application/pdf' : (file.mimetype || 'image/jpeg');
+            const prompt = isImage
+              ? "You are an expert OCR and study assistant. Transcribe and extract all handwritten notes, typed text, headings, formulas, equations, and diagrams text from this image accurately into clean, readable Markdown. Do not add conversational commentary; output only the transcribed notes."
+              : "You are an expert document parser. Extract and transcribe all text, notes, equations, and structured study content from this document accurately into clean, readable Markdown. Do not add conversational commentary; output only the extracted notes.";
+
+            let ocrResponse: any = null;
+            const modelsToTry = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+            for (const model of modelsToTry) {
+              try {
+                ocrResponse = await ai.models.generateContent({
+                  model,
+                  contents: [
+                    {
+                      role: 'user',
+                      parts: [
+                        {
+                          inlineData: {
+                            mimeType,
+                            data: base64Data
+                          }
+                        },
+                        { text: prompt }
+                      ]
+                    }
+                  ]
+                });
+                if (ocrResponse?.text) break;
+              } catch (err) {
+                console.warn(`OCR attempt with model ${model} failed:`, err);
+              }
+            }
+            if (ocrResponse?.text) {
+              extractedText = ocrResponse.text.trim();
+            }
+          } catch (ocrErr) {
+            console.warn('OCR extraction error:', ocrErr);
+          }
+        }
+
+        if (extractedText) {
+          extractedTexts.push(extractedText);
+        }
+
         uploadedAttachments.push({
           url: `/api/uploads/${filename}`,
           name: file.originalname,
           mimeType: file.mimetype,
-          fileUri: fileUri || null
+          fileUri: fileUri || null,
+          extractedText: extractedText || undefined
         });
       }
 
-      res.json({ attachments: uploadedAttachments });
+      res.json({
+        attachments: uploadedAttachments,
+        extractedText: extractedTexts.join('\n\n')
+      });
     } catch (error) {
       console.error("Upload API Error:", error);
       res.status(500).json({ error: "Failed to upload files" });
@@ -1331,7 +1390,7 @@ Provide a structured, engaging summary of this topic:
     }
   });
 
-  app.post("/api/process-notes", requireAuth, async (req, res) => {
+  app.post("/api/process-notes", optionalAuth, async (req, res) => {
     try {
       const { action, text, attachments, subject, topic, educationLevel, count } = req.body;
       if (!action) {
@@ -1346,10 +1405,22 @@ Provide a structured, engaging summary of this topic:
 
       const ai = getGeminiClient();
 
-      // Build content parts (supporting multimodal file attachments if provided)
+      // Build content parts (preferring inlineData base64 over fragile ephemeral fileUri)
       const parts: any[] = [];
       if (attachments && Array.isArray(attachments)) {
         for (const att of attachments) {
+          if (att.url && att.url.startsWith('data:')) {
+            const match = att.url.match(/^data:([^;]+);base64,(.+)$/);
+            if (match) {
+              parts.push({
+                inlineData: {
+                  mimeType: match[1],
+                  data: match[2]
+                }
+              });
+              continue;
+            }
+          }
           if (att.fileUri) {
             parts.push({
               fileData: {
@@ -1360,6 +1431,42 @@ Provide a structured, engaging summary of this topic:
           }
         }
       }
+
+      const generateNotesContent = async (reqParts: any[], cfg?: any) => {
+        const models = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+        let lastErr: any = null;
+        for (const model of models) {
+          try {
+            const response = await ai.models.generateContent({
+              model,
+              contents: [{ role: 'user', parts: reqParts }],
+              config: cfg
+            });
+            if (response?.text) return { response, usedModel: model };
+          } catch (err: any) {
+            lastErr = err;
+            const errMsg = err?.message || String(err || '');
+            // If 403 Permission Denied on File URI, retry immediately without fileData parts
+            if (errMsg.includes('403') || errMsg.includes('PERMISSION_DENIED') || errMsg.includes('permission to access the File')) {
+              console.warn('File URI permission denied in server.ts, retrying without fileData parts...');
+              const cleanParts = reqParts.filter((p: any) => !p.fileData);
+              if (cleanParts.length > 0) {
+                try {
+                  const fallbackResp = await ai.models.generateContent({
+                    model,
+                    contents: [{ role: 'user', parts: cleanParts }],
+                    config: cfg
+                  });
+                  if (fallbackResp?.text) return { response: fallbackResp, usedModel: model };
+                } catch (cleanErr) {
+                  lastErr = cleanErr;
+                }
+              }
+            }
+          }
+        }
+        throw lastErr || new Error('Failed to generate response from Gemini');
+      };
 
       if (action === 'summarize') {
         const prompt = `You are an expert academic tutor for secondary and high school exam students (WAEC/JAMB/GCSE/SAT/International).
@@ -1383,24 +1490,7 @@ Formatting & Content Guidelines:
 
         parts.push({ text: prompt });
 
-        let usedModel = 'gemini-3.8-flash';
-        let response;
-        try {
-          response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents: [{ role: 'user', parts }]
-          });
-        } catch (err: any) {
-          if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
-            usedModel = 'gemini-3.1-flash-lite';
-            response = await ai.models.generateContent({
-              model: 'gemini-3.1-flash-lite',
-              contents: [{ role: 'user', parts }]
-            });
-          } else {
-            throw err;
-          }
-        }
+        const { response, usedModel } = await generateNotesContent(parts);
 
         if (uid) {
           const inputTokens = response.usageMetadata?.promptTokenCount ?? 0;
@@ -1441,24 +1531,7 @@ Formatting & Content Guidelines:
 
         parts.push({ text: prompt });
 
-        let usedModel = 'gemini-3.8-flash';
-        let response;
-        try {
-          response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents: [{ role: 'user', parts }]
-          });
-        } catch (err: any) {
-          if (err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503) {
-            usedModel = 'gemini-3.1-flash-lite';
-            response = await ai.models.generateContent({
-              model: 'gemini-3.1-flash-lite',
-              contents: [{ role: 'user', parts }]
-            });
-          } else {
-            throw err;
-          }
-        }
+        const { response, usedModel } = await generateNotesContent(parts);
 
         if (uid) {
           const inputTokens = response.usageMetadata?.promptTokenCount ?? 0;
@@ -1500,28 +1573,7 @@ Formatting & Content Guidelines:
             responseSchema: cardSchema,
             maxOutputTokens: maxTokens
           };
-          let usedModel = 'gemini-3.8-flash';
-          let resp;
-          try {
-            resp = await ai.models.generateContent({
-              model: 'gemini-3.8-flash',
-              contents: [{ role: 'user', parts: reqParts }],
-              config: cfg
-            });
-          } catch (err: any) {
-            const isOverloaded = err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503 || err?.status === 429;
-            if (isOverloaded) {
-              console.warn("gemini-3.8-flash overloaded in notes flashcards, falling back to gemini-3.1-flash-lite");
-              usedModel = 'gemini-3.1-flash-lite';
-              resp = await ai.models.generateContent({
-                model: 'gemini-3.1-flash-lite',
-                contents: [{ role: 'user', parts: reqParts }],
-                config: cfg
-              });
-            } else {
-              throw err;
-            }
-          }
+          const { response: resp, usedModel } = await generateNotesContent(reqParts, cfg);
 
           if (uid) {
             const inputTokens = resp.usageMetadata?.promptTokenCount ?? 0;
@@ -1650,28 +1702,7 @@ ${text || '(Notes provided in the attached document/image)'}`;
             responseSchema: questionSchema,
             maxOutputTokens: maxTokens
           };
-          let usedModel = 'gemini-3.8-flash';
-          let resp;
-          try {
-            resp = await ai.models.generateContent({
-              model: 'gemini-3.8-flash',
-              contents: [{ role: 'user', parts: reqParts }],
-              config: cfg
-            });
-          } catch (err: any) {
-            const isOverloaded = err?.status === 503 || err?.message?.includes("503") || err?.status === "UNAVAILABLE" || err?.error?.code === 503 || err?.status === 429;
-            if (isOverloaded) {
-              console.warn("gemini-3.8-flash overloaded in notes questions, falling back to gemini-3.1-flash-lite");
-              usedModel = 'gemini-3.1-flash-lite';
-              resp = await ai.models.generateContent({
-                model: 'gemini-3.1-flash-lite',
-                contents: [{ role: 'user', parts: reqParts }],
-                config: cfg
-              });
-            } else {
-              throw err;
-            }
-          }
+          const { response: resp, usedModel } = await generateNotesContent(reqParts, cfg);
 
           if (uid) {
             const inputTokens = resp.usageMetadata?.promptTokenCount ?? 0;

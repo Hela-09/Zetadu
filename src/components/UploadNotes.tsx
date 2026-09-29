@@ -162,8 +162,16 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
   const handleFiles = async (files: File[]) => {
     setUploadError(null);
     for (const file of files) {
-      // If it's a plain text or markdown file, read text directly into editor
-      if (file.type === 'text/plain' || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
+      const lowerName = file.name.toLowerCase();
+      const isTxt = lowerName.endsWith('.txt') || file.type === 'text/plain';
+      const isMd = lowerName.endsWith('.md') || file.type === 'text/markdown';
+      const isPdf = lowerName.endsWith('.pdf') || file.type === 'application/pdf';
+      const isJpg = lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || file.type === 'image/jpeg';
+      const isPng = lowerName.endsWith('.png') || file.type === 'image/png';
+      const isImage = isJpg || isPng || file.type.startsWith('image/');
+
+      if (isTxt || isMd) {
+        // Read plain text or markdown directly into editor
         const reader = new FileReader();
         reader.onload = (event) => {
           const content = event.target?.result as string;
@@ -175,8 +183,8 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
           }
         };
         reader.readAsText(file);
-      } else if (file.type.startsWith('image/') || file.type === 'application/pdf') {
-        // Upload image or PDF to server
+      } else if (isPdf || isImage) {
+        // Process PDF or Image (JPG, PNG) with server-side AI OCR / text extraction
         setIsUploadingFile(true);
         try {
           const token = await getToken();
@@ -193,7 +201,8 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
           });
 
           if (!uploadRes.ok) {
-            throw new Error(`Upload failed (${uploadRes.status})`);
+            const errData = await uploadRes.json().catch(() => null);
+            throw new Error(errData?.error || `Upload failed (${uploadRes.status})`);
           }
 
           const data = await uploadRes.json();
@@ -210,9 +219,14 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
               setNoteTitle(file.name.replace(/\.[^/.]+$/, ''));
             }
           }
+
+          // If OCR/text extraction returned transcribed notes, populate the editor content
+          if (data.extractedText) {
+            setNoteContent((prev) => (prev ? `${prev}\n\n${data.extractedText}` : data.extractedText));
+          }
         } catch (err: any) {
           console.error("File upload error:", err);
-          setUploadError(`Failed to upload ${file.name}: ${err.message || 'Network error'}`);
+          setUploadError(`Failed to process ${file.name}: ${err.message || 'Network error'}`);
         } finally {
           setIsUploadingFile(false);
         }
@@ -223,6 +237,9 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
           const content = event.target?.result as string;
           if (content) {
             setNoteContent((prev) => (prev ? `${prev}\n\n${content}` : content));
+            if (!noteTitle) {
+              setNoteTitle(file.name.replace(/\.[^/.]+$/, ''));
+            }
           }
         };
         reader.readAsText(file);
@@ -285,12 +302,22 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
         })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Processing failed with status ${response.status}`);
+      const contentType = response.headers.get('content-type') || '';
+      const rawText = await response.text();
+      let result: any = null;
+
+      try {
+        result = JSON.parse(rawText);
+      } catch (_) {
+        if (rawText.trim().startsWith('<') || contentType.includes('text/html')) {
+          throw new Error(`Server returned HTML instead of JSON (${response.status}). Please try again.`);
+        }
+        throw new Error(`Invalid response format from server (${response.status})`);
       }
 
-      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || `Processing failed with status ${response.status}`);
+      }
 
       if (action === 'summarize') {
         setSummaryText(result.summary || 'Summary generated.');
@@ -665,7 +692,7 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                     Upload Study Notes or Documents
                   </label>
-                  <span className="text-[11px] text-slate-400">PDF, TXT, MD, Images (JPG, PNG)</span>
+                  <span className="text-[11px] text-slate-400">PDF, TXT, MD, JPG, PNG (with OCR)</span>
                 </div>
 
                 <div
@@ -683,7 +710,7 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept=".txt,.md,.pdf,image/png,image/jpeg,image/webp,image/jpg"
+                    accept=".pdf,.txt,.md,.jpg,.jpeg,.png,application/pdf,text/plain,text/markdown,image/jpeg,image/png"
                     onChange={handleFileChange}
                     className="hidden"
                   />
@@ -697,10 +724,10 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
                   </div>
 
                   <p className="font-bold text-sm text-slate-800 dark:text-white">
-                    {isUploadingFile ? 'Uploading file...' : 'Drop notes here or click to browse'}
+                    {isUploadingFile ? 'Scanning & extracting text via OCR...' : 'Drop notes here or click to browse'}
                   </p>
                   <p className="text-xs text-slate-400 max-w-sm">
-                    Upload handwritten notes photos, scanned textbook pages, typed PDFs, or lecture notes.
+                    Upload typed PDFs, plain text (.txt, .md), or photo notes/scans (.jpg, .png) with AI OCR.
                   </p>
                 </div>
 

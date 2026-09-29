@@ -103,7 +103,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-    const { prompt, model = 'gemini-2.5-flash', contents, systemInstruction } = body;
+    const { prompt, model = 'gemini-3.8-flash', contents, systemInstruction } = body;
 
     const ai = getGeminiClient();
 

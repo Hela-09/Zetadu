@@ -142,11 +142,9 @@ Each question must be a multiple choice question with 4 options, one correct ans
 
     let response: any = null;
     const modelCandidates = [
-      'gemini-3-flash-preview',
       'gemini-3.8-flash',
-      'gemini-flash-latest',
       'gemini-3.1-flash-lite',
-      'gemini-3.6-flash'
+      'gemini-flash-latest'
     ];
     let lastGenError: any = null;
 
