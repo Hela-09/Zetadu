@@ -1,0 +1,125 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { GoogleGenAI } from '@google/genai';
+
+let geminiClient: GoogleGenAI | null = null;
+
+export function getGeminiClient(): GoogleGenAI {
+  let apiKey = (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '').trim();
+  apiKey = apiKey.replace(/^["']|["']$/g, '').trim();
+
+  if (!apiKey) {
+    throw new Error(
+      "GEMINI_API_KEY is not configured in Vercel Environment Variables. Please go to your Vercel Dashboard -> Project -> Settings -> Environment Variables, add GEMINI_API_KEY, and redeploy."
+    );
+  }
+  if (!geminiClient) {
+    geminiClient = new GoogleGenAI({ apiKey });
+  }
+  return geminiClient;
+}
+
+export function formatGeminiError(error: any): { status: number; message: string } {
+  const errMsg = error?.message || String(error || '');
+  const status = error?.status || error?.error?.code || 500;
+
+  if (
+    errMsg.includes("GEMINI_API_KEY is not configured") ||
+    errMsg.includes("API key not valid") ||
+    errMsg.includes("API_KEY_INVALID")
+  ) {
+    return {
+      status: 500,
+      message: "GEMINI_API_KEY is missing or invalid in Vercel Environment Variables. Please configure GEMINI_API_KEY in Vercel Project Settings (Settings -> Environment Variables) and redeploy."
+    };
+  }
+
+  const isQuota = status === 429 || 
+    errMsg.toLowerCase().includes("quota") || 
+    errMsg.toLowerCase().includes("resource_exhausted") || 
+    errMsg.toLowerCase().includes("rate limit") ||
+    errMsg.toLowerCase().includes("rate_limit");
+
+  if (isQuota) {
+    return {
+      status: 429,
+      message: "The Gemini AI model is currently rate-limited or quota is exceeded. Please verify your GEMINI_API_KEY plan or try again shortly."
+    };
+  }
+
+  const isOverloaded = status === 503 || 
+    errMsg.includes("503") || 
+    status === "UNAVAILABLE" || 
+    errMsg.toLowerCase().includes("overloaded");
+
+  if (isOverloaded) {
+    return {
+      status: 503,
+      message: "The AI model is currently experiencing high demand. Please try again in a few moments."
+    };
+  }
+
+  if (status === 400 || errMsg.toLowerCase().includes("invalid_argument")) {
+    return {
+      status: 400,
+      message: `Invalid AI request: ${errMsg}`
+    };
+  }
+
+  return {
+    status: typeof status === 'number' && status >= 400 && status < 600 ? status : 500,
+    message: errMsg || "Failed to generate AI response from Gemini."
+  };
+}
+
+export function setCorsHeaders(res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
+  );
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setCorsHeaders(res);
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method === 'GET') {
+    const apiKey = (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '').trim();
+    return res.status(200).json({
+      status: 'ok',
+      configured: Boolean(apiKey),
+      message: apiKey ? 'Gemini API is ready' : 'GEMINI_API_KEY missing in environment variables'
+    });
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed. Use POST or GET.' });
+  }
+
+  try {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+    const { prompt, model = 'gemini-2.5-flash', contents, systemInstruction } = body;
+
+    const ai = getGeminiClient();
+
+    const response = await ai.models.generateContent({
+      model,
+      contents: contents || prompt || 'Hello',
+      config: systemInstruction ? { systemInstruction } : undefined,
+    });
+
+    return res.status(200).json({
+      text: response.text,
+      candidates: response.candidates,
+    });
+  } catch (error: any) {
+    console.error('Gemini API handler error:', error);
+    const { status, message } = formatGeminiError(error);
+    return res.status(status).json({ error: message });
+  }
+}
