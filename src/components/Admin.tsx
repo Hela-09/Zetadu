@@ -193,15 +193,14 @@ function UsersTab({ activeTab }: { activeTab: string }) {
 
     try {
       const token = await getToken();
-      const endpoint = statusModal.action === 'disable' ? '/api/admin/users/disable' : '/api/admin/users/enable';
-      
-      const res = await fetch(endpoint, {
+      const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
+          action: statusModal.action,
           uid: statusModal.user.id,
           email: statusModal.user.email,
           reason: statusModal.reason || undefined

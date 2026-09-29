@@ -575,7 +575,7 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
 
     try {
       const token = await getToken();
-      const response = await fetch('/api/generate-flashcards-structured', {
+      const response = await fetch('/api/generate-flashcards', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

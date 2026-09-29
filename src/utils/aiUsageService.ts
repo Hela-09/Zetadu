@@ -70,7 +70,7 @@ export async function fetchUserAiUsage(token?: string | null): Promise<UserAiUsa
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch('/api/ai-usage/me', { headers });
+  const res = await fetch('/api/ai-usage?type=me', { headers });
   if (!res.ok) {
     throw new Error(`Failed to fetch AI usage: ${res.statusText}`);
   }
@@ -85,7 +85,7 @@ export async function fetchAdminAiStats(token?: string | null): Promise<AdminAiS
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch('/api/ai-usage/admin-stats', { headers });
+  const res = await fetch('/api/ai-usage?type=admin-stats', { headers });
   if (!res.ok) {
     throw new Error(`Failed to fetch Super Admin AI statistics: ${res.statusText}`);
   }

@@ -72,6 +72,30 @@
   ],
   "rewrites": [
     {
+      "source": "/api/jamb/generate-questions",
+      "destination": "/api/generate-questions"
+    },
+    {
+      "source": "/api/generate-flashcards-structured",
+      "destination": "/api/generate-flashcards"
+    },
+    {
+      "source": "/api/admin/users/enable",
+      "destination": "/api/admin/users?action=enable"
+    },
+    {
+      "source": "/api/admin/users/disable",
+      "destination": "/api/admin/users?action=disable"
+    },
+    {
+      "source": "/api/ai-usage/me",
+      "destination": "/api/ai-usage?type=me"
+    },
+    {
+      "source": "/api/ai-usage/admin-stats",
+      "destination": "/api/ai-usage?type=admin-stats"
+    },
+    {
       "source": "/((?!api(?:/|$)).*)",
       "destination": "/index.html"
     }

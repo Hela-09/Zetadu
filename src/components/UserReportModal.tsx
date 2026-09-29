@@ -245,14 +245,14 @@ export default function UserReportModal({ userId, userInitialData, onClose, onSt
 
       // 2. Notify backend server
       const token = await getToken();
-      const endpoint = isDisabling ? '/api/admin/users/disable' : '/api/admin/users/enable';
-      const res = await fetch(endpoint, {
+      const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
+          action: isDisabling ? 'disable' : 'enable',
           uid: userId,
           email: userEmail,
           reason: isDisabling ? 'Disabled by Super Admin' : undefined

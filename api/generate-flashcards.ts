@@ -15,33 +15,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-    const { text, count } = body;
+    const { text, subject, topic, level, count } = body;
 
-    if (!text || text.trim() === '') {
-      return res.status(400).json({ error: 'Please provide notes text to generate flashcards.' });
+    const isStructured = !text || (subject && topic);
+
+    if (!isStructured && (!text || text.trim() === '')) {
+      return res.status(400).json({ error: 'Please provide notes text or subject/topic to generate flashcards.' });
     }
 
     const ai = getGeminiClient();
+    const flashcardCount = Math.min(25, Math.max(1, Number(count) || 10));
 
-    const prompt = `You are an expert AI tutor. Generate ${count || 10} interactive flashcards from the following study notes or lecture transcript. Make the questions concise and the answers clear.
+    let prompt = '';
+    let config: any;
+
+    if (isStructured) {
+      prompt = `You are an expert AI tutor. Generate ${flashcardCount} interactive flashcards for the following subject:
+Subject: ${subject || 'General Academic'}
+Topic: ${topic || 'Key Concepts'}
+Education Level: ${level || 'Secondary'}
+
+Make the questions concise and the answers clear. Provide a short explanation for each answer.`;
+
+      config = {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              front: { type: Type.STRING, description: 'The question or concept on the front of the flashcard' },
+              back: { type: Type.STRING, description: 'The concise answer or definition' },
+              explanation: { type: Type.STRING, description: 'A short explanation of the answer' }
+            },
+            required: ['front', 'back', 'explanation']
+          }
+        }
+      };
+    } else {
+      prompt = `You are an expert AI tutor. Generate ${flashcardCount} interactive flashcards from the following study notes or lecture transcript. Make the questions concise and the answers clear. Provide a short explanation for each answer.
 
 Text:
 ${text}`;
 
-    const config = {
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            front: { type: Type.STRING, description: 'The question or concept on the front of the flashcard' },
-            back: { type: Type.STRING, description: 'The answer or definition on the back of the flashcard' }
-          },
-          required: ['front', 'back']
+      config = {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              front: { type: Type.STRING, description: 'The question or concept on the front of the flashcard' },
+              back: { type: Type.STRING, description: 'The answer or definition on the back of the flashcard' },
+              explanation: { type: Type.STRING, description: 'A short explanation of the answer' }
+            },
+            required: ['front', 'back']
+          }
         }
-      }
-    };
+      };
+    }
 
     let response;
     try {
@@ -68,13 +100,23 @@ ${text}`;
       }
     }
 
-    const responseText = response.text;
-    if (!responseText) throw new Error('No flashcard response received from Gemini');
-    const flashcards = JSON.parse(responseText);
+    const responseText = response.text?.trim() || '[]';
+    let flashcards = [];
+    try {
+      flashcards = JSON.parse(responseText);
+    } catch (parseErr) {
+      const match = responseText.match(/\[\s*\{.*\}\s*\]/s);
+      if (match) {
+        flashcards = JSON.parse(match[0]);
+      } else {
+        throw new Error('Could not parse flashcards JSON response');
+      }
+    }
+
     return res.status(200).json({ flashcards });
   } catch (error: any) {
-    const formatted = formatGeminiError(error);
-    console.error('Generate Flashcards API Error:', formatted.status, formatted.message);
-    return res.status(formatted.status).json({ error: formatted.message });
+    console.error('Error in /api/generate-flashcards:', error);
+    const { status, message } = formatGeminiError(error);
+    return res.status(status).json({ error: message });
   }
 }

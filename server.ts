@@ -216,6 +216,26 @@ async function startServer() {
   });
 
   // AI Usage Endpoints
+  app.get("/api/ai-usage", requireAuth, (req, res) => {
+    const type = req.query.type;
+    if (type === 'admin-stats') {
+      try {
+        const stats = getSuperAdminAiStats();
+        return res.json(stats);
+      } catch (error: any) {
+        return res.status(500).json({ error: "Failed to fetch AI statistics" });
+      }
+    }
+    try {
+      const user = (req as any).user;
+      const uid = user?.uid || user?.user_id;
+      const usage = uid ? getUserAiUsage(uid) : { requestsCount: 0 };
+      return res.json(usage);
+    } catch (error: any) {
+      return res.status(500).json({ error: "Failed to fetch AI usage" });
+    }
+  });
+
   app.get("/api/ai-usage/me", requireAuth, (req, res) => {
     try {
       const user = (req as any).user;
@@ -275,6 +295,30 @@ async function startServer() {
       return res.json({ disabled: false });
     } catch (err) {
       return res.json({ disabled: false });
+    }
+  });
+
+  // Unified Admin users handler
+  app.post("/api/admin/users", requireAuth, requireSuperAdmin, async (req, res) => {
+    const { action, uid, email, reason } = req.body;
+    if (action === 'disable') {
+      if (!uid) return res.status(400).json({ error: "User ID is required" });
+      if (email === SUPER_ADMIN_EMAIL || uid === (req as any).user.uid) {
+        return res.status(400).json({ error: "Cannot disable the Super Admin account." });
+      }
+      disableUser(uid, email, reason, (req as any).user.email || SUPER_ADMIN_EMAIL);
+      try {
+        await getAuth().updateUser(uid, { disabled: true });
+        await getAuth().revokeRefreshTokens(uid);
+      } catch (_) {}
+      return res.json({ success: true, message: "User account disabled and active sessions revoked." });
+    } else {
+      if (!uid) return res.status(400).json({ error: "User ID is required" });
+      enableUser(uid, email);
+      try {
+        await getAuth().updateUser(uid, { disabled: false });
+      } catch (_) {}
+      return res.json({ success: true, message: "User account enabled successfully. Access restored." });
     }
   });
 

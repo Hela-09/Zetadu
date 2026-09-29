@@ -359,7 +359,7 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
         } catch (e) {}
 
         try {
-          const genRes = await fetch('/api/generate-flashcards-structured', {
+          const genRes = await fetch('/api/generate-flashcards', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
