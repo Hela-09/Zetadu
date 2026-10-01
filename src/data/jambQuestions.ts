@@ -7,6 +7,14 @@ import { BIOLOGY_QUESTIONS } from './jamb/biologyQuestions';
 import { ARTS_SOCIAL_QUESTIONS } from './jamb/artsSocialQuestions';
 import { EXTENDED_JAMB_QUESTIONS } from './jamb/extendedJambQuestions';
 import { APPROVED_SUBJECTS_QUESTIONS } from './jamb/approvedSubjectsQuestions';
+import { MATH_QUESTIONS_EXPANDED } from './jamb/mathQuestionsExpanded';
+import { ENGLISH_QUESTIONS_EXPANDED } from './jamb/englishQuestionsExpanded';
+import { PHYSICS_QUESTIONS_EXPANDED } from './jamb/physicsQuestionsExpanded';
+import { CHEMISTRY_QUESTIONS_EXPANDED } from './jamb/chemistryQuestionsExpanded';
+import { BIOLOGY_QUESTIONS_EXPANDED } from './jamb/biologyQuestionsExpanded';
+import { SOCIAL_SCIENCES_EXPANDED } from './jamb/socialSciencesQuestionsExpanded';
+import { APPLIED_VOCATIONAL_EXPANDED } from './jamb/appliedVocationalQuestionsExpanded';
+import { LARGE_JAMB_BANK } from './jamb/largeJambBank';
 
 export interface JambQuestion {
   id: string;
@@ -1064,13 +1072,21 @@ const questionMap = new Map<string, JambQuestion>();
 for (const q of [
   ...RAW_STATIC_QUESTIONS,
   ...MATH_QUESTIONS,
+  ...MATH_QUESTIONS_EXPANDED,
   ...ENGLISH_QUESTIONS,
+  ...ENGLISH_QUESTIONS_EXPANDED,
   ...PHYSICS_QUESTIONS,
+  ...PHYSICS_QUESTIONS_EXPANDED,
   ...CHEMISTRY_QUESTIONS,
+  ...CHEMISTRY_QUESTIONS_EXPANDED,
   ...BIOLOGY_QUESTIONS,
+  ...BIOLOGY_QUESTIONS_EXPANDED,
   ...ARTS_SOCIAL_QUESTIONS,
+  ...SOCIAL_SCIENCES_EXPANDED,
   ...EXTENDED_JAMB_QUESTIONS,
-  ...APPROVED_SUBJECTS_QUESTIONS
+  ...APPROVED_SUBJECTS_QUESTIONS,
+  ...APPLIED_VOCATIONAL_EXPANDED,
+  ...LARGE_JAMB_BANK
 ]) {
   if (q && q.id && !questionMap.has(q.id)) {
     questionMap.set(q.id, q);
@@ -1096,9 +1112,18 @@ export function getRealAvailableQuestionsForSubject(subjectIdOrName: string): Ja
       qId.startsWith(`jamb-${norm}-`) ||
       (norm === 'english' && (qSub.includes('english') || qName.includes('english'))) ||
       (norm === 'mathematics' && (qSub.includes('math') || qName.includes('math'))) ||
+      (norm === 'physics' && (qSub.includes('phy') || qName.includes('phy'))) ||
+      (norm === 'chemistry' && (qSub.includes('chem') || qName.includes('chem'))) ||
+      (norm === 'biology' && (qSub.includes('bio') || qName.includes('bio'))) ||
+      (norm === 'economics' && (qSub.includes('eco') || qName.includes('eco'))) ||
+      (norm === 'government' && (qSub.includes('gov') || qName.includes('gov'))) ||
+      (norm === 'literature' && (qSub.includes('lit') || qName.includes('lit'))) ||
+      (norm === 'commerce' && (qSub.includes('com') || qName.includes('com'))) ||
+      (norm === 'geography' && (qSub.includes('geo') || qName.includes('geo'))) ||
       (norm === 'agriculture' && (qSub.includes('agric') || qName.includes('agric'))) ||
       (norm === 'computer' && (qSub.includes('computer') || qName.includes('computer'))) ||
       (norm === 'accounts' && (qSub.includes('account') || qName.includes('account'))) ||
+      (norm === 'civic' && (qSub.includes('civic') || qName.includes('civic'))) ||
       (norm === 'crs' && (qSub.includes('christ') || qSub.includes('crs') || qName.includes('christ'))) ||
       (norm === 'irs' && (qSub.includes('islam') || qSub.includes('irs') || qName.includes('islam'))) ||
       (norm === 'art' && (qSub.includes('art') || qName.includes('art'))) ||

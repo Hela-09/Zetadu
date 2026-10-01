@@ -13,6 +13,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from './contexts/AuthContext';
 import { ThemeToggle } from './components/ThemeToggle';
 import { VIEW_TO_PATH } from './utils/navigation';
+import { recordRoute } from './utils/navigationHistory';
+import FloatingAIShortcut from './components/FloatingAIShortcut';
 
 const Login = lazy(() => import('./components/Login'));
 const PaymentGate = lazy(() => import('./components/PaymentGate'));
@@ -55,6 +57,12 @@ export default function App() {
   const navigate = useNavigate();
 
   const currentView = getEffectiveView(location.pathname);
+
+  // Synchronize route changes with LearnDean navigation stack
+  React.useEffect(() => {
+    recordRoute(location.pathname + location.search);
+  }, [location.pathname, location.search]);
+
   const {
     user,
     userProfile,
@@ -299,10 +307,10 @@ export default function App() {
               <AnimatePresence mode="wait">
                 <motion.div
                   key={location.pathname}
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.1, ease: "easeOut" }}
                   className="flex-1 flex flex-col min-h-0 relative"
                 >
                   <Routes>
@@ -353,6 +361,9 @@ export default function App() {
           </div>
         </main>
         
+        {/* Floating movable AI Tutor shortcut across all pages */}
+        <FloatingAIShortcut onOpenTutor={() => setCurrentView('tutor')} />
+
         {currentView !== 'tutor' && <BottomNav currentView={currentView} setCurrentView={setCurrentView} />}
         
         {/* Global Search Modal - only loaded and mounted when search is activated */}

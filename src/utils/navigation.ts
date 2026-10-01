@@ -159,15 +159,20 @@ export function replaceViewInHistory(view: ViewType, subState?: Record<string, a
   }
 }
 
+export { appNavigateBack, recordRoute, getContextualFallback, getPreviousPath } from './navigationHistory';
+
 /**
  * Safely navigates back via browser history if available,
- * or falls back to navigating to a designated view.
+ * or falls back to navigating to a designated view or contextual route.
  */
 export function goBackOrFallback(fallbackView: ViewType = 'home', fallbackAction?: () => void) {
   if (typeof window === 'undefined') return;
 
-  // If there is history inside this window session, go back
-  if (window.history.length > 1) {
+  const historyIdx = (window.history.state && typeof window.history.state.idx === 'number')
+    ? window.history.state.idx
+    : null;
+
+  if ((historyIdx !== null && historyIdx > 0) || (historyIdx === null && window.history.length > 1)) {
     window.history.back();
   } else if (fallbackAction) {
     fallbackAction();
@@ -176,3 +181,4 @@ export function goBackOrFallback(fallbackView: ViewType = 'home', fallbackAction
     window.dispatchEvent(new PopStateEvent('popstate', { state: { view: fallbackView } }));
   }
 }
+

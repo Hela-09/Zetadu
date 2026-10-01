@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Novel, NovelReadingProgress, NovelBookmark } from '../../types';
+import { appNavigateBack } from '../../utils/navigationHistory';
 import {
   Search,
   BookOpen,
@@ -12,6 +13,7 @@ import {
   Clock,
   Sparkles,
   ArrowRight,
+  ArrowLeft,
   Filter,
   HelpCircle,
   FileText,
@@ -298,11 +300,7 @@ export default function NovelsLibrary({ initialNovelId }: NovelsLibraryProps = {
             refreshProgress();
             refreshOfflineStatuses();
             refreshAllBookmarks();
-            if (window.history.length > 1) {
-              navigate(-1);
-            } else {
-              navigate('/novels');
-            }
+            appNavigateBack(navigate, { fallback: '/novels' });
           }}
           onOpenPractice={(chapterIndex) => {
             setQuizInitialChapterIndex(chapterIndex);
@@ -565,14 +563,25 @@ export default function NovelsLibrary({ initialNovelId }: NovelsLibraryProps = {
       {/* Header & Bookmarks Button */}
       <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-xs font-extrabold uppercase tracking-widest text-blue-600 dark:text-blue-400">
-              JAMB Prescribed Texts & Syllabus Study Materials
-            </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-              <WifiOff size={11} />
-              100% Offline Capable
-            </span>
+          <div className="flex items-center gap-3 mb-2">
+            <button
+              type="button"
+              onClick={() => appNavigateBack(navigate, { fallback: '/learn' })}
+              className="p-2.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors shadow-2xs cursor-pointer shrink-0"
+              title="Go back"
+              aria-label="Back"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-extrabold uppercase tracking-widest text-blue-600 dark:text-blue-400">
+                JAMB Prescribed Texts & Syllabus Study Materials
+              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                <WifiOff size={11} />
+                100% Offline Capable
+              </span>
+            </div>
           </div>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             JAMB Literature & English Texts

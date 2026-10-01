@@ -644,5 +644,225 @@ export const JAMB_SYLLABUS_DATA: Record<string, SubjectSyllabus> = {
       { title: 'Government for SSS', author: 'Oyediran, O. et al.', publisher: 'Longman' },
       { title: 'Constitutional Development in Nigeria', author: 'Kalu Ezera' }
     ]
+  },
+
+  commerce: {
+    subjectId: 'commerce',
+    subjectName: 'Commerce',
+    code: 'COM',
+    overview: 'Examines commercial activities, retail and wholesale trade, banking and finance, transportation, insurance, marketing, and business ownership.',
+    examStructure: {
+      totalQuestions: 40,
+      durationMinutes: 40,
+      calculatorAllowed: true,
+      sections: ['Trade & Commerce', 'Banking & Finance', 'Insurance & Transport', 'Marketing & Law']
+    },
+    generalObjectives: [
+      'Understand trade, commerce, and international business.',
+      'Analyze commercial banking, central bank functions, and capital markets.',
+      'Apply business law and consumer protection principles.'
+    ],
+    topics: [
+      { id: 'com-trade', name: 'Trade & Commerce', objectives: ['Differentiate home and foreign trade.'], contents: ['Wholesale and Retail', 'International trade'], examWeight: 'High', questionCount: 10 },
+      { id: 'com-banking', name: 'Banking & Financial Markets', objectives: ['Understand commercial and central banking.'], contents: ['Functions of Central Bank', 'Commercial bank services'], examWeight: 'High', questionCount: 10 },
+      { id: 'com-insurance', name: 'Insurance & Risk Management', objectives: ['Explain principles of indemnity and insurable interest.'], contents: ['Life and Non-life insurance', 'Principles of insurance'], examWeight: 'Medium', questionCount: 10 },
+      { id: 'com-law', name: 'Business Law & Consumer Protection', objectives: ['Understand contracts and consumer rights.'], contents: ['Elements of valid contract', 'Consumer protection councils'], examWeight: 'Medium', questionCount: 10 }
+    ],
+    recommendedBooks: [{ title: 'Commerce for Senior Secondary Schools', author: 'E.U. Longe' }]
+  },
+
+  accounts: {
+    subjectId: 'accounts',
+    subjectName: 'Principles of Accounts',
+    code: 'ACC',
+    overview: 'Tests bookkeeping principles, double entry, trial balance, final accounts, partnerships, company accounts, and public sector accounting.',
+    examStructure: {
+      totalQuestions: 40,
+      durationMinutes: 40,
+      calculatorAllowed: true,
+      sections: ['Bookkeeping & Journals', 'Final Accounts & Balance Sheet', 'Partnership Accounts', 'Company & Non-Profit Accounts']
+    },
+    generalObjectives: [
+      'Master the principles of double entry bookkeeping.',
+      'Prepare Trading, Profit & Loss Accounts and Balance Sheets.',
+      'Calculate accounting ratios, depreciation, and bank reconciliation.'
+    ],
+    topics: [
+      { id: 'acc-bookkeeping', name: 'Bookkeeping & Ledger Entries', objectives: ['Apply double-entry rules.'], contents: ['Ledgers', 'Books of Prime Entry', 'Trial Balance'], examWeight: 'High', questionCount: 10 },
+      { id: 'acc-final', name: 'Final Accounts & Balance Sheet', objectives: ['Compute gross profit, net profit, and capital employed.'], contents: ['Trading and Profit & Loss', 'Balance sheet', 'Adjustments'], examWeight: 'High', questionCount: 10 },
+      { id: 'acc-partnerships', name: 'Partnership Accounts', objectives: ['Prepare Appropriation Account and partner current accounts.'], contents: ['Profit sharing', 'Goodwill', 'Dissolution'], examWeight: 'High', questionCount: 10 },
+      { id: 'acc-depreciation', name: 'Depreciation & Reserves', objectives: ['Calculate straight line and reducing balance depreciation.'], contents: ['Straight-line method', 'Reducing balance method'], examWeight: 'Medium', questionCount: 10 }
+    ],
+    recommendedBooks: [{ title: 'Essential Financial Accounting', author: 'O.A. Longe' }]
+  },
+
+  computer: {
+    subjectId: 'computer',
+    subjectName: 'Computer Studies',
+    code: 'CMP',
+    overview: 'Covers computer systems, hardware, operating systems, networking, internet technologies, data processing, algorithms, and cyber security.',
+    examStructure: {
+      totalQuestions: 40,
+      durationMinutes: 40,
+      calculatorAllowed: false,
+      sections: ['Computer Hardware & System Software', 'Data Processing & Information Tech', 'Networking & Internet', 'Algorithms & Computer Ethics']
+    },
+    generalObjectives: [
+      'Understand computer architecture and peripherals.',
+      'Differentiate system software and application suites.',
+      'Explain networking protocols, IPv4/IPv6, and cyber safety.'
+    ],
+    topics: [
+      { id: 'cmp-hardware', name: 'Computer Hardware & Architecture', objectives: ['Explain CPU structure, ALU, CU, and registers.'], contents: ['Von Neumann architecture', 'Memory types (RAM, ROM)', 'Peripherals'], examWeight: 'High', questionCount: 10 },
+      { id: 'cmp-software', name: 'Operating Systems & System Software', objectives: ['Understand OS functions: multitasking, process scheduling, memory allocation.'], contents: ['OS types', 'File systems', 'Utility programs'], examWeight: 'High', questionCount: 10 },
+      { id: 'cmp-networking', name: 'Computer Networks & Internet', objectives: ['Identify network topologies, IP addressing, and OSI layers.'], contents: ['LAN, WAN, MAN', 'IPv4 vs IPv6', 'DNS and HTTP protocols'], examWeight: 'High', questionCount: 10 },
+      { id: 'cmp-programming', name: 'Algorithms & Programming Fundamentals', objectives: ['Trace flowcharts and pseudo-code logic.'], contents: ['Variables and loops', 'Flowcharts and algorithms', 'Data security'], examWeight: 'Medium', questionCount: 10 }
+    ],
+    recommendedBooks: [{ title: 'Computer Studies for Senior Secondary Schools', author: 'Hiit Plc' }]
+  },
+
+  civic: {
+    subjectId: 'civic',
+    subjectName: 'Civic Education',
+    code: 'CIV',
+    overview: 'Evaluates understanding of democratic values, human rights, the Nigerian constitution, youth empowerment, public service, and anti-corruption.',
+    examStructure: {
+      totalQuestions: 40,
+      durationMinutes: 40,
+      calculatorAllowed: false,
+      sections: ['National Values & Citizenship', 'Democracy & Rule of Law', 'Human Rights & Social Issues', 'Public Service & Civic Responsibility']
+    },
+    generalObjectives: [
+      'Demonstrate understanding of fundamental human rights.',
+      'Identify pillars of democracy, constitutionalism, and civil society.',
+      'Promote national consciousness, anti-corruption, and responsible citizenship.'
+    ],
+    topics: [
+      { id: 'civ-values', name: 'National Values & Citizen Rights', objectives: ['Identify core national values.'], contents: ['Integrity and honesty', 'Fundamental human rights', 'Duties of citizens'], examWeight: 'High', questionCount: 10 },
+      { id: 'civ-democracy', name: 'Democracy, Rule of Law & Electoral Process', objectives: ['Explain democratic institutions.'], contents: ['INEC and elections', 'Separation of powers', 'Rule of law'], examWeight: 'High', questionCount: 10 },
+      { id: 'civ-cultism', name: 'Social Ills, Cultism & Drug Abuse', objectives: ['Analyze negative impacts of social vices.'], contents: ['Cultism origins and prevention', 'NDLEA and substance abuse'], examWeight: 'Medium', questionCount: 10 },
+      { id: 'civ-public', name: 'Public Service & Anti-Corruption', objectives: ['Understand code of conduct and anti-graft agencies.'], contents: ['EFCC and ICPC', 'Civil service structure', 'Code of conduct'], examWeight: 'Medium', questionCount: 10 }
+    ],
+    recommendedBooks: [{ title: 'Basic Civic Education for Senior Secondary Schools', author: 'M.O. Ukegbu' }]
+  },
+
+  crs: {
+    subjectId: 'crs',
+    subjectName: 'Christian Religious Studies',
+    code: 'CRS',
+    overview: 'Examines the Old Testament, the Synoptic Gospels, the early Church, the apostolic epistles, and Christian living in society.',
+    examStructure: {
+      totalQuestions: 40,
+      durationMinutes: 40,
+      calculatorAllowed: false,
+      sections: ['Old Testament Themes', 'Synoptic Gospels & Jesus Ministry', 'The Acts of Apostles & Early Church', 'Epistles & Christian Ethics']
+    },
+    generalObjectives: [
+      'Analyze the life, teachings, and miracles of Jesus Christ.',
+      'Trace the growth and challenges of the early Church in Acts.',
+      'Apply biblical moral teachings to contemporary societal life.'
+    ],
+    topics: [
+      { id: 'crs-gospels', name: 'The Ministry & Parables of Jesus', objectives: ['Interpret the parables and teachings of Jesus.'], contents: ['Sermon on the Mount', 'Parables of the Kingdom', 'Miracles'], examWeight: 'High', questionCount: 10 },
+      { id: 'crs-church', name: 'The Early Church & Apostles', objectives: ['Trace the day of Pentecost and missionary journeys.'], contents: ['Pentecost and Holy Spirit', 'Paul missionary journeys', 'Persecution'], examWeight: 'High', questionCount: 10 },
+      { id: 'crs-faith', name: 'Faith, Works & Fellowship', objectives: ['Examine Paul and James teachings on faith and justification.'], contents: ['Justification by faith', 'Living by the Spirit', 'Christian ethics'], examWeight: 'Medium', questionCount: 10 }
+    ],
+    recommendedBooks: [{ title: 'Comprehensive CRS for Senior Secondary Schools', author: 'A.E. Oji' }]
+  },
+
+  irs: {
+    subjectId: 'irs',
+    subjectName: 'Islamic Studies',
+    code: 'IRS',
+    overview: 'Covers the Qur’an, Hadith, Tawhid, Fiqh, Islamic history, and the moral system of Islam.',
+    examStructure: {
+      totalQuestions: 40,
+      durationMinutes: 40,
+      calculatorAllowed: false,
+      sections: ['The Holy Qur’an', 'Hadith & Sunnah', 'Tawhid & Pillars of Islam', 'Islamic History & Jurisprudence']
+    },
+    generalObjectives: [
+      'Understand the revelation, compilation, and themes of the Qur’an.',
+      'Apply authentic Hadith to daily Islamic conduct.',
+      'Explain the pillars of Islam and Islamic jurisprudence (Fiqh).'
+    ],
+    topics: [
+      { id: 'irs-tawhid', name: 'Tawhid & Pillars of Islam', objectives: ['Explain unity of Allah and pillars.'], contents: ['Attributes of Allah', 'Salat, Zakat, Sawm, Hajj', 'Articles of Faith'], examWeight: 'High', questionCount: 10 },
+      { id: 'irs-hadith', name: 'Hadith & Sunnah', objectives: ['Differentiate Sahih Hadith classifications.'], contents: ['Collections of Bukhari and Muslim', 'Sunnah in daily conduct'], examWeight: 'High', questionCount: 10 },
+      { id: 'irs-history', name: 'Islamic History & Caliphate', objectives: ['Trace the Hijrah and the four Rightly Guided Caliphs.'], contents: ['The Prophet in Makkah and Madinah', 'The Khulafa ar-Rashidun'], examWeight: 'Medium', questionCount: 10 }
+    ],
+    recommendedBooks: [{ title: 'Islamic Religious Knowledge for SSS', author: 'B. Aisha Lemu' }]
+  },
+
+  agriculture: {
+    subjectId: 'agriculture',
+    subjectName: 'Agricultural Science',
+    code: 'AGR',
+    overview: 'Covers crop production, animal science, soil fertility, farm mechanization, agricultural economics, and extension.',
+    examStructure: {
+      totalQuestions: 40,
+      durationMinutes: 40,
+      calculatorAllowed: true,
+      sections: ['General Agriculture & Soil', 'Crop Science & Agronomy', 'Animal Science & Nutrition', 'Agricultural Economics & Engineering']
+    },
+    generalObjectives: [
+      'Master soil physical and chemical properties and nutrient management.',
+      'Understand husbandry, pest management, and breeding in crops and livestock.',
+      'Apply agricultural marketing, farm budgeting, and mechanization principles.'
+    ],
+    topics: [
+      { id: 'agr-soil', name: 'Soil Science & Fertility', objectives: ['Analyze soil pH, texture, and nutrient cycles.'], contents: ['Soil profiles', 'Nitrogen and Carbon cycles', 'Fertilizer application'], examWeight: 'High', questionCount: 10 },
+      { id: 'agr-crop', name: 'Crop Science & Agronomy', objectives: ['Explain cultivation of cereals, legumes, and tubers.'], contents: ['Crop husbandry', 'Pest and disease control', 'Weed management'], examWeight: 'High', questionCount: 10 },
+      { id: 'agr-animal', name: 'Animal Husbandry & Nutrition', objectives: ['Differentiate ruminant and non-ruminant digestive systems.'], contents: ['Livestock feeds', 'Livestock diseases and immunization', 'Fishery and poultry'], examWeight: 'High', questionCount: 10 }
+    ],
+    recommendedBooks: [{ title: 'Essential Agricultural Science for SSS', author: 'O.A. Iwena' }]
+  },
+
+  geography: {
+    subjectId: 'geography',
+    subjectName: 'Geography',
+    code: 'GEO',
+    overview: 'Encompasses physical geography, climatology, map reading, human geography, and regional geography of Nigeria and Africa.',
+    examStructure: {
+      totalQuestions: 40,
+      durationMinutes: 40,
+      calculatorAllowed: true,
+      sections: ['Physical Geography & Geomorphology', 'Climatology & Biogeography', 'Map Work & Cartography', 'Human & Regional Geography']
+    },
+    generalObjectives: [
+      'Interpret topographic maps, contours, and gradients.',
+      'Understand earth rotation, revolution, rock types, and plate tectonics.',
+      'Analyze economic geography, urbanization, and resource distribution in Nigeria.'
+    ],
+    topics: [
+      { id: 'geo-physical', name: 'Physical Geography & Landforms', objectives: ['Explain rock weathering, vulcanicity, and river action.'], contents: ['Rock cycle', 'River basin landforms', 'Plate tectonics'], examWeight: 'High', questionCount: 10 },
+      { id: 'geo-climate', name: 'Climatology & Vegetation', objectives: ['Differentiate tropical rain forest, savannah, and desert climates.'], contents: ['Atmospheric pressure and winds', 'Precipitation types', 'World biomes'], examWeight: 'High', questionCount: 10 },
+      { id: 'geo-regional', name: 'Regional Geography of Nigeria', objectives: ['Analyze mineral resources, population, and agriculture in Nigeria.'], contents: ['Vegetation zones of Nigeria', 'Mineral resources', 'Industrial zones'], examWeight: 'High', questionCount: 10 }
+    ],
+    recommendedBooks: [{ title: 'Essential Geography for Senior Secondary Schools', author: 'N.P. Iloeje' }]
+  },
+
+  history: {
+    subjectId: 'history',
+    subjectName: 'History',
+    code: 'HIS',
+    overview: 'Explores Nigeria up to 1800, 19th-century developments, colonial rule, nationalist struggles, and post-independence history.',
+    examStructure: {
+      totalQuestions: 40,
+      durationMinutes: 40,
+      calculatorAllowed: false,
+      sections: ['Pre-Colonial Kingdoms', 'The 19th Century & Jihad Movements', 'British Conquest & Colonial Rule', 'Decolonization & Post-Colonial Nigeria']
+    },
+    generalObjectives: [
+      'Trace historical kingdoms (Oyo, Benin, Kanem-Borno, Hausa States).',
+      'Analyze the Sokoto Jihad and British amalgamation of Nigeria in 1914.',
+      'Evaluate nationalist leaders and post-independence political development.'
+    ],
+    topics: [
+      { id: 'his-precolonial', name: 'Pre-Colonial Kingdoms of Nigeria', objectives: ['Understand political structures of ancient Oyo, Benin, and Kanem-Borno.'], contents: ['Oyo Empire', 'Benin Kingdom', 'Kanem-Borno and Hausa Bakwai'], examWeight: 'High', questionCount: 10 },
+      { id: 'his-colonial', name: 'Colonial Rule & Indirect Rule System', objectives: ['Evaluate Lord Lugard Indirect Rule policy.'], contents: ['Amalgamation (1914)', 'Indirect Rule in North, West, and East', 'Warrant chiefs'], examWeight: 'High', questionCount: 10 }
+    ],
+    recommendedBooks: [{ title: 'Groundwork of Nigerian History', author: 'O. Ikime' }]
   }
 };
+

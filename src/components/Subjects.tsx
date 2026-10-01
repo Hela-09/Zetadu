@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { BookOpen, ChevronRight, Search, ChevronLeft, Star, Play, MessageSquare, BookMarked, BarChart3, FileText, Settings, Compass } from 'lucide-react';
+import { BookOpen, ChevronRight, Search, ChevronLeft, ArrowLeft, Star, Play, MessageSquare, BookMarked, BarChart3, FileText, Settings, Compass } from 'lucide-react';
+import { appNavigateBack } from '../utils/navigationHistory';
 import { db } from '../lib/firebase';
 import { collection, getDocs, query, where, addDoc, updateDoc } from 'firebase/firestore';
 import { ViewType } from '../types';
@@ -75,11 +76,7 @@ export default function Subjects({ setView, initialSection }: { setView?: (view:
 
   const handleBackToLibrary = () => {
     setSelectedSubject(null);
-    if (window.history.length > 1) {
-      navigate(-1);
-    } else {
-      navigate('/subjects');
-    }
+    appNavigateBack(navigate, { fallback: '/subjects' });
   };
 
   const categories = ['All', ...Array.from(new Set(ALL_SUBJECTS.map(s => s.category))).sort()];
@@ -315,11 +312,22 @@ export default function Subjects({ setView, initialSection }: { setView?: (view:
       ) : (
         <>
           <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6 shrink-0">
-            <div>
-              <p className="text-sm font-bold tracking-widest text-blue-600 dark:text-blue-400 uppercase mb-2">
-                Curriculum
-              </p>
-              <h2 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">Library</h2>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => appNavigateBack(navigate, { fallback: '/learn' })}
+                className="p-2.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors shadow-xs cursor-pointer"
+                title="Go back"
+                aria-label="Back"
+              >
+                <ArrowLeft size={20} />
+              </button>
+              <div>
+                <p className="text-sm font-bold tracking-widest text-blue-600 dark:text-blue-400 uppercase mb-0.5">
+                  Curriculum
+                </p>
+                <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">Library</h2>
+              </div>
             </div>
             
             <div className="relative w-full md:w-96">

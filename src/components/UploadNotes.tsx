@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { appNavigateBack } from '../utils/navigationHistory';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import {
@@ -10,6 +12,7 @@ import {
 import { ViewType, StudyNote, NoteFlashcard, NotePracticeQuestion, NoteAttachment } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserNotes, saveUserNote, deleteUserNote, saveNoteFlashcardsToDeck, SAMPLE_NOTES } from '../utils/notesService';
+import CombineNotes from './notes/CombineNotes';
 
 interface UploadNotesProps {
   setView: (view: ViewType) => void;
@@ -27,6 +30,7 @@ const SUBJECT_OPTIONS = [
 ];
 
 export default function UploadNotes({ setView }: UploadNotesProps) {
+  const navigate = useNavigate();
   const { user, getToken, userProfile } = useAuth();
 
   // Core note input state
@@ -44,7 +48,7 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // AI Processing & Results state
-  const [activeTab, setActiveTab] = useState<'editor' | 'summary' | 'explain' | 'flashcards' | 'questions' | 'history'>('editor');
+  const [activeTab, setActiveTab] = useState<'editor' | 'combine' | 'summary' | 'explain' | 'flashcards' | 'questions' | 'history'>('editor');
   const [processingAction, setProcessingAction] = useState<ProcessingAction | null>(null);
   const [processingStatus, setProcessingStatus] = useState<string>('');
   const [aiError, setAiError] = useState<string | null>(null);
@@ -498,14 +502,11 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
           <button
             id="back-to-home-btn"
             onClick={() => {
-              if (window.history.length > 1) {
-                window.history.back();
-              } else {
-                setView('home');
-              }
+              appNavigateBack(navigate, { fallback: '/learn' });
             }}
             className="p-2.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors shadow-sm cursor-pointer"
-            title="Return to Home"
+            title="Go back"
+            aria-label="Back"
           >
             <ArrowLeft size={20} />
           </button>
@@ -537,6 +538,19 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
           >
             <FileText size={15} />
             <span>Notes Editor</span>
+          </button>
+
+          <button
+            id="tab-combine-btn"
+            onClick={() => setActiveTab('combine')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+              activeTab === 'combine'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
+            }`}
+          >
+            <Layers size={15} className={activeTab === 'combine' ? 'text-white' : 'text-indigo-500'} />
+            <span>Combine Notes</span>
           </button>
 
           {summaryText && (
@@ -957,15 +971,64 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
                 </div>
               </button>
 
+              {/* Option 5: Combine Notes */}
+              <button
+                id="ai-combine-notes-btn"
+                onClick={() => setActiveTab('combine')}
+                className="w-full text-left p-4 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800/80 hover:border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-all group cursor-pointer"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform shadow-xs">
+                    <Layers size={20} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-slate-900 dark:text-white text-sm">Combine Notes</h4>
+                      <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 group-hover:translate-x-0.5 transition-transform">
+                        Select Files →
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                      Select and merge multiple study files or notes into one master study set.
+                    </p>
+                  </div>
+                </div>
+              </button>
+
               <div className="p-3.5 rounded-2xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 text-xs text-slate-600 dark:text-slate-300 flex items-start gap-2 mt-2">
                 <Sparkles size={16} className="text-blue-600 shrink-0 mt-0.5" />
                 <span>
-                  Tip: You can generate all 4 options sequentially. Your results remain available in the tabs above!
+                  Tip: You can generate all study assets sequentially. Your results remain available in the tabs above!
                 </span>
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* COMBINE NOTES TAB */}
+      {activeTab === 'combine' && (
+        <CombineNotes
+          savedNotes={savedNotes}
+          currentEditorAttachments={attachments}
+          currentEditorContent={noteContent}
+          currentEditorTitle={noteTitle}
+          currentEditorSubject={noteSubject}
+          onOpenInEditor={(note) => {
+            setNoteTitle(note.title);
+            setNoteSubject(note.subject || 'General');
+            setNoteTopic(note.topic || '');
+            setNoteContent(note.content);
+            setAttachments(note.attachments || []);
+            setCurrentNoteId(note.id);
+            if (note.summary) setSummaryText(note.summary);
+            if (note.explanation) setExplanationText(note.explanation);
+            if (note.flashcards && note.flashcards.length > 0) setGeneratedFlashcards(note.flashcards);
+            if (note.practiceQuestions && note.practiceQuestions.length > 0) setGeneratedQuestions(note.practiceQuestions);
+            setActiveTab('editor');
+          }}
+          onRefreshHistory={loadHistory}
+        />
       )}
 
       {/* 2. SUMMARY VIEW TAB */}

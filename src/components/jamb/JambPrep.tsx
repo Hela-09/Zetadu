@@ -22,6 +22,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { JAMB_SUBJECTS, JambQuestion } from '../../data/jambQuestions';
+import { appNavigateBack } from '../../utils/navigationHistory';
 import { jambService, JambExamAttempt, BookmarkedJambQuestion } from '../../services/jambService';
 import { jambOfflineDb, DownloadedSubjectMeta, JambOfflinePackMeta } from '../../services/jambOfflineDb';
 import { useAuth } from '../../contexts/AuthContext';
@@ -464,16 +465,18 @@ export default function JambPrep({ onBack, setView, initialTab }: JambPrepProps)
       {/* Top Header with Status & History */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-              title="Back"
-            >
-              <ArrowLeft size={20} />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (onBack) onBack();
+              else appNavigateBack(navigate, { fallback: '/learn' });
+            }}
+            className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+            title="Back"
+            aria-label="Back"
+          >
+            <ArrowLeft size={20} />
+          </button>
           <div>
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 uppercase tracking-wider">

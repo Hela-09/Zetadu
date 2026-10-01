@@ -33,6 +33,8 @@ import {
   History
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { appNavigateBack } from '../utils/navigationHistory';
 import { db, cleanFirestoreData } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { SUBJECT_DATA, ALL_SUBJECTS } from '../data/subjects';
@@ -66,6 +68,9 @@ export interface QuizProps {
   onBack?: () => void;
   setView?: (v: any) => void;
   initialMode?: 'standard' | 'jamb-cbt' | 'jamb-practice' | 'topic-practice' | 'history-review';
+  onSelectSubject?: (subject: any) => void;
+  onBackToSubjects?: () => void;
+  onStartSession?: () => void;
   initialConfig?: {
     subject?: string;
     subjectId?: string;
@@ -102,7 +107,17 @@ export interface QuizProps {
 
 let cachedInternalSession: any = null;
 
-export default function Quiz({ onBack, setView, initialMode, initialConfig }: QuizProps) {
+export default function Quiz({
+  onBack,
+  setView,
+  initialMode,
+  initialConfig,
+  onSelectSubject,
+  onBackToSubjects,
+  onStartSession
+}: QuizProps) {
+  const navigate = useNavigate();
+  const isExitingRef = useRef<boolean>(false);
   const { user, getToken, settings, userProfile, awardQuestionProgress } = useAuth();
 
   const getNormalizedCorrectIndex = (question: any): number => {
@@ -226,7 +241,25 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
 
   // Clean up timers, abort controllers, and internal session on unmount
   useEffect(() => {
+    const handleAbortActiveSession = () => {
+      isExitingRef.current = true;
+      clearSession();
+      setQuestions([]);
+      setAnswers({});
+      setMarkedForReview({});
+      setCurrentQIndex(0);
+      setScore(0);
+      setTimeUsedSeconds(0);
+      setSetupMode(true);
+      setViewMode('practice');
+      setIsSubmitted(false);
+    };
+
+    window.addEventListener('learndean-abort-active-session', handleAbortActiveSession);
+
     return () => {
+      window.removeEventListener('learndean-abort-active-session', handleAbortActiveSession);
+      isExitingRef.current = true;
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
@@ -238,6 +271,14 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
       cachedInternalSession = null;
     };
   }, []);
+
+  const activateSession = useCallback(() => {
+    isExitingRef.current = false;
+    setSetupMode(false);
+    if (onStartSession) {
+      onStartSession();
+    }
+  }, [onStartSession]);
 
   const [poolShortfallState, setPoolShortfallState] = useState<{
     requested: number;
@@ -526,7 +567,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
         setAmount(finalQs.length);
         setQuestions(finalQs);
         setPoolShortfallState(null);
-        setSetupMode(false);
+        activateSession();
         setIsSubmitted(false);
         setViewMode('practice');
         setCurrentQIndex(0);
@@ -600,7 +641,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
       const exactQuestions = loadedQ.slice(0, reqCount);
       setQuestions(exactQuestions);
       setPoolShortfallState(null);
-      setSetupMode(false);
+      activateSession();
       setIsSubmitted(false);
       setViewMode('practice');
       setCurrentQIndex(0);
@@ -780,7 +821,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
 
   // Persist session state helper (saves to memory, IndexedDB, localStorage, and Firestore)
   const persistSessionToFirebase = useCallback(async (overrides?: Partial<any>) => {
-    if (setupMode || questions.length === 0 || isSubmitted) return;
+    if (isExitingRef.current || setupMode || questions.length === 0 || isSubmitted) return;
 
     const validQuestions = (questions || []).map(q => cleanFirestoreData(q));
     const sessionData: Record<string, any> = {
@@ -844,7 +885,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
 
   // Save on significant state changes (answers, marked-for-review, question index change)
   useEffect(() => {
-    if (!hasRestored || setupMode || questions.length === 0 || isSubmitted) return;
+    if (isExitingRef.current || !hasRestored || setupMode || questions.length === 0 || isSubmitted) return;
     persistSessionToFirebase();
   }, [answers, markedForReview, currentQIndex, hasRestored, setupMode, questions.length, isSubmitted, persistSessionToFirebase]);
 
@@ -876,17 +917,9 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
         }
         const updated = prev - 1;
         timerRemainingRef.current = updated;
-        
-        // Save to localStorage every second (instant and quota-free)
         try {
-          const cached = localStorage.getItem('practice_session');
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            parsed.timerRemaining = updated;
-            localStorage.setItem('practice_session', JSON.stringify(parsed));
-          }
-        } catch (e) {}
-
+          sessionStorage.setItem('practice_timer_remaining', String(updated));
+        } catch (_) {}
         return updated;
       });
     }, 1000);
@@ -897,6 +930,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
   }, [setupMode, isSubmitted, questions.length, viewMode, isUntimed, user]);
 
   const clearSession = () => {
+    isExitingRef.current = true;
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -908,6 +942,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     cachedInternalSession = null;
     try {
       localStorage.removeItem('practice_session');
+      sessionStorage.removeItem('practice_timer_remaining');
       localStorage.removeItem('zetadu_target_subject_id');
       localStorage.removeItem('zetadu_target_subject');
       localStorage.removeItem('zetadu_target_topic');
@@ -922,6 +957,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
   };
 
   const handleLeavePractice = () => {
+    isExitingRef.current = true;
     setShowLeavePrompt(false);
     clearSession();
     setQuestions([]);
@@ -935,10 +971,8 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     setIsSubmitted(false);
     if (onBack) {
       onBack();
-    } else if (typeof window !== 'undefined' && window.history.state && window.history.state.idx > 0) {
-      window.history.back();
-    } else if (setView) {
-      setView('learn');
+    } else {
+      appNavigateBack(navigate, { fallback: '/practice' });
     }
   };
 
@@ -1096,7 +1130,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
       setAwardedQuestionIndices(new Set());
       setTimerRemaining(timerDuration * 60);
       setTimeUsedSeconds(0);
-      setSetupMode(false);
+      activateSession();
       setIsSubmitted(false);
       setViewMode('practice');
 
@@ -1204,7 +1238,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
         const exactQuestions = refreshed.questions.slice(0, requested);
         setQuestions(exactQuestions);
         setPoolShortfallState(null);
-        setSetupMode(false);
+        activateSession();
         setIsSubmitted(false);
         setViewMode('practice');
         setCurrentQIndex(0);
@@ -1231,7 +1265,7 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
     const exact = poolShortfallState.pendingQuestions;
     setQuestions(exact);
     setPoolShortfallState(null);
-    setSetupMode(false);
+    activateSession();
     setIsSubmitted(false);
     setViewMode('practice');
     setCurrentQIndex(0);
@@ -1567,10 +1601,8 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
                 onClick={() => {
                   if (onBack) {
                     onBack();
-                  } else if (typeof window !== 'undefined' && window.history.length > 1) {
-                    window.history.back();
-                  } else if (setView) {
-                    setView('learn');
+                  } else {
+                    appNavigateBack(navigate, { fallback: '/learn' });
                   }
                 }} 
                 className="p-2 sm:p-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors self-start cursor-pointer"
@@ -1626,6 +1658,9 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
                   setSubjectId(sub.id);
                   setSubject(sub.name);
                   setSetupStep(2);
+                  if (onSelectSubject) {
+                    onSelectSubject(sub);
+                  }
                 }}
                 className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 border-2 border-slate-100 dark:border-slate-700/60 hover:border-blue-500 dark:hover:border-blue-500 shadow-xs hover:shadow-lg transition-all cursor-pointer group flex flex-col justify-between text-left relative min-w-0"
               >
@@ -1731,7 +1766,14 @@ export default function Quiz({ onBack, setView, initialMode, initialConfig }: Qu
         <div className="mb-6 sm:mb-8 flex items-center justify-between gap-3">
           <button 
             id="quiz-back-to-step1"
-            onClick={() => setSetupStep(1)} 
+            onClick={() => {
+              setSetupStep(1);
+              if (onBackToSubjects) {
+                onBackToSubjects();
+              } else if (onBack) {
+                onBack();
+              }
+            }} 
             className="p-2 sm:p-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors shrink-0 cursor-pointer"
           >
             <ArrowLeft size={22} />

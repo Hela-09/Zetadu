@@ -1,6 +1,8 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ViewType } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import { navigateToRootSection } from '../utils/navigationHistory';
 import Logo from './Logo';
 import {
   Home,
@@ -24,6 +26,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
+  const navigate = useNavigate();
   const { isInstallable, triggerInstall } = usePWAInstall();
 
   // Desktop sidebar navigation items:
@@ -53,6 +56,26 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
   ];
 
   const handleNavClick = (id: string) => {
+    if (id === 'home') {
+      navigateToRootSection(navigate, '/home');
+      return;
+    }
+
+    if (id === 'learn') {
+      navigateToRootSection(navigate, '/learn');
+      return;
+    }
+
+    if (id === 'jamb') {
+      navigateToRootSection(navigate, '/jamb');
+      return;
+    }
+
+    if (id === 'upload_notes') {
+      navigateToRootSection(navigate, '/upload-notes');
+      return;
+    }
+
     if (id === 'history') {
       try {
         localStorage.setItem('zetadu_profile_section', 'practice_history');
@@ -82,7 +105,7 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
     <aside className="w-64 h-full bg-slate-900 text-white flex flex-col shrink-0 border-r border-slate-800 select-none">
       {/* Brand Header */}
       <div 
-        onClick={() => setCurrentView('home')}
+        onClick={() => navigateToRootSection(navigate, '/home')}
         className="p-5 pb-4 flex items-center space-x-3 shrink-0 cursor-pointer group"
       >
         <Logo variant="icon" className="w-9 h-9 shrink-0 group-hover:scale-105 transition-transform" />

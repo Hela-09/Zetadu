@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { appNavigateBack } from '../utils/navigationHistory';
 import { motion } from 'motion/react';
 import { Zap, Clock, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Trophy, Loader2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,6 +20,7 @@ interface Question {
 }
 
 export default function DailyChallenge({ setView }: { setView: (view: any) => void }) {
+  const navigate = useNavigate();
   const { user, userProfile, getToken, refreshProfile } = useAuth();
   
   const [loading, setLoading] = useState(true);
@@ -256,15 +259,11 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
         
         <button 
           onClick={() => {
-            if (window.history.length > 1) {
-              window.history.back();
-            } else {
-              setView('home');
-            }
+            appNavigateBack(navigate, { fallback: '/home' });
           }}
-          className="mt-8 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white px-8 py-3 rounded-xl font-bold transition-colors"
+          className="mt-8 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white px-8 py-3 rounded-xl font-bold transition-colors cursor-pointer"
         >
-          Back to Dashboard
+          Back
         </button>
       </div>
     );

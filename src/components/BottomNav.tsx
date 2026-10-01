@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ViewType } from '../types';
 import {
   Home,
@@ -6,6 +7,7 @@ import {
   GraduationCap,
   FileUp,
 } from 'lucide-react';
+import { navigateToRootSection, getSectionForPath } from '../utils/navigationHistory';
 
 interface BottomNavProps {
   currentView: ViewType;
@@ -13,48 +15,57 @@ interface BottomNavProps {
 }
 
 export default function BottomNav({ currentView, setCurrentView }: BottomNavProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const currentSection = getSectionForPath(location.pathname);
+
   // STRICT REQUIREMENT:
-  // BOTTOM NAVIGATION — ONLY 4 ITEMS:
-  // 1. Home
-  // 2. Learn
-  // 3. JAMB
-  // 4. Upload
+  // BOTTOM NAVIGATION — ONLY 4 ROOT DESTINATIONS:
+  // 1. Home   -> /home
+  // 2. Learn  -> /learn
+  // 3. JAMB   -> /jamb
+  // 4. Upload -> /upload-notes
   const navItems = [
     {
       id: 'home',
       label: 'Home',
       icon: Home,
-      isActive: currentView === 'home',
+      rootPath: '/home',
+      isActive: currentSection === 'home',
       isUpload: false,
     },
     {
       id: 'learn',
       label: 'Learn',
       icon: BrainCircuit,
-      // Stays active when using any of the learning features (AI Tutor, Practice, Flashcards, Study Journey)
-      isActive:
-        currentView === 'learn' ||
-        currentView === 'tutor' ||
-        currentView === 'practice' ||
-        currentView === 'flashcards' ||
-        currentView === 'journey',
+      rootPath: '/learn',
+      // Active for all learning tools under Learn (AI Tutor, Practice, Flashcards, Study Journey, Library, Weak Topics)
+      isActive: currentSection === 'learn',
       isUpload: false,
     },
     {
       id: 'jamb',
       label: 'JAMB',
       icon: GraduationCap,
-      isActive: currentView === 'jamb' || currentView === 'novels',
+      rootPath: '/jamb',
+      // Active for all JAMB and Literature/Novel preparation sections
+      isActive: currentSection === 'jamb',
       isUpload: false,
     },
     {
       id: 'upload_notes',
       label: 'Upload',
       icon: FileUp,
-      isActive: currentView === 'upload_notes',
+      rootPath: '/upload-notes',
+      isActive: currentSection === 'upload',
       isUpload: true,
     },
   ];
+
+  const handleNavClick = (item: (typeof navItems)[number]) => {
+    navigateToRootSection(navigate, item.rootPath);
+  };
 
   return (
     <nav
@@ -70,7 +81,7 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
             <button
               key={item.id}
               id={`mobile-nav-${item.id}-btn`}
-              onClick={() => setCurrentView(item.id as ViewType)}
+              onClick={() => handleNavClick(item)}
               className="flex flex-col items-center justify-center h-13 py-0.5 min-w-0 transition-colors group cursor-pointer relative"
               aria-label={item.label}
             >

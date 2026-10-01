@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import Quiz from './Quiz';
 import { ALL_SUBJECTS } from '../data/subjects';
+import { appNavigateBack } from '../utils/navigationHistory';
 
 export default function Practice({ setView }: { setView?: (v: any) => void }) {
   const { subjectId } = useParams<{ subjectId?: string }>();
@@ -29,24 +30,41 @@ export default function Practice({ setView }: { setView?: (v: any) => void }) {
     };
   }, [matchedSubject]);
 
+  const isSessionActive = searchParams.get('session') === 'active';
+
   const handleBack = () => {
-    if (window.history.state && window.history.state.idx > 0) {
-      navigate(-1);
+    if (isSessionActive) {
+      // In active session: back goes to the subject setup
+      if (matchedSubject) {
+        navigate(`/practice/${matchedSubject.id}`);
+      } else {
+        navigate('/practice');
+      }
     } else if (matchedSubject) {
-      navigate(`/subjects/${matchedSubject.id}`);
-    } else if (setView) {
-      setView('learn');
+      // On subject setup: back goes to practice subject list or previous screen
+      appNavigateBack(navigate, { fallback: '/practice' });
     } else {
-      navigate('/home');
+      // On practice list: back goes to wherever user came from (e.g. /learn, /home)
+      appNavigateBack(navigate, { fallback: '/learn' });
     }
   };
 
   return (
     <Quiz
-      key={matchedSubject?.id || 'general-practice'}
+      key={`${matchedSubject?.id || 'general-practice'}-${isSessionActive ? 'session' : 'setup'}`}
       setView={setView}
       initialConfig={initialConfig}
       onBack={handleBack}
+      onSelectSubject={(selectedSub) => {
+        navigate(`/practice/${selectedSub.id}`);
+      }}
+      onBackToSubjects={() => {
+        appNavigateBack(navigate, { fallback: '/practice' });
+      }}
+      onStartSession={() => {
+        const subId = matchedSubject?.id || subjectId || 'general';
+        navigate(`/practice/${subId}?session=active`);
+      }}
     />
   );
 }

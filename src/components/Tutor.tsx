@@ -27,6 +27,8 @@ const formatAIResponse = (text: string) => {
   return formatted;
 };
 
+import { useNavigate } from 'react-router-dom';
+import { appNavigateBack } from '../utils/navigationHistory';
 import { ArrowLeft } from 'lucide-react';
 
 interface TutorProps {
@@ -34,6 +36,7 @@ interface TutorProps {
 }
 
 export default function Tutor({ setCurrentView }: TutorProps = {}) {
+  const navigate = useNavigate();
   const { user, getToken, userProfile, settings, oauthToken, signInWithGoogle } = useAuth();
   
   const [targetSubject] = useState(() => localStorage.getItem('zetadu_target_subject') || '');
@@ -595,18 +598,9 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
           {setCurrentView && (
             <button 
               onClick={() => {
-                if (window.history.length > 1) {
-                  window.history.back();
-                } else {
-                  const prev = localStorage.getItem('zetadu_previous_view');
-                  if (prev && prev !== 'tutor') {
-                    setCurrentView(prev as ViewType);
-                  } else {
-                    setCurrentView('home');
-                  }
-                }
+                appNavigateBack(navigate, { fallback: '/learn' });
               }}
-              className="flex items-center justify-center gap-1.5 px-3 md:px-4 py-2 min-h-[44px] min-w-[44px] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors font-bold text-[15px]"
+              className="flex items-center justify-center gap-1.5 px-3 md:px-4 py-2 min-h-[44px] min-w-[44px] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors font-bold text-[15px] cursor-pointer"
               title="Back"
               aria-label="Go back"
             >

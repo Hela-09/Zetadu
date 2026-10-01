@@ -1,5 +1,7 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ViewType } from '../types';
+import { appNavigateBack } from '../utils/navigationHistory';
 import {
   MessageSquare,
   BrainCircuit,
@@ -8,6 +10,7 @@ import {
   Clock,
   Sparkles,
   ArrowRight,
+  ArrowLeft,
   BookOpen,
   ChevronRight,
   Target,
@@ -21,6 +24,7 @@ interface LearnHubProps {
 }
 
 export default function LearnHub({ setView }: LearnHubProps) {
+  const navigate = useNavigate();
   const { userProfile } = useAuth();
 
   const learningFeatures = [
@@ -106,9 +110,20 @@ export default function LearnHub({ setView }: LearnHubProps) {
       {/* Top Banner / Hero */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 text-white p-6 sm:p-8 border border-slate-800 shadow-xl">
         <div className="relative z-10 max-w-2xl space-y-2.5">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-bold tracking-wide">
-            <Sparkles size={14} className="text-blue-400" />
-            <span>LEARNDEAN AI STUDY SUITE</span>
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => appNavigateBack(navigate, { fallback: '/home' })}
+              className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/90 transition-colors cursor-pointer border border-white/15"
+              title="Go back"
+              aria-label="Back"
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-bold tracking-wide">
+              <Sparkles size={14} className="text-blue-400" />
+              <span>LEARNDEAN AI STUDY SUITE</span>
+            </div>
           </div>
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight leading-tight">
             What would you like to learn today?

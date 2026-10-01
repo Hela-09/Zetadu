@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { appNavigateBack } from '../../utils/navigationHistory';
 import { 
   WifiOff, 
   Wifi, 
@@ -8,6 +10,7 @@ import {
   Clock, 
   CheckCircle2, 
   ArrowRight, 
+  ArrowLeft,
   Play, 
   RefreshCw, 
   Sparkles, 
@@ -69,6 +72,7 @@ export default function OfflineLearningHub({
   onRetryConnection,
   isOnlineActual = false
 }: OfflineLearningHubProps) {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [data, setData] = useState<OfflineHubData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -632,7 +636,16 @@ export default function OfflineLearningHub({
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500/10 via-amber-600/5 to-orange-500/10 dark:from-amber-950/40 dark:via-slate-900 dark:to-orange-950/40 border border-amber-300 dark:border-amber-800/80 p-5 sm:p-7 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-2">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => appNavigateBack(navigate, { fallback: '/learn' })}
+                className="p-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-900 dark:text-amber-200 transition-colors cursor-pointer border border-amber-500/30 shrink-0"
+                title="Go back"
+                aria-label="Back"
+              >
+                <ArrowLeft size={16} />
+              </button>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500 text-white shadow-xs">
                 <WifiOff className="w-3.5 h-3.5" />
                 Offline Mode Active
