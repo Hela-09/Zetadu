@@ -587,7 +587,66 @@ export default function Quiz({
         return;
       }
 
-      // If loaded questions is fewer than requested and online, attempt automated backfill replenishment
+      // JAMB Practice / CBT Session: ALWAYS retrieve authentic questions from question bank and start immediately
+      const isJambSession = initialConfig.examType === 'JAMB' || initialMode === 'jamb-practice' || initialMode === 'jamb-cbt';
+      if (isJambSession) {
+        if (isCancelled) return;
+
+        // If loaded questions from service is fewer than requested, backfill from stored question bank
+        if (loadedQ.length < reqCount) {
+          const fallbackQs = getUnifiedQuestionsForPractice({
+            subjects: initialConfig.subjects,
+            subject: initialConfig.subjectId || initialConfig.subject,
+            topic: initialConfig.topic,
+            year: initialConfig.year,
+            count: reqCount,
+            order: initialConfig.ordering || 'random'
+          });
+          const existingIds = new Set(loadedQ.map(q => q.id));
+          for (const fq of fallbackQs) {
+            if (loadedQ.length >= reqCount) break;
+            if (!existingIds.has(fq.id)) {
+              loadedQ.push(fq);
+              existingIds.add(fq.id);
+            }
+          }
+        }
+
+        const exactQuestions = (reqCount && loadedQ.length >= reqCount) 
+          ? loadedQ.slice(0, reqCount) 
+          : loadedQ;
+
+        if (exactQuestions.length === 0) {
+          console.warn("No questions found for JAMB practice configuration");
+          if (onBack) onBack();
+          else setSetupMode(true);
+          return;
+        }
+
+        setAmount(exactQuestions.length);
+        setQuestions(exactQuestions);
+        setPoolShortfallState(null);
+        activateSession();
+        setIsSubmitted(false);
+        setViewMode('practice');
+        setCurrentQIndex(0);
+        setAnswers({});
+        setMarkedForReview({});
+        setAwardedQuestionIndices(new Set());
+        const dur = initialConfig.timerDuration !== undefined ? initialConfig.timerDuration : Math.max(5, Math.round(exactQuestions.length * 1.5));
+        setTimerDuration(dur);
+        const untimed = initialConfig.isUntimed || dur === 0;
+        setIsUntimed(untimed);
+        setTimerRemaining(dur * 60);
+        setTimeUsedSeconds(0);
+        if (initialConfig.subject) setSubject(initialConfig.subject);
+        if (initialConfig.subjectId) setSubjectId(initialConfig.subjectId);
+        if (initialConfig.topic) setTopic(initialConfig.topic);
+        setHasRestored(true);
+        return;
+      }
+
+      // If loaded questions is fewer than requested and online (for non-JAMB generic modes)
       if (loadedQ.length < reqCount && typeof navigator !== 'undefined' && navigator.onLine) {
         try {
           const subjectsToReplenish = initialConfig.subjects && initialConfig.subjects.length > 0 

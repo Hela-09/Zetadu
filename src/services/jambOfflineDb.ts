@@ -1,4 +1,5 @@
 import { JambQuestion, JAMB_QUESTIONS, JAMB_SUBJECTS, getRealAvailableQuestionsForSubject } from '../data/jambQuestions';
+import { JAMB_SYLLABUS_DATA } from '../data/jambSyllabus';
 import { JambExamAttempt, BookmarkedJambQuestion } from './jambService';
 
 export interface DownloadedSubjectMeta {
@@ -961,70 +962,86 @@ class JambOfflineDatabase {
         const allCandidates = Array.from(candidateMap.values());
         totalPoolAvailable += allCandidates.length;
 
-        // Partition by requested filters (year and topic)
-        const filterMatching: JambQuestion[] = [];
-        const otherValid: JambQuestion[] = [];
+        // Partition by exact topic + year, topic only, year only, general
+        const normalizeTopic = (t?: string) => (t || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+        const hasTopic = topic && topic !== 'All Topics' && topic !== 'General';
+        const hasYear = year && year !== 'all';
+        const targetTopicNorm = normalizeTopic(topic);
+
+        const isTopicMatch = (q: JambQuestion) => {
+          if (!hasTopic) return true;
+          const qTopicNorm = normalizeTopic(q.topic);
+          if (qTopicNorm.includes(targetTopicNorm) || targetTopicNorm.includes(qTopicNorm)) return true;
+          const words = targetTopicNorm.split(/\s+/).filter(w => w.length > 3);
+          return words.some(w => qTopicNorm.includes(w));
+        };
+
+        const isYearMatch = (q: JambQuestion) => {
+          if (!hasYear) return true;
+          return q.year === year;
+        };
+
+        const topicAndYearUnanswered: JambQuestion[] = [];
+        const topicAndYearAnswered: JambQuestion[] = [];
+        const topicOnlyUnanswered: JambQuestion[] = [];
+        const topicOnlyAnswered: JambQuestion[] = [];
+        const yearOnlyUnanswered: JambQuestion[] = [];
+        const yearOnlyAnswered: JambQuestion[] = [];
+        const generalUnanswered: JambQuestion[] = [];
+        const generalAnswered: JambQuestion[] = [];
 
         for (const q of allCandidates) {
-          const matchYear = !year || year === 'all' || q.year === year;
-          const matchTopic = !topic || topic === 'All Topics' || topic === 'General' || 
-            (q.topic && q.topic.toLowerCase().includes(topic.toLowerCase()));
+          const mTopic = hasTopic && isTopicMatch(q);
+          const mYear = hasYear && isYearMatch(q);
+          const isAnswered = answeredIds.has(q.id) || answeredIds.has(normalizeQuestionText(q.question));
 
-          if (matchYear && matchTopic) {
-            filterMatching.push(q);
+          if (mTopic && mYear) {
+            if (isAnswered) topicAndYearAnswered.push(q);
+            else topicAndYearUnanswered.push(q);
+          } else if (mTopic) {
+            if (isAnswered) topicOnlyAnswered.push(q);
+            else topicOnlyUnanswered.push(q);
+          } else if (mYear) {
+            if (isAnswered) yearOnlyAnswered.push(q);
+            else yearOnlyUnanswered.push(q);
           } else {
-            otherValid.push(q);
+            if (isAnswered) generalAnswered.push(q);
+            else generalUnanswered.push(q);
           }
         }
 
-        // Sub-partition into unanswered and answered
-        const filterUnanswered: JambQuestion[] = [];
-        const filterAnswered: JambQuestion[] = [];
-        const otherUnanswered: JambQuestion[] = [];
-        const otherAnswered: JambQuestion[] = [];
-
-        for (const q of filterMatching) {
-          const sig = normalizeQuestionText(q.question);
-          if (answeredIds.has(q.id) || answeredIds.has(sig)) {
-            filterAnswered.push(q);
-          } else {
-            filterUnanswered.push(q);
-          }
-        }
-
-        for (const q of otherValid) {
-          const sig = normalizeQuestionText(q.question);
-          if (answeredIds.has(q.id) || answeredIds.has(sig)) {
-            otherAnswered.push(q);
-          } else {
-            otherUnanswered.push(q);
-          }
-        }
-
-        totalUnansweredCount += (filterUnanswered.length + otherUnanswered.length);
-
-        if (allCandidates.length < targetForSubject || (filterUnanswered.length + otherUnanswered.length) < Math.min(targetForSubject, 5)) {
-          anyPoolLow = true;
-        }
+        const totalUnansweredSubject = topicAndYearUnanswered.length + topicOnlyUnanswered.length + yearOnlyUnanswered.length + generalUnanswered.length;
+        totalUnansweredCount += totalUnansweredSubject;
 
         // Ordering function
         const sortFn = (a: JambQuestion, b: JambQuestion) => {
           if (order === 'random') return 0.5 - Math.random();
+          if (a.year !== b.year) return (b.year || 0) - (a.year || 0);
           return (a.questionNumber || 0) - (b.questionNumber || 0);
         };
 
-        filterUnanswered.sort(sortFn);
-        filterAnswered.sort(sortFn);
-        otherUnanswered.sort(sortFn);
-        otherAnswered.sort(sortFn);
+        [topicAndYearUnanswered, topicAndYearAnswered, topicOnlyUnanswered, topicOnlyAnswered, yearOnlyUnanswered, yearOnlyAnswered, generalUnanswered, generalAnswered].forEach(arr => arr.sort(sortFn));
 
         // Priority selection:
-        // 1. Filter-matching Unanswered
-        // 2. Filter-matching Answered
-        // 3. Backfill with Other Unanswered from same subject
-        // 4. Backfill with Other Answered from same subject
+        // 1. Topic & Year Unanswered
+        // 2. Topic & Year Answered
+        // 3. Topic Only Unanswered
+        // 4. Topic Only Answered
+        // 5. Year Only Unanswered
+        // 6. Year Only Answered
+        // 7. General Unanswered
+        // 8. General Answered
         const subSelected: JambQuestion[] = [];
-        const candidatePipelines = [filterUnanswered, filterAnswered, otherUnanswered, otherAnswered];
+        const candidatePipelines = [
+          topicAndYearUnanswered,
+          topicAndYearAnswered,
+          topicOnlyUnanswered,
+          topicOnlyAnswered,
+          yearOnlyUnanswered,
+          yearOnlyAnswered,
+          generalUnanswered,
+          generalAnswered
+        ];
 
         for (const pipeline of candidatePipelines) {
           if (subSelected.length >= targetForSubject) break;
@@ -1159,62 +1176,94 @@ class JambOfflineDatabase {
     const allCandidates = Array.from(candidateMap.values());
     const totalAvailable = allCandidates.length;
 
-    // Partition by filters (topic & year)
-    const filterMatching: JambQuestion[] = [];
-    const otherValid: JambQuestion[] = [];
+    // Partition by exact topic + year, topic only, year only, general
+    const normalizeTopic = (t?: string) => (t || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+    const hasTopic = topic && topic !== 'All Topics' && topic !== 'General';
+    const hasYear = year && year !== 'all';
+    const targetTopicNorm = normalizeTopic(topic);
+
+    const isTopicMatch = (q: JambQuestion) => {
+      if (!hasTopic) return true;
+      const qTopicNorm = normalizeTopic(q.topic);
+      if (qTopicNorm.includes(targetTopicNorm) || targetTopicNorm.includes(qTopicNorm)) return true;
+      const words = targetTopicNorm.split(/\s+/).filter(w => w.length > 3);
+      return words.some(w => qTopicNorm.includes(w));
+    };
+
+    const isYearMatch = (q: JambQuestion) => {
+      if (!hasYear) return true;
+      return String(q.year) === String(year);
+    };
+
+    const topicAndYearUnanswered: JambQuestion[] = [];
+    const topicAndYearAnswered: JambQuestion[] = [];
+    const topicOnlyUnanswered: JambQuestion[] = [];
+    const topicOnlyAnswered: JambQuestion[] = [];
+    const yearOnlyUnanswered: JambQuestion[] = [];
+    const yearOnlyAnswered: JambQuestion[] = [];
+    const generalUnanswered: JambQuestion[] = [];
+    const generalAnswered: JambQuestion[] = [];
 
     for (const q of allCandidates) {
-      const matchYear = !year || year === 'all' || q.year === year;
-      const matchTopic = !topic || topic === 'All Topics' || topic === 'General' || 
-        (q.topic && q.topic.toLowerCase().includes(topic.toLowerCase()));
+      const mTopic = hasTopic && isTopicMatch(q);
+      const mYear = hasYear && isYearMatch(q);
+      const isAnswered = answeredIds.has(q.id) || answeredIds.has(normalizeQuestionText(q.question));
 
-      if (matchYear && matchTopic) {
-        filterMatching.push(q);
+      if (mTopic && mYear) {
+        if (isAnswered) topicAndYearAnswered.push(q);
+        else topicAndYearUnanswered.push(q);
+      } else if (mTopic) {
+        if (isAnswered) topicOnlyAnswered.push(q);
+        else topicOnlyUnanswered.push(q);
+      } else if (mYear) {
+        if (isAnswered) yearOnlyAnswered.push(q);
+        else yearOnlyUnanswered.push(q);
       } else {
-        otherValid.push(q);
+        if (isAnswered) generalAnswered.push(q);
+        else generalUnanswered.push(q);
       }
     }
 
-    // Sub-partition into unanswered and answered
-    const filterUnanswered: JambQuestion[] = [];
-    const filterAnswered: JambQuestion[] = [];
-    const otherUnanswered: JambQuestion[] = [];
-    const otherAnswered: JambQuestion[] = [];
-
-    for (const q of filterMatching) {
-      const sig = normalizeQuestionText(q.question);
-      if (answeredIds.has(q.id) || answeredIds.has(sig)) {
-        filterAnswered.push(q);
-      } else {
-        filterUnanswered.push(q);
-      }
-    }
-
-    for (const q of otherValid) {
-      const sig = normalizeQuestionText(q.question);
-      if (answeredIds.has(q.id) || answeredIds.has(sig)) {
-        otherAnswered.push(q);
-      } else {
-        otherUnanswered.push(q);
-      }
-    }
-
-    const unansweredCount = filterUnanswered.length + otherUnanswered.length;
+    const unansweredCount = topicAndYearUnanswered.length + topicOnlyUnanswered.length + yearOnlyUnanswered.length + generalUnanswered.length;
 
     // Ordering function
     const sortFn = (a: JambQuestion, b: JambQuestion) => {
       if (order === 'random') return 0.5 - Math.random();
+      if (a.year !== b.year) return (b.year || 0) - (a.year || 0);
       return (a.questionNumber || 0) - (b.questionNumber || 0);
     };
 
-    filterUnanswered.sort(sortFn);
-    filterAnswered.sort(sortFn);
-    otherUnanswered.sort(sortFn);
-    otherAnswered.sort(sortFn);
+    [
+      topicAndYearUnanswered,
+      topicAndYearAnswered,
+      topicOnlyUnanswered,
+      topicOnlyAnswered,
+      yearOnlyUnanswered,
+      yearOnlyAnswered,
+      generalUnanswered,
+      generalAnswered
+    ].forEach(arr => arr.sort(sortFn));
 
-    // Priority selection: Unanswered matching -> Answered matching -> Other Unanswered -> Other Answered
+    // Priority selection:
+    // 1. Topic & Year Unanswered (Exact Match)
+    // 2. Topic & Year Answered (Exact Match)
+    // 3. Topic Only Unanswered
+    // 4. Topic Only Answered
+    // 5. Year Only Unanswered
+    // 6. Year Only Answered
+    // 7. General Unanswered
+    // 8. General Answered
     const selected: JambQuestion[] = [];
-    const candidatePipelines = [filterUnanswered, filterAnswered, otherUnanswered, otherAnswered];
+    const candidatePipelines = [
+      topicAndYearUnanswered,
+      topicAndYearAnswered,
+      topicOnlyUnanswered,
+      topicOnlyAnswered,
+      yearOnlyUnanswered,
+      yearOnlyAnswered,
+      generalUnanswered,
+      generalAnswered
+    ];
 
     for (const pipeline of candidatePipelines) {
       if (selected.length >= count) break;
@@ -1264,6 +1313,49 @@ class JambOfflineDatabase {
       order: 'random'
     });
     return res.questions;
+  }
+
+  /**
+   * Retrieves all available past years and topics for a downloaded subject in IndexedDB
+   */
+  async getDownloadedSubjectFilters(subjectId: string): Promise<{ years: number[]; topics: string[] }> {
+    const normSub = subjectId.toLowerCase().trim();
+    const db = await this.getDb();
+    const allDbQuestions: JambQuestion[] = await new Promise((resolve) => {
+      const tx = db.transaction('offline_questions', 'readonly');
+      const store = tx.objectStore('offline_questions');
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+
+    const years = new Set<number>();
+    const topics = new Set<string>();
+
+    allDbQuestions.forEach(q => {
+      const qSub = (q.subject || '').toLowerCase().trim();
+      const qName = (q.subjectName || '').toLowerCase().trim();
+      if (qSub === normSub || qName === normSub || qSub.includes(normSub) || normSub.includes(qSub)) {
+        if (q.year) years.add(q.year);
+        if (q.topic) topics.add(q.topic);
+      }
+    });
+
+    // Also include syllabus topics if available
+    const syllabus = JAMB_SYLLABUS_DATA[normSub];
+    if (syllabus?.topics) {
+      syllabus.topics.forEach(t => topics.add(t.name));
+    }
+
+    // Default standard years if empty
+    if (years.size === 0) {
+      [2024, 2023, 2022, 2021, 2020, 2019, 2018].forEach(y => years.add(y));
+    }
+
+    return {
+      years: Array.from(years).sort((a, b) => b - a),
+      topics: Array.from(topics).sort()
+    };
   }
 
   // -------------------------------------------------------------

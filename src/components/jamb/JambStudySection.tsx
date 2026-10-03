@@ -30,6 +30,7 @@ import { JAMB_SYLLABUS_DATA } from '../../data/jambSyllabus';
 import { NOVELS_COLLECTION } from '../../data/novels';
 import { BookmarkedJambQuestion } from '../../services/jambService';
 import { DownloadedSubjectMeta } from '../../services/jambOfflineDb';
+import JambNovelSection from './JambNovelSection';
 
 export type StudySubTab = 
   | 'subjects' 
@@ -644,156 +645,14 @@ export default function JambStudySection({
       {/* ------------------------------------------------------------- */}
       {/* 5. JAMB NOVEL SUB-VIEW */}
       {/* ------------------------------------------------------------- */}
-      {activeSubTab === 'jamb_novel' && currentNovel && (
-        <div className="space-y-6">
-          <div className="bg-gradient-to-r from-amber-900 via-slate-900 to-indigo-950 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row gap-6 items-start">
-            <div className="w-24 sm:w-32 aspect-[3/4] rounded-xl bg-slate-800 overflow-hidden shrink-0 shadow-lg border border-white/20">
-              <img
-                src={currentNovel.coverImage}
-                alt={currentNovel.title}
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-            <div className="flex-1 space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="px-3 py-1 rounded-full text-[11px] font-extrabold bg-amber-400 text-slate-950 uppercase tracking-wider">
-                  Current Official JAMB Prescribed Novel
-                </span>
-                <span className="text-xs text-amber-200">15-20 Questions in Use of English</span>
-              </div>
-              <h3 className="text-2xl sm:text-3xl font-black">{currentNovel.title}</h3>
-              <p className="text-sm text-slate-300">By {currentNovel.author} • {currentNovel.year}</p>
-              <p className="text-xs sm:text-sm text-slate-200 leading-relaxed max-w-3xl">
-                {currentNovel.description}
-              </p>
-
-              <div className="pt-2 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => onStartPractice({
-                    subject: 'English Language',
-                    topic: currentNovel.title,
-                    amount: 20,
-                    isUntimed: true,
-                    examType: 'JAMB'
-                  })}
-                  className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg transition-transform cursor-pointer hover:scale-[1.02]"
-                >
-                  <Sparkles size={16} />
-                  <span>Practice All Novel Questions ({currentNovel.practiceQuestions?.length || 20} Qs)</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Chapter Selector & Chapter Detail */}
-          {currentNovel.chapters && currentNovel.chapters.length > 0 && (
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-6">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
-                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Chapter Breakdown & Study Notes</h4>
-                <span className="text-xs text-slate-500">{currentNovel.chapters.length} Total Chapters</span>
-              </div>
-
-              {/* Chapter Pills */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
-                {currentNovel.chapters.map((ch, chIdx) => (
-                  <button
-                    key={ch.id}
-                    type="button"
-                    onClick={() => setSelectedNovelChapterIdx(chIdx)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                      selectedNovelChapterIdx === chIdx
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    Chapter {ch.chapterNumber}
-                  </button>
-                ))}
-              </div>
-
-              {/* Selected Chapter Details */}
-              {(() => {
-                const chapter = currentNovel.chapters[selectedNovelChapterIdx];
-                if (!chapter) return null;
-
-                return (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-extrabold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-                          Chapter {chapter.chapterNumber}
-                        </span>
-                        <h4 className="text-xl font-bold text-slate-900 dark:text-white">
-                          {chapter.title}
-                        </h4>
-                      </div>
-
-                      {chapter.questions && chapter.questions.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => onStartPractice({
-                            subject: 'English Language',
-                            topic: `${currentNovel.title} - Chapter ${chapter.chapterNumber}`,
-                            amount: chapter.questions?.length || 10,
-                            isUntimed: true,
-                            examType: 'JAMB'
-                          })}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                        >
-                          <BookOpen size={14} />
-                          <span>Practice Chapter Questions</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Summary */}
-                    <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                      <p className="font-bold text-slate-900 dark:text-white mb-1.5 uppercase text-xs tracking-wider">
-                        Chapter Summary:
-                      </p>
-                      <p>{chapter.summary}</p>
-                    </div>
-
-                    {/* Key Characters & Themes */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {chapter.importantCharacters && chapter.importantCharacters.length > 0 && (
-                        <div className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-2">
-                          <p className="font-bold text-xs uppercase tracking-wider text-slate-500">
-                            Key Characters in Chapter
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {chapter.importantCharacters.map((c, i) => (
-                              <span key={i} className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs font-semibold">
-                                {c.name} ({c.role})
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {chapter.themes && chapter.themes.length > 0 && (
-                        <div className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-2">
-                          <p className="font-bold text-xs uppercase tracking-wider text-slate-500">
-                            Themes Explored
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {chapter.themes.map((t, i) => (
-                              <span key={i} className="px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-xs font-semibold">
-                                {t}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-        </div>
+      {activeSubTab === 'jamb_novel' && (
+        <JambNovelSection
+          onStartPractice={onStartPractice}
+          bookmarksList={bookmarksList}
+          bookmarkedIds={bookmarkedIds}
+          onToggleBookmark={onToggleBookmark}
+          initialNovelId={currentNovel?.id}
+        />
       )}
 
       {/* ------------------------------------------------------------- */}

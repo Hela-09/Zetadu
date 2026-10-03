@@ -104,16 +104,28 @@ export function getPreviousPath(): string | null {
 export const SECTION_ROOTS: Record<string, string> = {
   home: '/home',
   learn: '/learn',
-  jamb: '/jamb',
   upload: '/upload-notes',
+  profile: '/profile',
 };
 
 /**
- * Determines which of the 4 root navbar sections a given URL path belongs to.
+ * Determines which of the 4 root navbar sections a given URL path belongs to:
+ * 1. Home (/home)
+ * 2. Learn (/learn, /practice, /jamb, /flashcards, etc.)
+ * 3. Upload (/upload-notes)
+ * 4. Profile (/profile, /settings)
  */
-export function getSectionForPath(path: string): 'home' | 'learn' | 'jamb' | 'upload' {
+export function getSectionForPath(path: string): 'home' | 'learn' | 'upload' | 'profile' {
   const clean = path.split('?')[0].replace(/\/+$/, '') || '/';
-  
+
+  if (clean.startsWith('/upload-notes') || clean.startsWith('/upload')) {
+    return 'upload';
+  }
+
+  if (clean.startsWith('/profile') || clean.startsWith('/settings')) {
+    return 'profile';
+  }
+
   if (
     clean === '/learn' ||
     clean.startsWith('/practice') ||
@@ -124,17 +136,11 @@ export function getSectionForPath(path: string): 'home' | 'learn' | 'jamb' | 'up
     clean.startsWith('/journey') ||
     clean.startsWith('/library') ||
     clean.startsWith('/subjects') ||
-    clean.startsWith('/weak-topics')
+    clean.startsWith('/novels') ||
+    clean.startsWith('/weak-topics') ||
+    clean.startsWith('/jamb')
   ) {
     return 'learn';
-  }
-
-  if (clean.startsWith('/jamb') || clean.startsWith('/novels')) {
-    return 'jamb';
-  }
-
-  if (clean.startsWith('/upload-notes') || clean.startsWith('/upload')) {
-    return 'upload';
   }
 
   return 'home';

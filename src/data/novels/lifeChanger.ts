@@ -124,6 +124,23 @@ export const LIFE_CHANGER_NOVEL: Novel = {
       wordCount: 1950,
       estimatedMinutes: 10,
       summary: 'Omar announces his admission to study Law at Ahmadu Bello University, prompting celebration among his sisters Teemah, Jamila, and Bint, and Ummi beginning her counseling narrative on university life.',
+      importantCharacters: [
+        { name: 'Omar', role: 'Firstborn Son & Freshman', description: 'Excited 18-year-old celebrating his admission to study Law at Ahmadu Bello University with a JAMB score of 230.' },
+        { name: 'Ummi', role: 'Mother & Narrator', description: 'Wise matriarch whose maternal counseling and cautionary tales guide Omar into adulthood.' },
+        { name: 'Teemah & Jamila', role: 'Omar’s Younger Sisters', description: 'Playfully tease Omar about leaving behind his household chores for campus life.' },
+        { name: 'Bint', role: 'Youngest Daughter', description: 'Precocious primary school girl who impresses the family with French vocabulary lessons.' }
+      ],
+      importantEvents: [
+        'Omar arrives home with his official JAMB admission letter into the Faculty of Law, scoring 230.',
+        'Joyous family celebration with sisters Teemah and Jamila.',
+        'Bint recounts her witty classroom encounter with her French teacher.',
+        'Ummi begins her overarching maternal counseling on how university is a defining life changer.'
+      ],
+      themes: [
+        'The Threshold of Youth: Transition from Parental Guidance to Independence',
+        'Family Unity, Warmth, and Intergenerational Wisdom',
+        'Humility as the True Beginning of Knowledge'
+      ],
       keyPoints: [
         'Omar arrives home with his official JAMB admission printout for Faculty of Law.',
         'Teemah and Jamila tease Omar about becoming a big man on campus.',
@@ -184,6 +201,23 @@ As the crickets began their nocturnal chorus outside, Ummi leaned back against t
       wordCount: 1850,
       estimatedMinutes: 9,
       summary: 'Ummi narrates the story of the ancestral community of Lafayette, the trusted village teacher Hakimi, and the deceitful caller whose false promises robbed the villagers.',
+      importantCharacters: [
+        { name: 'Hakimi', role: 'Village Head & Respected Teacher', description: 'Contented, honest community elder in Lafayette whose natural trust in people leaves him vulnerable to modern deceit.' },
+        { name: 'The Well-Dressed Stranger', role: 'Deceitful Swindler', description: 'Polished confidence trickster who arrives in an expensive car wearing a Western suit to defraud the village.' },
+        { name: 'Ummi', role: 'Narrator', description: 'Draws the critical connection between the Lafayette fraud and the predators lurking around modern universities.' }
+      ],
+      importantEvents: [
+        'A sophisticated stranger arrives in Lafayette claiming to represent a rural development agency.',
+        'The stranger promises village electrification in exchange for upfront cash deposits.',
+        'Hakimi pools communal funds and personal savings, handing the sum over in good faith.',
+        'The stranger absconds with the village money, never to be seen or heard from again.',
+        'Ummi uses the incident to warn Omar never to mistake outward polish for moral purity.'
+      ],
+      themes: [
+        'Deception Behind Polished Appearances & Fluent Rhetoric',
+        'Vulnerability of Traditional Trust in the Face of Modern Duplicity',
+        'The Necessity of Prudence and Verification'
+      ],
       keyPoints: [
         'Ummi describes the traditional communal harmony of Lafayette village.',
         'Hakimi, the village head and teacher, is approached by a persuasive stranger in a modern suit.',
@@ -249,6 +283,21 @@ He was never seen again. The promised electrification never materialized.
       wordCount: 1900,
       estimatedMinutes: 10,
       summary: 'Ummi recalls her own university matriculation years earlier, her meeting with the kind-hearted university official, and her early encounters with the dress code regulations.',
+      importantCharacters: [
+        { name: 'Ummi', role: 'Young Undergraduate', description: 'Arrives as a newly married freshman balancing university matriculation with personal maturity.' },
+        { name: 'Mr. Samuel Johnson', role: 'Elderly Registry Officer', description: 'Calm, observant administrative staff who guides Ummi through registration and commends her modest demeanor.' }
+      ],
+      importantEvents: [
+        'Ummi arrives at the university administrative registry for student clearance.',
+        'Overwhelmed by registration chaos, she encounters the patient assistance of Mr. Johnson.',
+        'Introduction of the university’s uncompromising dress code policy against indecent attire.',
+        'Ummi reflects on how rules safeguard personal dignity rather than curtail freedom.'
+      ],
+      themes: [
+        'The Sanctity of Human Dignity and Modesty in Higher Education',
+        'Rules and Institutional Regulations as Shields of Protection',
+        'Kindness and Professionalism in Public Service'
+      ],
       keyPoints: [
         'Ummi reflects on her youthful naivety when she first arrived on campus as a married student.',
         'Her encounter with Mr. Samuel Johnson (the quiet administrative staff).',
@@ -291,6 +340,22 @@ Omar listened attentively, absorbing the realization that rules on campus were n
       wordCount: 2100,
       estimatedMinutes: 11,
       summary: 'The narrative shifts to Salma, a glamorous fresher whose vanity, arrogance, and contempt for campus regulations set her on a collision course with reality.',
+      importantCharacters: [
+        { name: 'Salma', role: 'Proud & Vain Undergraduate', description: 'Arrogant freshman who prioritizes expensive outfits, fabricated social status, and disdain for university rules.' },
+        { name: 'Tomiwa', role: 'Roommate from Ibadan', description: 'Energetic, practical, and outspoken Yoruba girl who excels in her studies and values honesty.' },
+        { name: 'Ada & Ngozi', role: 'Igbo Roommates', description: 'Disciplined, hardworking students from Eastern Nigeria who show tolerance and sisterhood in the hostel.' }
+      ],
+      importantEvents: [
+        'Salma arrives at Queen Amina Hall with luxury luggage, making condescending remarks about hostel facilities.',
+        'Introduction of her diverse roommates: Tomiwa (Yoruba), Ada (Igbo), and Ngozi (Igbo).',
+        'Salma fabricates stories of immense family riches to project high social standing.',
+        'The three roommates maintain mutual harmony and academic focus despite Salma’s snobbery.'
+      ],
+      themes: [
+        'Inter-Ethnic Harmony and National Integration in Nigerian Universities',
+        'Vanity, False Pretense, and the Superficial Quest for Status',
+        'True Sisterhood vs Superficial Friendships'
+      ],
       keyPoints: [
         'Salma arrives at Queen Amina Hall with expensive baggage and an arrogant demeanor.',
         'Introduction of her three roommates: Tomiwa from Ibadan, Ada from Imo, and Ngozi from Enugu.',
@@ -349,6 +414,23 @@ Salma looked down on them as rustic village girls. Yet, the brittle veneer of he
       wordCount: 2200,
       estimatedMinutes: 11,
       summary: 'Salma’s dangerous encounter with wealthy political patrons Habib and Labaran, Tomiwa’s involvement, and the narrow escape from severe physical and moral jeopardy.',
+      importantCharacters: [
+        { name: 'Alhaji Habib', role: 'Influential Political Operative', description: 'Wealthy, opportunistic patron who uses luxury cars and money to entice female students for ulterior motives.' },
+        { name: 'Labaran', role: 'Habib’s Confidant & Driver', description: 'Cynical associate who arranges social rendezvous and shields Habib from accountability.' },
+        { name: 'Salma', role: 'Vulnerable Target', description: 'Fascinated by high-society glamour and oblivious to the moral trap.' },
+        { name: 'Tomiwa', role: 'Discerning Roommate', description: 'Recognizes the predatory threat immediately and insists on safety and moral boundaries.' }
+      ],
+      importantEvents: [
+        'A black Mercedes Benz stops by the university terminus; Habib and Labaran invite Salma for a ride.',
+        'Salma invites Tomiwa to join them, thinking it is an innocent luxury outing.',
+        'Habib shower them with lavish gifts while expecting future sexual favors.',
+        'Tomiwa sees through the manipulation and firmly pulls away, warning Salma of the deadly trap.'
+      ],
+      themes: [
+        'Predatory Sugar-Daddy Culture and Exploitation of Undergraduates',
+        'Materialism as an Engine of Moral Blindness',
+        'Prudence and Decisive Action in the Face of Danger'
+      ],
       keyPoints: [
         'Salma is approached near the campus gate by luxury car owners offering rides and gifts.',
         'Tomiwa is invited along under false pretenses.',
@@ -391,6 +473,21 @@ When Tomiwa realized the true nature of their hosts, she firmly extracted hersel
       wordCount: 2050,
       estimatedMinutes: 10,
       summary: 'The sub-plot involving Kabir, a smooth-talking campus operative who swindles funds meant for official university business, demonstrating the web of campus corruption.',
+      importantCharacters: [
+        { name: 'Kabir', role: 'Campus Swindler & Gambler', description: 'Smooth-talking conman posing as an administrative insider who defrauds desperate students.' },
+        { name: 'Defrauded Students', role: 'Victims of Shortcuts', description: 'Undergraduates seeking dishonest shortcuts who lose their school fee payments.' }
+      ],
+      importantEvents: [
+        'Kabir collects tuition funds and clearance fees from unsuspecting students.',
+        'Instead of remitting the funds, Kabir bets the entire sum at an underground gambling den.',
+        'Kabir loses every kobo on a single dice game and flees the university town.',
+        'Victimized students face cancelled course registrations and shattered academic careers.'
+      ],
+      themes: [
+        'The Peril of Seeking Shortcuts and Corrupt Intermediaries',
+        'Gambling, Greed, and Institutional Parasitism',
+        'Personal Diligence vs Dependency on Fraudulent Agents'
+      ],
       keyPoints: [
         'Kabir’s deceptive financial transactions and gambling habits.',
         'How unscrupulous individuals exploit student desperation on campus.',
@@ -433,6 +530,23 @@ Ummi paused her narration here, reminding Omar that in every community, predator
       wordCount: 2300,
       estimatedMinutes: 12,
       summary: 'The critical turning point: Salma sits for Moral Philosophy without studying, accepts an illicit cheat-sheet, and is apprehended red-handed by a vigilant invigilator.',
+      importantCharacters: [
+        { name: 'Salma', role: 'Unprepared Candidate', description: 'Panic-stricken student who abandons ethics to cheat in an examination on moral philosophy.' },
+        { name: 'The Invigilator', role: 'Incorruptible Hall Examiner', description: 'Vigilant, uncompromising supervisor who apprehends Salma and records the examination malpractice.' },
+        { name: 'The Male Accomplice', role: 'Cheating Student', description: 'Passes the contraband cheat-sheet across the aisle in a misguided attempt at collaboration.' }
+      ],
+      importantEvents: [
+        'Salma enters the Moral Philosophy examination hall completely unprepared after weeks of partying.',
+        'A male student passes an illicit cheat-sheet across the aisle onto her desk.',
+        'Salma conceals the paper under her answer script and begins copying answers.',
+        'The vigilant female invigilator catches her red-handed and confiscates the script and cheat-sheet.',
+        'Salma breaks down in tears as the official Examination Malpractice form is filled.'
+      ],
+      themes: [
+        'Dramatic Irony: Moral Failure in an Examination of Moral Philosophy',
+        'Academic Integrity and the Catastrophic Cost of Cheating',
+        'The Inevitability of Exposure When Built on Falsehood'
+      ],
       keyPoints: [
         'Salma neglects her studies due to weeks spent socializing with politicians.',
         'The Moral Philosophy paper: irony of cheating in a course on ethics and integrity.',
@@ -479,6 +593,22 @@ A vigilant female invigilator stood directly over her desk. She reached down, li
       wordCount: 2200,
       estimatedMinutes: 11,
       summary: 'Salma appears before the Examination Malpractice Committee (EMC) headed by Dr. Dogo, attempts to bribe officials through false intermediaries, and receives her final expulsion.',
+      importantCharacters: [
+        { name: 'Dr. Dogo', role: 'EMC Chairman', description: 'Firm, principled academic who upholds institutional integrity and rejects outside interference.' },
+        { name: 'Salma', role: 'Accused Student', description: 'Desperately seeks to use political connections to escape punishment, only to be abandoned.' },
+        { name: 'Habib', role: 'Fair-Weather Patron', description: 'Blocks Salma’s calls as soon as scandal threatens his political ambitions.' }
+      ],
+      importantEvents: [
+        'The Examination Malpractice Committee convenes to examine evidence against Salma.',
+        'Salma pleads ignorance but eyewitness accounts and forensic handwriting confirm her guilt.',
+        'Salma appeals to Habib to intervene; Habib blocks her calls to protect himself.',
+        'The University Senate ratifies her immediate expulsion from the institution.'
+      ],
+      themes: [
+        'Institutional Justice and Incorruptible Accountability',
+        'The Treachery and Emptiness of Opportunistic Relationships',
+        'The High Price of Compromising Academic Honor'
+      ],
       keyPoints: [
         'Salma faces the stern interrogation of the Examination Malpractice Committee.',
         'Dr. Dogo and committee members review the indisputable evidence.',
@@ -523,6 +653,23 @@ Stripped of her student status, Salma packed her belongings in shame, unable to 
       wordCount: 2400,
       estimatedMinutes: 12,
       summary: 'Salma returns home in tears, receives unconditional forgiveness from her mother, and learns that true beauty lies in humility and virtue. Ummi concludes her counseling, sending Omar into the world with wisdom.',
+      importantCharacters: [
+        { name: 'Salma', role: 'Penitent & Redeemed', description: 'Humbled by adversity, she renounces vanity and begins rebuilding her character with sincere humility.' },
+        { name: 'Salma’s Mother', role: 'Compassionate Anchor', description: 'Offers unconditional maternal forgiveness and guides her daughter toward spiritual renewal.' },
+        { name: 'Tomiwa, Ada & Ngozi', role: 'True Friends', description: 'Forgive Salma wholeheartedly, demonstrating enduring sisterhood and cultural brotherhood.' },
+        { name: 'Ummi & Omar', role: 'Mother & Son', description: 'Ummi delivers her concluding wisdom, and Omar steps forward into adulthood equipped with moral discernment.' }
+      ],
+      importantEvents: [
+        'Salma returns home broken and confesses her expulsion to her mother in tears.',
+        'Her mother offers unconditional forgiveness and spiritual counsel.',
+        'Salma sends letters of apology to Tomiwa, Ada, and Ngozi, who warmly welcome her back.',
+        'Ummi concludes her narrative with Omar, emphasizing that character is the true armor of life.'
+      ],
+      themes: [
+        'Redemption, Forgiveness, and Moral Rebirth After Failure',
+        'Maternal Grace as the Healing Balm for Youthful Transgressions',
+        'Integrity and Character as the Authentic Measures of Success'
+      ],
       keyPoints: [
         'Salma’s painful homecoming and confession to her mother.',
         'Her mother’s compassionate response, guiding her toward spiritual repentance and personal rebirth.',

@@ -10,6 +10,7 @@ import {
   NovelChapterQuestion
 } from '../types';
 import { NOVELS_COLLECTION } from '../data/novels';
+import { getStoredQuestionsForNovel } from '../data/jambNovelQuestionsBank';
 import {
   saveNovelForOffline,
   deleteOfflineNovel,
@@ -584,7 +585,30 @@ export async function getNovelPracticeQuestions(
     }
   }
 
-  // 3. Query centralized Firestore jambNovelQuestions if online
+  // 3. Stored high-yield question bank for this novel
+  const storedQuestions = getStoredQuestionsForNovel(novel.id);
+  storedQuestions.forEach((sq, sqIdx) => {
+    if (!seenIds.has(sq.id)) {
+      seenIds.add(sq.id);
+      collectedQuestions.push({
+        id: sq.id,
+        novelId: novel.id,
+        chapterIndex: (sq as any).chapterIndex ?? (sqIdx % Math.max(1, novel.chapters.length)),
+        chapterNumber: ((sq as any).chapterIndex ?? (sqIdx % Math.max(1, novel.chapters.length))) + 1,
+        chapterTitle: sq.topic || 'Novel Practice',
+        question: sq.question,
+        options: sq.options,
+        correctAnswer: sq.correctAnswer,
+        explanation: sq.explanation,
+        difficulty: ((sq as any).difficulty as any) || 'medium',
+        topic: sq.topic || 'Novel Comprehension',
+        year: sq.year ? `${sq.year} UTME` : 'Authentic JAMB UTME',
+        isAIgenerated: false
+      });
+    }
+  });
+
+  // 4. Query centralized Firestore jambNovelQuestions if online
   if (isOnline() && db) {
     try {
       const nqQuery = query(collection(db, 'jambNovelQuestions'), where('novelId', '==', novel.id), limit(50));

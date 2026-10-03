@@ -15,6 +15,10 @@ import { BIOLOGY_QUESTIONS_EXPANDED } from './jamb/biologyQuestionsExpanded';
 import { SOCIAL_SCIENCES_EXPANDED } from './jamb/socialSciencesQuestionsExpanded';
 import { APPLIED_VOCATIONAL_EXPANDED } from './jamb/appliedVocationalQuestionsExpanded';
 import { LARGE_JAMB_BANK } from './jamb/largeJambBank';
+import { MEGA_JAMB_BANK } from './jamb/megaJambBank';
+import { ARTS_VOCATIONAL_MEGA_BANK } from './jamb/artsVocationalMegaBank';
+import { ALL_SUBJECTS_COMPREHENSIVE_BANK } from './jamb/allSubjectsComprehensiveBank';
+import { JAMB_NOVEL_QUESTIONS_BANK } from './jambNovelQuestionsBank';
 
 export interface JambQuestion {
   id: string;
@@ -1086,7 +1090,11 @@ for (const q of [
   ...EXTENDED_JAMB_QUESTIONS,
   ...APPROVED_SUBJECTS_QUESTIONS,
   ...APPLIED_VOCATIONAL_EXPANDED,
-  ...LARGE_JAMB_BANK
+  ...LARGE_JAMB_BANK,
+  ...MEGA_JAMB_BANK,
+  ...ARTS_VOCATIONAL_MEGA_BANK,
+  ...ALL_SUBJECTS_COMPREHENSIVE_BANK,
+  ...JAMB_NOVEL_QUESTIONS_BANK
 ]) {
   if (q && q.id && !questionMap.has(q.id)) {
     questionMap.set(q.id, q);
@@ -1254,46 +1262,63 @@ export function getUnifiedQuestionsForPractice(options: PracticeQueryOptions) {
     }
   } else if (subject) {
     const normSubject = subject.toLowerCase().trim();
-    const allSubQuestions = JAMB_QUESTIONS.filter(q => 
-      q.subject.toLowerCase() === normSubject || 
-      q.subjectName.toLowerCase() === normSubject ||
-      q.id.toLowerCase().includes(normSubject)
-    );
+    let allSubQuestions = getRealAvailableQuestionsForSubject(normSubject);
+    if (allSubQuestions.length === 0) {
+      allSubQuestions = JAMB_QUESTIONS.filter(q => 
+        q.subject.toLowerCase() === normSubject || 
+        q.subjectName.toLowerCase() === normSubject ||
+        q.id.toLowerCase().includes(normSubject)
+      );
+    }
 
-    let topicAndYearMatches: JambQuestion[] = [];
-    let yearOnlyMatches: JambQuestion[] = [];
-    let topicOnlyMatches: JambQuestion[] = [];
-    let generalMatches: JambQuestion[] = [];
-
+    const normalizeTopic = (t?: string) => (t || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
     const hasTopic = topic && topic !== 'All Topics' && topic !== 'General';
     const hasYear = year && year !== 'all';
+    const targetTopicNorm = normalizeTopic(topic);
+
+    const isTopicMatch = (q: JambQuestion) => {
+      if (!hasTopic) return true;
+      const qTopicNorm = normalizeTopic(q.topic);
+      if (qTopicNorm.includes(targetTopicNorm) || targetTopicNorm.includes(qTopicNorm)) return true;
+      const words = targetTopicNorm.split(/\s+/).filter(w => w.length > 3);
+      return words.some(w => qTopicNorm.includes(w));
+    };
+
+    const isYearMatch = (q: JambQuestion) => {
+      if (!hasYear) return true;
+      return q.year === year;
+    };
+
+    let topicAndYearMatches: JambQuestion[] = [];
+    let topicOnlyMatches: JambQuestion[] = [];
+    let yearOnlyMatches: JambQuestion[] = [];
+    let generalMatches: JambQuestion[] = [];
 
     for (const q of allSubQuestions) {
-      const matchTopic = hasTopic && q.topic.toLowerCase().includes(topic!.toLowerCase());
-      const matchYear = hasYear && q.year === year;
+      const matchT = hasTopic && isTopicMatch(q);
+      const matchY = hasYear && isYearMatch(q);
 
-      if (matchTopic && matchYear) {
+      if (matchT && matchY) {
         topicAndYearMatches.push(q);
-      } else if (matchYear) {
-        yearOnlyMatches.push(q);
-      } else if (matchTopic) {
+      } else if (matchT) {
         topicOnlyMatches.push(q);
+      } else if (matchY) {
+        yearOnlyMatches.push(q);
       } else {
         generalMatches.push(q);
       }
     }
 
-    if (order === 'random') {
-      topicAndYearMatches.sort(() => 0.5 - Math.random());
-      yearOnlyMatches.sort(() => 0.5 - Math.random());
-      topicOnlyMatches.sort(() => 0.5 - Math.random());
-      generalMatches.sort(() => 0.5 - Math.random());
-    } else {
-      topicAndYearMatches.sort((a, b) => a.questionNumber - b.questionNumber);
-      yearOnlyMatches.sort((a, b) => a.questionNumber - b.questionNumber);
-      topicOnlyMatches.sort((a, b) => a.questionNumber - b.questionNumber);
-      generalMatches.sort((a, b) => a.questionNumber - b.questionNumber);
-    }
+    const sortFn = (a: JambQuestion, b: JambQuestion) => {
+      if (order === 'random') return 0.5 - Math.random();
+      if (a.year !== b.year) return (b.year || 0) - (a.year || 0);
+      return (a.questionNumber || 0) - (b.questionNumber || 0);
+    };
+
+    topicAndYearMatches.sort(sortFn);
+    topicOnlyMatches.sort(sortFn);
+    yearOnlyMatches.sort(sortFn);
+    generalMatches.sort(sortFn);
 
     const priorityPool = [
       ...topicAndYearMatches,

@@ -33,7 +33,10 @@ import {
   X,
   CheckSquare,
   HelpCircle,
-  Award
+  Award,
+  Sliders,
+  Shuffle,
+  ListOrdered
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
@@ -57,6 +60,7 @@ import { OFFICIAL_JAMB_SUBJECTS, JambSubject } from '../../data/jambSubjects';
 import { getRealAvailableQuestionsForSubject } from '../../data/jambQuestions';
 import { FlashcardDeck, Novel } from '../../types';
 import Quiz, { QuizProps, Question } from '../Quiz';
+import JambPracticeScreen from '../jamb/JambPracticeScreen';
 import NovelReader from '../novels/NovelReader';
 import { NOVELS_COLLECTION } from '../../data/novels';
 import PrepareForOfflineModal from './PrepareForOfflineModal';
@@ -104,6 +108,21 @@ export default function OfflineLearningHub({
   const [isMultiCbtModalOpen, setIsMultiCbtModalOpen] = useState<boolean>(false);
   const [selectedCbtSubjects, setSelectedCbtSubjects] = useState<string[]>(['english', 'mathematics', 'physics', 'chemistry']);
   const [cbtDurationMinutes, setCbtDurationMinutes] = useState<number>(120);
+
+  // Targeted offline practice modal state (subject/year/topic/count/mode)
+  const [offlinePracticeModal, setOfflinePracticeModal] = useState<{
+    isOpen: boolean;
+    subjectId: string;
+    subjectName: string;
+    years: number[];
+    topics: string[];
+    selectedYear: number | 'all';
+    selectedTopic: string;
+    count: number;
+    mode: 'practice' | 'cbt' | 'study';
+    ordering: 'random' | 'sequential';
+    timerMinutes: number;
+  } | null>(null);
 
   // Active tab inside hub
   const [activeHubTab, setActiveHubTab] = useState<'subjects' | 'history' | 'bookmarks' | 'novels' | 'flashcards'>('subjects');
@@ -293,6 +312,88 @@ export default function OfflineLearningHub({
       setToastMessage('Subject removed from offline cache.');
     } catch (err) {
       console.error('Remove subject failed:', err);
+    }
+  };
+
+  // Launch targeted offline JAMB practice with custom subject, year, topic, count & mode
+  const handleOpenOfflinePracticeModal = async (subjectId: string, subjectName: string) => {
+    try {
+      const filters = await jambOfflineDb.getDownloadedSubjectFilters(subjectId);
+      setOfflinePracticeModal({
+        isOpen: true,
+        subjectId,
+        subjectName,
+        years: filters.years,
+        topics: filters.topics,
+        selectedYear: 'all',
+        selectedTopic: 'All Topics',
+        count: 20,
+        mode: 'practice',
+        ordering: 'random',
+        timerMinutes: 20
+      });
+    } catch (e) {
+      handleLaunchPractice(subjectId, subjectName);
+    }
+  };
+
+  const handleStartCustomOfflinePractice = async () => {
+    if (!offlinePracticeModal) return;
+    const { subjectId, subjectName, selectedYear, selectedTopic, count, mode, ordering, timerMinutes } = offlinePracticeModal;
+
+    try {
+      const res = await jambOfflineDb.getOfflinePracticeQuestions({
+        subject: subjectId,
+        year: selectedYear !== 'all' ? selectedYear : undefined,
+        topic: selectedTopic !== 'All Topics' ? selectedTopic : undefined,
+        count: count,
+        order: ordering
+      });
+
+      const qList = res.questions || [];
+      if (qList.length === 0) {
+        setToastMessage(`No downloaded questions match your exact selection for ${subjectName}. Please download questions first.`);
+        return;
+      }
+
+      const formattedQuestions: Question[] = qList.map((q, idx) => ({
+        id: q.id,
+        question: q.passage ? `${q.passage}\n\n${q.question}` : q.question,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        correctAnswerIndex: q.correctAnswer,
+        explanation: q.explanation || 'Refer to official syllabus and curriculum guide.',
+        difficulty: 'medium',
+        sourceType: (q as any).sourceType || 'past_question',
+        isAIgenerated: false,
+        topic: q.topic || 'General',
+        subject: q.subjectName || subjectName,
+        subjectId: q.subject || subjectId,
+        year: q.year,
+        questionNumber: q.questionNumber || (idx + 1)
+      }));
+
+      const isUntimed = mode === 'study';
+      const dur = isUntimed ? 0 : (mode === 'cbt' ? 45 : timerMinutes);
+
+      setOfflinePracticeModal(null);
+      setActiveQuizMode(mode === 'cbt' ? 'jamb-cbt' : 'jamb-practice');
+      setActiveQuizConfig({
+        subject: subjectName,
+        subjectId: subjectId,
+        topic: selectedTopic !== 'All Topics' ? selectedTopic : undefined,
+        year: selectedYear !== 'all' ? selectedYear : 'all',
+        amount: formattedQuestions.length,
+        ordering: ordering,
+        isUntimed: isUntimed,
+        timerDuration: dur,
+        examType: 'JAMB',
+        isOfflineOnly: true,
+        questions: formattedQuestions
+      });
+    } catch (err) {
+      console.error('Error starting targeted offline practice:', err);
+      setToastMessage('Could not start offline practice. Please try again.');
     }
   };
 
@@ -563,7 +664,40 @@ export default function OfflineLearningHub({
     );
   }
 
-  // If a Quiz session is active (Practice, CBT, or Review), render the Quiz engine directly
+  // If a JAMB Practice session is active, render the dedicated JambPracticeScreen
+  if (activeQuizConfig && (activeQuizConfig.examType === 'JAMB' || activeQuizMode === 'jamb-practice' || activeQuizMode === 'jamb-cbt')) {
+    return (
+      <div className="w-full max-w-5xl mx-auto py-2">
+        <JambPracticeScreen
+          config={{
+            subject: activeQuizConfig.subject || 'General Practice',
+            subjectId: activeQuizConfig.subjectId,
+            topic: activeQuizConfig.topic,
+            year: activeQuizConfig.year,
+            amount: activeQuizConfig.amount,
+            ordering: activeQuizConfig.ordering,
+            isUntimed: activeQuizConfig.isUntimed,
+            timerDuration: activeQuizConfig.timerDuration,
+            practiceMode: activeQuizMode === 'jamb-cbt' ? 'cbt' : 'practice',
+            subjects: activeQuizConfig.subjects,
+            questions: activeQuizConfig.questions as any
+          }}
+          onExit={() => {
+            setActiveQuizConfig(null);
+            loadData();
+          }}
+          onRetake={(newConfig) => {
+            setActiveQuizConfig({
+              ...activeQuizConfig,
+              ...(newConfig as any)
+            });
+          }}
+        />
+      </div>
+    );
+  }
+
+  // If a generic Quiz session is active (Practice, CBT, or Review), render the Quiz engine directly
   if (activeQuizConfig) {
     return (
       <div className="w-full max-w-5xl mx-auto py-2">
@@ -933,11 +1067,11 @@ export default function OfflineLearningHub({
                       <>
                         <div className="flex items-center gap-1.5">
                           <button
-                            onClick={() => handleLaunchPractice(subj.id, subj.name)}
+                            onClick={() => handleOpenOfflinePracticeModal(subj.id, subj.name)}
                             className="px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer shadow-xs"
-                            title="Start untimed practice with instant feedback & answers"
+                            title="Configure offline practice by year, topic & count"
                           >
-                            <Play className="w-3 h-3 fill-current" />
+                            <Sliders className="w-3 h-3" />
                             Practice
                           </button>
 
@@ -947,7 +1081,7 @@ export default function OfflineLearningHub({
                             title="Start timed CBT simulation for this subject"
                           >
                             <Layers className="w-3 h-3" />
-                            CBT
+                            Quick CBT
                           </button>
                         </div>
 
@@ -1509,6 +1643,214 @@ export default function OfflineLearningHub({
               >
                 <Play className="w-4 h-4 fill-current" />
                 Start Offline JAMB CBT
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Target Offline Practice Configuration Modal */}
+      {offlinePracticeModal && offlinePracticeModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400">
+                  <Sliders size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                    Offline Practice Setup
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {offlinePracticeModal.subjectName} • 100% Offline (No Internet or AI)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOfflinePracticeModal(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              {/* Year Selector */}
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  1. Exam Year
+                </label>
+                <select
+                  value={offlinePracticeModal.selectedYear}
+                  onChange={e => setOfflinePracticeModal({
+                    ...offlinePracticeModal,
+                    selectedYear: e.target.value === 'all' ? 'all' : Number(e.target.value)
+                  })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold cursor-pointer"
+                >
+                  <option value="all">All Downloaded Years (Mixed)</option>
+                  {offlinePracticeModal.years.map(yr => (
+                    <option key={yr} value={yr}>JAMB {yr} Past Paper</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Topic Selector */}
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  2. Syllabus Topic
+                </label>
+                <select
+                  value={offlinePracticeModal.selectedTopic}
+                  onChange={e => setOfflinePracticeModal({
+                    ...offlinePracticeModal,
+                    selectedTopic: e.target.value
+                  })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white font-bold cursor-pointer"
+                >
+                  <option value="All Topics">All Downloaded Topics</option>
+                  {offlinePracticeModal.topics.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Practice Mode */}
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  3. Practice Mode
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOfflinePracticeModal({
+                      ...offlinePracticeModal,
+                      mode: 'practice'
+                    })}
+                    className={`p-2 rounded-xl border text-center font-bold transition-all cursor-pointer ${
+                      offlinePracticeModal.mode === 'practice'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    Timed Practice
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOfflinePracticeModal({
+                      ...offlinePracticeModal,
+                      mode: 'study'
+                    })}
+                    className={`p-2 rounded-xl border text-center font-bold transition-all cursor-pointer ${
+                      offlinePracticeModal.mode === 'study'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    Untimed Study
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOfflinePracticeModal({
+                      ...offlinePracticeModal,
+                      mode: 'cbt',
+                      count: 40
+                    })}
+                    className={`p-2 rounded-xl border text-center font-bold transition-all cursor-pointer ${
+                      offlinePracticeModal.mode === 'cbt'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    Full CBT (40 Qs)
+                  </button>
+                </div>
+              </div>
+
+              {/* Number of Questions */}
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  4. Question Count
+                </label>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {[5, 10, 20, 30, 40].map(cnt => (
+                    <button
+                      key={cnt}
+                      type="button"
+                      onClick={() => setOfflinePracticeModal({
+                        ...offlinePracticeModal,
+                        count: cnt
+                      })}
+                      className={`py-2 rounded-xl font-bold border transition-colors cursor-pointer text-center ${
+                        offlinePracticeModal.count === cnt
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      {cnt} Qs
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Ordering */}
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  5. Question Order
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOfflinePracticeModal({
+                      ...offlinePracticeModal,
+                      ordering: 'random'
+                    })}
+                    className={`py-2 rounded-xl font-bold border flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                      offlinePracticeModal.ordering === 'random'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    <Shuffle size={13} />
+                    <span>Random</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOfflinePracticeModal({
+                      ...offlinePracticeModal,
+                      ordering: 'sequential'
+                    })}
+                    className={`py-2 rounded-xl font-bold border flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                      offlinePracticeModal.ordering === 'sequential'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    <ListOrdered size={13} />
+                    <span>Sequential</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Launch Button */}
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setOfflinePracticeModal(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleStartCustomOfflinePractice}
+                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-2 transition-colors cursor-pointer shadow-md"
+              >
+                <Play className="w-4 h-4 fill-current" />
+                Start Offline Practice
               </button>
             </div>
           </div>

@@ -3,9 +3,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ViewType } from '../types';
 import {
   Home,
-  BrainCircuit,
-  GraduationCap,
+  BookOpen,
   FileUp,
+  User,
 } from 'lucide-react';
 import { navigateToRootSection, getSectionForPath } from '../utils/navigationHistory';
 
@@ -21,11 +21,11 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
   const currentSection = getSectionForPath(location.pathname);
 
   // STRICT REQUIREMENT:
-  // BOTTOM NAVIGATION — ONLY 4 ROOT DESTINATIONS:
-  // 1. Home   -> /home
-  // 2. Learn  -> /learn
-  // 3. JAMB   -> /jamb
-  // 4. Upload -> /upload-notes
+  // CLEAN 4-ITEM MOBILE BOTTOM NAVIGATION:
+  // 1. Home    -> /home
+  // 2. Learn   -> /learn
+  // 3. Upload  -> /upload-notes
+  // 4. Profile -> /profile
   const navItems = [
     {
       id: 'home',
@@ -38,28 +38,26 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
     {
       id: 'learn',
       label: 'Learn',
-      icon: BrainCircuit,
+      icon: BookOpen,
       rootPath: '/learn',
-      // Active for all learning tools under Learn (AI Tutor, Practice, Flashcards, Study Journey, Library, Weak Topics)
       isActive: currentSection === 'learn',
       isUpload: false,
     },
     {
-      id: 'jamb',
-      label: 'JAMB',
-      icon: GraduationCap,
-      rootPath: '/jamb',
-      // Active for all JAMB and Literature/Novel preparation sections
-      isActive: currentSection === 'jamb',
-      isUpload: false,
-    },
-    {
-      id: 'upload_notes',
+      id: 'upload',
       label: 'Upload',
       icon: FileUp,
       rootPath: '/upload-notes',
       isActive: currentSection === 'upload',
       isUpload: true,
+    },
+    {
+      id: 'profile',
+      label: 'Profile',
+      icon: User,
+      rootPath: '/profile',
+      isActive: currentSection === 'profile',
+      isUpload: false,
     },
   ];
 
@@ -71,6 +69,8 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
     <nav
       id="mobile-bottom-nav"
       className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.3)] select-none"
+      role="navigation"
+      aria-label="Main mobile navigation"
     >
       <div className="grid grid-cols-4 w-full max-w-md mx-auto px-1 sm:px-2">
         {navItems.map((item) => {
@@ -84,12 +84,13 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
               onClick={() => handleNavClick(item)}
               className="flex flex-col items-center justify-center h-13 py-0.5 min-w-0 transition-colors group cursor-pointer relative"
               aria-label={item.label}
+              aria-current={isActive ? 'page' : undefined}
             >
               {/* Active Pill Indicator */}
               <div
                 className={`w-12 sm:w-14 h-7 rounded-full flex items-center justify-center transition-all duration-200 relative ${
                   isActive
-                    ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 scale-100'
+                    ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 scale-100 font-bold'
                     : item.isUpload
                     ? 'text-blue-600 dark:text-blue-400 group-hover:text-blue-700 bg-blue-50/80 dark:bg-blue-950/40'
                     : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200'
@@ -101,7 +102,7 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
                 {item.isUpload && !isActive && (
                   <span
                     className="absolute -top-1 -right-1 flex h-2 w-2"
-                    title="Upload study notes & textbooks"
+                    title="Upload study notes"
                   >
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
@@ -111,9 +112,9 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
 
               {/* Text Label */}
               <span
-                className={`text-[10px] sm:text-[10.5px] tracking-tight leading-tight mt-0.5 truncate max-w-full px-0.5 ${
+                className={`text-[10.5px] tracking-tight leading-tight mt-0.5 truncate max-w-full px-0.5 ${
                   isActive
-                    ? 'font-extrabold text-blue-700 dark:text-blue-400'
+                    ? 'font-black text-blue-700 dark:text-blue-300'
                     : item.isUpload
                     ? 'font-bold text-blue-600 dark:text-blue-400'
                     : 'font-medium text-slate-500 dark:text-slate-400'

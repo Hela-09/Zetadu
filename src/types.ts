@@ -244,7 +244,8 @@ export interface NovelStudyMaterial {
 export interface NovelChapterCharacter {
   name: string;
   role: string;
-  significance: string;
+  significance?: string;
+  description?: string;
   traits?: string[];
 }
 

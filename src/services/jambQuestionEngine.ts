@@ -13,7 +13,8 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { generateQuestionFingerprint, validateQuestionPayload } from '../utils/jambFingerprint';
-import { JAMB_QUESTIONS, JAMB_SUBJECTS, JambQuestion } from '../data/jambQuestions';
+import { JAMB_QUESTIONS, JAMB_SUBJECTS, JambQuestion, getRealAvailableQuestionsForSubject } from '../data/jambQuestions';
+import { JAMB_NOVEL_QUESTIONS_BANK, getStoredQuestionsForNovel } from '../data/jambNovelQuestionsBank';
 import { NOVELS_COLLECTION } from '../data/novels';
 import { JAMB_SYLLABUS_DATA } from '../data/jambSyllabus';
 import { jambOfflineDb } from './jambOfflineDb';
@@ -130,18 +131,69 @@ class JambQuestionEngine {
   /**
    * Converts static curated questions to canonical JambQuestionDoc with deterministic fingerprints.
    */
-  private getCuratedSubjectQuestions(subjectId?: string, topicId?: string): JambQuestionDoc[] {
+  private getCuratedSubjectQuestions(subjectId?: string, topicId?: string, year?: number | 'all' | string): JambQuestionDoc[] {
     const list: JambQuestionDoc[] = [];
-    const targetSub = subjectId?.toLowerCase();
+    const rawTarget = (subjectId || '').toLowerCase().trim();
+    const cleanRaw = rawTarget.replace(/_/g, ' ');
 
-    for (const raw of JAMB_QUESTIONS) {
-      if (targetSub && raw.subject.toLowerCase() !== targetSub) {
-        continue;
+    // Resolve target subject against canonical JAMB subjects
+    const matchedSubjectMeta = JAMB_SUBJECTS.find(s => 
+      s.id.toLowerCase() === rawTarget || 
+      s.id.toLowerCase() === cleanRaw ||
+      s.name.toLowerCase() === rawTarget || 
+      s.name.toLowerCase() === cleanRaw || 
+      s.code.toLowerCase() === rawTarget
+    );
+    const validSubjectIds = new Set<string>([rawTarget, cleanRaw]);
+    if (matchedSubjectMeta) {
+      validSubjectIds.add(matchedSubjectMeta.id.toLowerCase());
+      validSubjectIds.add(matchedSubjectMeta.name.toLowerCase());
+      validSubjectIds.add(matchedSubjectMeta.code.toLowerCase());
+    }
+
+    const normTopic = topicId && topicId !== 'all' && topicId !== 'All Topics' && topicId !== 'General'
+      ? topicId.toLowerCase().replace(/[^a-z0-9]/g, ' ').trim()
+      : null;
+
+    const sourceMap = new Map<string, JambQuestion>();
+    // 1. All in JAMB_QUESTIONS
+    JAMB_QUESTIONS.forEach(q => sourceMap.set(q.id, q));
+    // 2. All from real available questions resolver
+    if (matchedSubjectMeta) {
+      getRealAvailableQuestionsForSubject(matchedSubjectMeta.id).forEach(q => sourceMap.set(q.id, q));
+    }
+    if (rawTarget) {
+      getRealAvailableQuestionsForSubject(rawTarget).forEach(q => sourceMap.set(q.id, q));
+    }
+
+    for (const raw of sourceMap.values()) {
+      if (rawTarget) {
+        const rawSub = (raw.subject || '').toLowerCase().trim();
+        const rawSubName = (raw.subjectName || '').toLowerCase().trim();
+        const rawId = (raw.id || '').toLowerCase().trim();
+
+        let isSubMatch = false;
+        for (const v of validSubjectIds) {
+          if (rawSub === v || rawSubName === v || rawSub.includes(v) || v.includes(rawSub) || rawId.includes(v)) {
+            isSubMatch = true;
+            break;
+          }
+        }
+        if (!isSubMatch) continue;
       }
-      if (topicId && topicId !== 'all' && topicId !== 'All Topics') {
-        const normFilterTopic = topicId.toLowerCase();
-        const normQTopic = (raw.topic || '').toLowerCase();
-        if (!normQTopic.includes(normFilterTopic) && !normFilterTopic.includes(normQTopic)) {
+
+      if (year && year !== 'all') {
+        if (String(raw.year) !== String(year)) {
+          continue;
+        }
+      }
+
+      if (normTopic) {
+        const rawQTopic = (raw.topic || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+        const matchTopic = rawQTopic.includes(normTopic) || 
+          normTopic.includes(rawQTopic) ||
+          normTopic.split(/\s+/).some(w => w.length > 3 && rawQTopic.includes(w));
+        if (!matchTopic) {
           continue;
         }
       }
@@ -181,6 +233,7 @@ class JambQuestionEngine {
    */
   private getCuratedNovelQuestions(novelId?: string, chapterIndex?: number): JambNovelQuestionDoc[] {
     const list: JambNovelQuestionDoc[] = [];
+    const seenIds = new Set<string>();
 
     for (const novel of NOVELS_COLLECTION) {
       if (novelId && novel.id !== novelId) continue;
@@ -190,8 +243,10 @@ class JambQuestionEngine {
           return;
         }
 
-        const chapQuestions = chap.questions || [];
+        const chapQuestions: any[] = (chap.questions || []).concat((chap.practiceQuestions || []) as any);
         chapQuestions.forEach((q) => {
+          if (seenIds.has(q.id)) return;
+          seenIds.add(q.id);
           const fingerprint = generateQuestionFingerprint(q.question, q.options);
           list.push({
             questionId: q.id,
@@ -219,6 +274,8 @@ class JambQuestionEngine {
       // Also check novel general practice questions
       if (novel.practiceQuestions && (chapterIndex === undefined || chapterIndex === -1)) {
         novel.practiceQuestions.forEach((pq, pIdx) => {
+          if (seenIds.has(pq.id)) return;
+          seenIds.add(pq.id);
           const fingerprint = generateQuestionFingerprint(pq.question, pq.options);
           list.push({
             questionId: pq.id,
@@ -242,6 +299,52 @@ class JambQuestionEngine {
           });
         });
       }
+    }
+
+    // Also include stored high-yield questions from JAMB_NOVEL_QUESTIONS_BANK
+    const storedNovelQuestions = novelId ? getStoredQuestionsForNovel(novelId) : JAMB_NOVEL_QUESTIONS_BANK;
+    for (const sq of storedNovelQuestions) {
+      if (seenIds.has(sq.id)) continue;
+      seenIds.add(sq.id);
+
+      // Determine novel metadata from topic or novelId
+      const sqTopic = sq.topic || '';
+      let nId = novelId || 'the-lekki-headmaster';
+      let nTitle = 'The Lekki Headmaster';
+      if (sqTopic.toLowerCase().includes('life changer') || (sq as any).novelId === 'the-life-changer') {
+        nId = 'the-life-changer';
+        nTitle = 'The Life Changer';
+      } else if (sqTopic.toLowerCase().includes('second class') || (sq as any).novelId === 'second-class-citizen') {
+        nId = 'second-class-citizen';
+        nTitle = 'Second Class Citizen';
+      } else if (sqTopic.toLowerCase().includes('lion and the jewel') || (sq as any).novelId === 'the-lion-and-the-jewel') {
+        nId = 'the-lion-and-the-jewel';
+        nTitle = 'The Lion and the Jewel';
+      }
+
+      if (novelId && nId !== novelId) continue;
+
+      const fingerprint = generateQuestionFingerprint(sq.question, sq.options);
+      list.push({
+        questionId: sq.id,
+        novelId: nId,
+        novelTitle: nTitle,
+        chapterId: `stored_${sq.id}`,
+        chapterIndex: (sq as any).chapterIndex ?? 0,
+        chapterTitle: sq.topic || nTitle,
+        question: sq.question,
+        options: sq.options,
+        correctAnswer: sq.correctAnswer,
+        explanation: sq.explanation || 'Refer to novel text and JAMB syllabus for details.',
+        difficulty: ((sq as any).difficulty as any) || 'medium',
+        sourceType: 'curriculum_derived',
+        isAIgenerated: false,
+        status: 'active',
+        fingerprint,
+        timesUsed: 0,
+        createdAt: 1704067200000,
+        updatedAt: 1704067200000
+      });
     }
 
     return list;
@@ -755,67 +858,117 @@ class JambQuestionEngine {
         subjectId: currentSubjectId
       });
 
-      // 3. Fallback/combine with curated authentic questions
+      // 3. Curated authentic questions
       const curatedCandidates = isNovelMode
         ? this.getCuratedNovelQuestions(options.novelId, options.chapterIndex)
-        : this.getCuratedSubjectQuestions(currentSubjectId, options.topicId);
+        : this.getCuratedSubjectQuestions(currentSubjectId, options.topicId, options.year);
 
       const allCandidatesMap = new Map<string, JambQuestionDoc | JambNovelQuestionDoc>();
       for (const q of curatedCandidates) allCandidatesMap.set(q.questionId, q);
       for (const q of offlineCandidates) allCandidatesMap.set(q.questionId, q);
       for (const q of remoteCandidates) allCandidatesMap.set(q.questionId, q);
 
+      // If exact match candidate pool is smaller than needed, backfill with full subject bank
+      if (!isNovelMode && allCandidatesMap.size < neededForSubject) {
+        const fullSubjectBank = this.getCuratedSubjectQuestions(currentSubjectId, undefined, undefined);
+        for (const q of fullSubjectBank) {
+          if (!allCandidatesMap.has(q.questionId)) {
+            allCandidatesMap.set(q.questionId, q);
+          }
+        }
+      }
+
       const candidateList = Array.from(allCandidatesMap.values());
 
-      // Filter by year if specified
-      const filteredByYear = options.year && options.year !== 'all'
-        ? candidateList.filter(q => String((q as JambQuestionDoc).year) === String(options.year))
-        : candidateList;
+      const hasYear = options.year && options.year !== 'all';
+      const hasTopic = Boolean(options.topicId && options.topicId !== 'all' && options.topicId !== 'All Topics' && options.topicId !== 'General');
+      const targetTopicNorm = (options.topicId || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
 
-      const filteredPool = filteredByYear.length > 0 ? filteredByYear : candidateList;
+      const isTopicMatch = (q: JambQuestionDoc | JambNovelQuestionDoc) => {
+        if (!hasTopic) return true;
+        const qTopic = ((q as any).topicName || (q as any).topic || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+        if (qTopic.includes(targetTopicNorm) || targetTopicNorm.includes(qTopic)) return true;
+        const words = targetTopicNorm.split(/\s+/).filter((w: string) => w.length > 3);
+        return words.some((w: string) => qTopic.includes(w));
+      };
 
-      // Filter out candidates already chosen in this session or with duplicate fingerprints
-      const availableUnique = filteredPool.filter(q => {
+      const isYearMatch = (q: JambQuestionDoc | JambNovelQuestionDoc) => {
+        if (!hasYear) return true;
+        return String((q as JambQuestionDoc).year) === String(options.year);
+      };
+
+      // Filter out duplicate fingerprints or already used in this session
+      const validCandidates = candidateList.filter(q => {
         if (!q.fingerprint) q.fingerprint = generateQuestionFingerprint(q.question, q.options);
         return !usedFingerprints.has(q.fingerprint);
       });
 
-      // 4. Partition by unseen vs seen: Prefer questions the user has never seen
-      const unseenQuestions = availableUnique.filter(q => !seenIds.has(q.questionId));
-      const seenQuestions = availableUnique.filter(q => seenIds.has(q.questionId));
+      // Strict prioritization:
+      // Tier 1: Matches BOTH requested Year AND requested Topic (exact match)
+      // Tier 2: Matches requested Year OR matches requested Topic (partial match)
+      // Tier 3: All other candidates from the subject
+      const tier1Candidates: (JambQuestionDoc | JambNovelQuestionDoc)[] = [];
+      const tier2Candidates: (JambQuestionDoc | JambNovelQuestionDoc)[] = [];
+      const tier3Candidates: (JambQuestionDoc | JambNovelQuestionDoc)[] = [];
+
+      for (const q of validCandidates) {
+        const mYear = isYearMatch(q);
+        const mTopic = isTopicMatch(q);
+
+        if (mYear && mTopic) {
+          tier1Candidates.push(q);
+        } else if (mYear || mTopic) {
+          tier2Candidates.push(q);
+        } else {
+          tier3Candidates.push(q);
+        }
+      }
+
+      const sortCandidateGroup = (list: (JambQuestionDoc | JambNovelQuestionDoc)[]) => {
+        if (options.ordering === 'random') {
+          return [...list].sort(() => 0.5 - Math.random());
+        }
+        return [...list].sort((a, b) => {
+          const numA = (a as any).questionNumber || 0;
+          const numB = (b as any).questionNumber || 0;
+          return numA - numB;
+        });
+      };
 
       let subjectSelected: (JambQuestionDoc | JambNovelQuestionDoc)[] = [];
 
-      // Add unseen questions first
-      if (options.ordering === 'random') {
-        unseenQuestions.sort(() => 0.5 - Math.random());
-      }
-      subjectSelected.push(...unseenQuestions.slice(0, neededForSubject));
+      // Process tiers in order: Tier 1 (exact) -> Tier 2 (partial) -> Tier 3 (subject fallback)
+      // Within each tier: prioritize unseen over seen!
+      for (const tier of [tier1Candidates, tier2Candidates, tier3Candidates]) {
+        if (subjectSelected.length >= neededForSubject) break;
 
-      // 5. Use all available seen questions from downloaded bank BEFORE any generation!
-      if (subjectSelected.length < neededForSubject && seenQuestions.length > 0) {
-        if (options.ordering === 'random') {
-          seenQuestions.sort(() => 0.5 - Math.random());
-        } else {
-          seenQuestions.sort((a, b) => a.timesUsed - b.timesUsed);
+        const unseen = sortCandidateGroup(tier.filter(q => !seenIds.has(q.questionId)));
+        const seen = sortCandidateGroup(tier.filter(q => seenIds.has(q.questionId)));
+
+        for (const q of unseen) {
+          if (subjectSelected.length >= neededForSubject) break;
+          if (!subjectSelected.some(sq => sq.questionId === q.questionId)) {
+            subjectSelected.push(q);
+          }
         }
-        const backfill = seenQuestions.slice(0, neededForSubject - subjectSelected.length);
-        subjectSelected.push(...backfill);
+
+        for (const q of seen) {
+          if (subjectSelected.length >= neededForSubject) break;
+          if (!subjectSelected.some(sq => sq.questionId === q.questionId)) {
+            subjectSelected.push(q);
+          }
+        }
       }
 
-      // 6. Only generate additional questions if bank is genuinely empty AND user is online
-      const remainingNeeded = neededForSubject - subjectSelected.length;
-      if (remainingNeeded > 0 && typeof navigator !== 'undefined' && navigator.onLine && !(options as any).isOfflineOnly) {
+      // Novel mode fallback only (NEVER generate AI for standard JAMB practice / CBT)
+      if (isNovelMode && subjectSelected.length < neededForSubject && typeof navigator !== 'undefined' && navigator.onLine && !(options as any).isOfflineOnly) {
         try {
+          const remainingNeeded = neededForSubject - subjectSelected.length;
           const existingFps = Array.from(usedFingerprints).concat(
-            availableUnique.map(q => q.fingerprint).filter(Boolean)
+            validCandidates.map(q => q.fingerprint).filter(Boolean)
           );
 
           const generated = await this.generateAndSaveOriginalQuestions({
-            subjectId: currentSubjectId,
-            subjectName: currentSubjectRaw,
-            topicId: options.topicId,
-            topicName: options.topicName,
             novelId: options.novelId,
             novelTitle: options.novelTitle,
             chapterId: options.chapterId,
@@ -834,7 +987,7 @@ class JambQuestionEngine {
             }
           }
         } catch (genErr) {
-          console.warn('AI question auto-replenishment attempt notification:', genErr);
+          console.warn('Novel question auto-replenishment attempt notification:', genErr);
         }
       }
 

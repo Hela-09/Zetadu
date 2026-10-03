@@ -1,23 +1,23 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ViewType } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
-import { navigateToRootSection } from '../utils/navigationHistory';
+import { navigateToRootSection, getSectionForPath } from '../utils/navigationHistory';
 import Logo from './Logo';
 import {
   Home,
-  Sparkles,
-  FileUp,
-  MessageSquare,
-  BrainCircuit,
-  GraduationCap,
-  Compass,
   BookOpen,
+  FileUp,
+  User,
+  GraduationCap,
+  Sliders,
+  BrainCircuit,
   Layers,
-  Clock,
   WifiOff,
   Search,
   Download,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -25,198 +25,347 @@ interface SidebarProps {
   setCurrentView: (view: ViewType) => void;
 }
 
+const COLLAPSED_STORAGE_KEY = 'learndean_sidebar_collapsed';
+
 export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isInstallable, triggerInstall } = usePWAInstall();
 
-  // Desktop sidebar navigation items:
-  // - Home
-  // - Learn
-  // - Upload Notes
-  // - AI Tutor
-  // - Practice
-  // - JAMB
-  // - Study Journey
-  // - Library
-  // - Flashcards
-  // - History
-  // - Offline Learning
-  const navItems = [
-    { id: 'home', label: 'Home', icon: Home, isUpload: false },
-    { id: 'learn', label: 'Learn', icon: Sparkles, isUpload: false },
-    { id: 'upload_notes', label: 'Upload Notes', icon: FileUp, isUpload: true },
-    { id: 'tutor', label: 'AI Tutor', icon: MessageSquare, isUpload: false },
-    { id: 'practice', label: 'Practice', icon: BrainCircuit, isUpload: false },
-    { id: 'jamb', label: 'JAMB', icon: GraduationCap, isUpload: false },
-    { id: 'journey', label: 'Study Journey', icon: Compass, isUpload: false },
-    { id: 'subjects', label: 'Library', icon: BookOpen, isUpload: false },
-    { id: 'flashcards', label: 'Flashcards', icon: Layers, isUpload: false },
-    { id: 'history', label: 'History', icon: Clock, isUpload: false },
-    { id: 'offline_learning', label: 'Offline Learning', icon: WifiOff, isUpload: false },
+  // Collapsed state: user preference stored in localStorage, defaulting to compact on tablet
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const saved = localStorage.getItem(COLLAPSED_STORAGE_KEY);
+    if (saved !== null) {
+      return saved === 'true';
+    }
+    // Auto-compact on tablet screens (768px - 1024px) to preserve workspace
+    return window.innerWidth >= 768 && window.innerWidth < 1024;
+  });
+
+  const toggleCollapse = () => {
+    setIsCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem(COLLAPSED_STORAGE_KEY, String(next));
+      } catch (_) {}
+      return next;
+    });
+  };
+
+  const currentSection = getSectionForPath(location.pathname);
+
+  // 1. Primary Navigation Destinations (Home, Learn, Upload, Profile)
+  const primaryNavItems = [
+    {
+      id: 'home',
+      label: 'Home',
+      icon: Home,
+      rootPath: '/home',
+      isActive: currentSection === 'home',
+      isUpload: false,
+    },
+    {
+      id: 'learn',
+      label: 'Learn',
+      icon: BookOpen,
+      rootPath: '/learn',
+      isActive: currentSection === 'learn' && (location.pathname === '/learn' || location.pathname.startsWith('/study-journey')),
+      isUpload: false,
+    },
+    {
+      id: 'upload',
+      label: 'Upload Notes',
+      icon: FileUp,
+      rootPath: '/upload-notes',
+      isActive: currentSection === 'upload',
+      isUpload: true,
+    },
+    {
+      id: 'profile',
+      label: 'Profile',
+      icon: User,
+      rootPath: '/profile',
+      isActive: currentSection === 'profile',
+      isUpload: false,
+    },
   ];
 
-  const handleNavClick = (id: string) => {
-    if (id === 'home') {
-      navigateToRootSection(navigate, '/home');
-      return;
-    }
+  // 2. Secondary / Quick Study Destinations
+  const secondaryNavItems = [
+    {
+      id: 'jamb',
+      label: 'JAMB Prep',
+      icon: GraduationCap,
+      rootPath: '/jamb',
+      badge: 'UTME',
+      isActive: location.pathname.startsWith('/jamb'),
+    },
+    {
+      id: 'practice',
+      label: 'Practice',
+      icon: Sliders,
+      rootPath: '/practice',
+      isActive: location.pathname.startsWith('/practice'),
+    },
+    {
+      id: 'tutor',
+      label: 'AI Tutor',
+      icon: BrainCircuit,
+      rootPath: '/ai-tutor',
+      badge: 'AI',
+      isActive: location.pathname.startsWith('/ai-tutor') || location.pathname.startsWith('/tutor'),
+    },
+    {
+      id: 'library',
+      label: 'Library',
+      icon: BookOpen,
+      rootPath: '/subjects',
+      isActive: location.pathname.startsWith('/subjects') || location.pathname.startsWith('/library'),
+    },
+    {
+      id: 'flashcards',
+      label: 'Flashcards',
+      icon: Layers,
+      rootPath: '/flashcards',
+      isActive: location.pathname.startsWith('/flashcards'),
+    },
+    {
+      id: 'offline',
+      label: 'Offline Mode',
+      icon: WifiOff,
+      rootPath: null,
+      isActive: false,
+    },
+  ];
 
-    if (id === 'learn') {
-      navigateToRootSection(navigate, '/learn');
-      return;
-    }
-
-    if (id === 'jamb') {
-      navigateToRootSection(navigate, '/jamb');
-      return;
-    }
-
-    if (id === 'upload_notes') {
-      navigateToRootSection(navigate, '/upload-notes');
-      return;
-    }
-
-    if (id === 'history') {
-      try {
-        localStorage.setItem('zetadu_profile_section', 'practice_history');
-        window.dispatchEvent(new CustomEvent('open-profile-section', { detail: { section: 'practice_history' } }));
-      } catch (e) {
-        console.warn('History navigation trigger:', e);
-      }
-      setCurrentView('profile');
-      return;
-    }
-
-    if (id === 'offline_learning') {
+  const handleNavClick = (rootPath: string | null) => {
+    if (!rootPath) {
+      // Offline mode trigger
       try {
         sessionStorage.setItem('open_offline_hub', 'true');
         window.dispatchEvent(new CustomEvent('open-offline-hub'));
       } catch (e) {
         console.warn('Offline hub trigger:', e);
       }
-      setCurrentView('home');
+      navigateToRootSection(navigate, '/home');
       return;
     }
 
-    setCurrentView(id as ViewType);
+    navigateToRootSection(navigate, rootPath);
   };
 
   return (
-    <aside className="w-64 h-full bg-slate-900 text-white flex flex-col shrink-0 border-r border-slate-800 select-none">
-      {/* Brand Header */}
-      <div 
-        onClick={() => navigateToRootSection(navigate, '/home')}
-        className="p-5 pb-4 flex items-center space-x-3 shrink-0 cursor-pointer group"
-      >
-        <Logo variant="icon" className="w-9 h-9 shrink-0 group-hover:scale-105 transition-transform" />
-        <div>
-          <div className="flex items-center gap-1.5">
-            <h2 className="text-lg font-bold text-white leading-tight">LearnDean</h2>
-            <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-blue-600 text-white leading-tight">
-              PRO
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 leading-tight">Smart Prep System</p>
-        </div>
-      </div>
-
-      {/* Global Search Bar Trigger */}
-      <div className="px-4 pb-2 shrink-0">
-        <button
-          id="sidebar-search-btn"
-          onClick={() => {
-            const event = new CustomEvent('open-zetadu-search');
-            window.dispatchEvent(event);
-          }}
-          className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 text-slate-400 hover:text-slate-200 text-xs transition-all cursor-pointer group"
-          title="Search LearnDean (⌘K)"
+    <aside
+      className={`h-full bg-slate-900 text-white flex flex-col shrink-0 border-r border-slate-800 select-none transition-all duration-200 ${
+        isCollapsed ? 'w-20' : 'w-64'
+      }`}
+      role="navigation"
+      aria-label="Desktop and tablet navigation"
+    >
+      {/* Brand Header & Collapse Toggle */}
+      <div className="p-3.5 pb-2.5 flex items-center justify-between shrink-0 border-b border-slate-800/80">
+        <div
+          onClick={() => handleNavClick('/home')}
+          className={`flex items-center space-x-2.5 cursor-pointer group min-w-0 ${
+            isCollapsed ? 'justify-center w-full' : ''
+          }`}
+          title="LearnDean Home"
         >
-          <div className="flex items-center gap-2">
-            <Search size={15} className="group-hover:text-blue-400 transition-colors" />
-            <span className="font-medium">Search...</span>
-          </div>
-          <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-slate-900 text-slate-400 rounded border border-slate-700">
-            ⌘K
-          </kbd>
-        </button>
+          <Logo variant="icon" className="w-9 h-9 shrink-0 group-hover:scale-105 transition-transform" />
+          {!isCollapsed && (
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-base font-bold text-white leading-tight truncate">LearnDean</h2>
+                <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-blue-600 text-white leading-tight">
+                  PRO
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-tight truncate">Smart Prep System</p>
+            </div>
+          )}
+        </div>
+
+        {/* Collapse / Expand Toggle Button */}
+        {!isCollapsed && (
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar to maximize workspace"
+          >
+            <PanelLeftClose size={17} />
+          </button>
+        )}
       </div>
 
-      {/* Navigation Links */}
-      <nav className="flex-1 px-3 py-1 space-y-1 overflow-y-auto overscroll-contain">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive =
-            currentView === item.id ||
-            (item.id === 'subjects' && (currentView === 'subjects' || currentView === 'novels'));
+      {/* Global Search Bar (Expanded Only) or Search Icon Button (Collapsed) */}
+      <div className="px-3 py-2 shrink-0">
+        {isCollapsed ? (
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('open-zetadu-search'))}
+            className="w-full h-10 flex items-center justify-center rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 text-slate-400 hover:text-white transition cursor-pointer"
+            aria-label="Search LearnDean"
+            title="Search LearnDean (⌘K)"
+          >
+            <Search size={17} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            id="sidebar-search-btn"
+            onClick={() => window.dispatchEvent(new CustomEvent('open-zetadu-search'))}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 text-slate-400 hover:text-slate-200 text-xs transition-all cursor-pointer group"
+            title="Search LearnDean (⌘K)"
+          >
+            <div className="flex items-center gap-2">
+              <Search size={15} className="group-hover:text-blue-400 transition-colors" />
+              <span className="font-medium">Search...</span>
+            </div>
+            <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-slate-900 text-slate-400 rounded border border-slate-700">
+              ⌘K
+            </kbd>
+          </button>
+        )}
+      </div>
 
-          return (
-            <button
-              key={item.id}
-              id={`sidebar-nav-${item.id}-btn`}
-              onClick={() => handleNavClick(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all duration-150 text-left relative group cursor-pointer ${
-                isActive
-                  ? 'bg-blue-600 text-white font-semibold shadow-sm shadow-blue-900/50'
-                  : item.isUpload
-                  ? 'text-blue-400 hover:bg-slate-800/90 font-medium'
-                  : 'text-slate-300 hover:bg-slate-800/80 hover:text-white font-medium'
-              }`}
-            >
-              <div className="flex items-center space-x-3 truncate">
-                <Icon
-                  size={19}
-                  className={`shrink-0 transition-transform ${
-                    isActive
-                      ? 'text-white'
-                      : item.isUpload
-                      ? 'text-blue-400 group-hover:scale-110'
-                      : 'text-slate-400 group-hover:text-slate-200'
-                  }`}
-                />
-                <span className="text-sm truncate">{item.label}</span>
-              </div>
+      {/* Navigation Links Scroll Container */}
+      <nav className="flex-1 px-2.5 py-1 space-y-4 overflow-y-auto overscroll-contain">
+        {/* 1. Main Navigation Group */}
+        <div className="space-y-1">
+          {!isCollapsed && (
+            <p className="px-2 text-[10px] font-black uppercase tracking-wider text-slate-500">
+              Main
+            </p>
+          )}
+          {primaryNavItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = item.isActive;
 
-              {/* Upload Notes prominent badge */}
-              {item.isUpload && !isActive && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0">
-                  Upload
-                </span>
-              )}
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={item.id}
+                id={`sidebar-nav-${item.id}-btn`}
+                onClick={() => handleNavClick(item.rootPath)}
+                className={`w-full flex items-center rounded-xl transition-all duration-150 relative group cursor-pointer ${
+                  isCollapsed
+                    ? 'justify-center h-11 px-0'
+                    : 'justify-between px-3 py-2.5'
+                } ${
+                  isActive
+                    ? 'bg-blue-600 text-white font-bold shadow-sm shadow-blue-900/50'
+                    : item.isUpload
+                    ? 'text-blue-400 hover:bg-slate-800/90 font-medium'
+                    : 'text-slate-300 hover:bg-slate-800/80 hover:text-white font-medium'
+                }`}
+                title={item.label}
+                aria-label={item.label}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                <div className={`flex items-center space-x-3 truncate ${isCollapsed ? 'justify-center' : ''}`}>
+                  <Icon
+                    size={19}
+                    className={`shrink-0 transition-transform ${
+                      isActive
+                        ? 'text-white'
+                        : item.isUpload
+                        ? 'text-blue-400 group-hover:scale-110'
+                        : 'text-slate-400 group-hover:text-slate-200'
+                    }`}
+                  />
+                  {!isCollapsed && <span className="text-sm truncate">{item.label}</span>}
+                </div>
+
+                {!isCollapsed && item.isUpload && !isActive && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0">
+                    Upload
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 2. Quick Study Tools Group */}
+        <div className="space-y-1 pt-2 border-t border-slate-800/70">
+          {!isCollapsed && (
+            <p className="px-2 text-[10px] font-black uppercase tracking-wider text-slate-500">
+              Study Tools
+            </p>
+          )}
+          {secondaryNavItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = item.isActive;
+
+            return (
+              <button
+                key={item.id}
+                id={`sidebar-nav-${item.id}-btn`}
+                onClick={() => handleNavClick(item.rootPath)}
+                className={`w-full flex items-center rounded-xl transition-all duration-150 relative group cursor-pointer ${
+                  isCollapsed
+                    ? 'justify-center h-10 px-0'
+                    : 'justify-between px-3 py-2'
+                } ${
+                  isActive
+                    ? 'bg-blue-600/90 text-white font-bold'
+                    : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200 font-medium'
+                }`}
+                title={item.label}
+                aria-label={item.label}
+              >
+                <div className={`flex items-center space-x-3 truncate ${isCollapsed ? 'justify-center' : ''}`}>
+                  <Icon
+                    size={17}
+                    className={`shrink-0 ${
+                      isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'
+                    }`}
+                  />
+                  {!isCollapsed && <span className="text-xs truncate">{item.label}</span>}
+                </div>
+
+                {!isCollapsed && item.badge && !isActive && (
+                  <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 shrink-0">
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </nav>
 
-      {/* Footer & Study Goal */}
-      <div className="p-3 shrink-0 border-t border-slate-800/80">
+      {/* Footer & Expand Toggle for Collapsed View */}
+      <div className="p-2.5 shrink-0 border-t border-slate-800/80 space-y-2">
         {isInstallable && (
           <button
+            type="button"
             onClick={triggerInstall}
-            className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-semibold py-2 px-3 rounded-xl transition-all shadow-md mb-3 text-xs cursor-pointer"
+            className={`w-full flex items-center justify-center bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-semibold rounded-xl transition-all shadow-md text-xs cursor-pointer ${
+              isCollapsed ? 'p-2.5' : 'py-2 px-3 space-x-2'
+            }`}
+            title="Install LearnDean App"
+            aria-label="Install App"
           >
             <Download size={16} />
-            <span>Install App</span>
+            {!isCollapsed && <span>Install App</span>}
           </button>
         )}
 
-        <div className="bg-slate-800/90 p-3 rounded-xl border border-slate-700/50">
-          <div className="flex items-center justify-between mb-1.5">
-            <h3 className="text-xs font-semibold text-white">Daily Target</h3>
-            <span className="text-[10px] text-blue-400 font-bold">2/3 Done</span>
-          </div>
-          <p className="text-[11px] text-slate-400 mb-2.5 leading-snug">
-            Upload study notes or drill 5 CBT questions to keep your streak.
-          </p>
-          <div className="h-1.5 w-full bg-slate-950 rounded-full mb-2.5 overflow-hidden">
-            <div className="h-full w-2/3 bg-blue-500 rounded-full"></div>
-          </div>
+        {/* Collapsed Mode Expand Button */}
+        {isCollapsed && (
           <button
-            onClick={() => setCurrentView('practice')}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition-colors cursor-pointer text-center"
+            type="button"
+            onClick={toggleCollapse}
+            className="w-full h-10 flex items-center justify-center rounded-xl bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+            aria-label="Expand sidebar"
+            title="Expand sidebar"
           >
-            Continue Practice
+            <PanelLeftOpen size={18} />
           </button>
-        </div>
+        )}
       </div>
     </aside>
   );

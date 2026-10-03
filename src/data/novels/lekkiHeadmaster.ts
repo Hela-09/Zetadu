@@ -169,6 +169,23 @@ export const LEKKI_HEADMASTER_NOVEL: Novel = {
       wordCount: 1980,
       estimatedMinutes: 10,
       summary: 'Introduction of Mr. Bepo, the morning assembly routine at Stardom Schools, the contrast between Lekki luxury and mainland teacher commutes, and the foundational address on punctuality and character.',
+      importantCharacters: [
+        { name: 'Mr. Bepo', role: 'Headmaster of Stardom Schools', description: 'Deeply principled and austere leader who inspects the assembly and preaches punctuality as the covenant of destiny.' },
+        { name: 'Femi Adeleke', role: 'Late-coming Senior Student', description: 'Fourteen-year-old son of Chief Adeleke who arrives late with an unauthorized gadget.' },
+        { name: 'Mr. Ojo & Miss Sandra', role: 'Mainland Teaching Staff', description: 'Dedicated instructors enduring early morning commutes from distant mainland suburbs.' }
+      ],
+      importantEvents: [
+        'Assembly commences promptly at 7:15 AM in Stardom Schools courtyard off Admiralty Way, Lekki.',
+        'Contrast established between luxury student cars and teachers traveling from Iyana-Ipaja and Berger.',
+        'Mr. Bepo delivers keynote address on punctuality as the first covenant of personal destiny.',
+        'Femi Adeleke arrives late with a domestic escort carrying an unauthorized designer backpack.',
+        'Mr. Bepo confiscates the unauthorized gadget and enters the infraction in the official disciplinary ledger.'
+      ],
+      themes: [
+        'Punctuality and Personal Discipline as Foundation of Character',
+        'Socioeconomic Contrast: Lekki Opulence vs Mainland Teacher Sacrifices',
+        'Impartial Application of Institutional Rules Regardless of Family Wealth'
+      ],
       keyPoints: [
         'Mr. Bepo inspects the Stardom Schools assembly courtyard off Admiralty Way, Lekki Phase 1.',
         'Presents the contrast between students arriving in luxury SUVs and dedicated teachers traveling hours on mainland buses.',
@@ -272,6 +289,22 @@ During assembly inspection, Mr. Bepo noticed fourteen-year-old Femi Adeleke arri
       wordCount: 2150,
       estimatedMinutes: 11,
       summary: 'Mrs. Savage summons Mr. Bepo to her plush executive office to discuss complaints from influential parents regarding his strict disciplinary regime and pending end-of-term fee balances.',
+      importantCharacters: [
+        { name: 'Mrs. Savage', role: 'School Proprietress', description: 'Astute, image-conscious owner of Stardom Schools caught between profitability and academic standards.' },
+        { name: 'Mr. Bepo', role: 'Headmaster', description: 'Firmly rejects commercial appeasement, insisting that schools mold character rather than auction certificates.' },
+        { name: 'Chief Adeleke (off-screen)', role: 'Influential Patron', description: 'Billionaire patron calling angrily to protest the disciplinary action against his son.' }
+      ],
+      importantEvents: [
+        'Mrs. Savage summons Mr. Bepo to her executive office following complaints from influential parents.',
+        'Mrs. Savage argues that private schooling is a commercial enterprise requiring customer appeasement.',
+        'Mr. Bepo refutes commercialization, asserting that trading moral authority turns schools into auction halls.',
+        'Discussions over the upcoming promotional examination and refusal to inflate continuous assessment scores.'
+      ],
+      themes: [
+        'Commercial Expediency vs Educational & Moral Integrity',
+        'Parental Entitlement and Pressure on School Administrations',
+        'The Sanctity of Authentic Academic Assessment'
+      ],
       keyPoints: [
         'Mrs. Savage questions Mr. Bepo’s confiscation of high-end phones from wealthy students.',
         'Explores the economic survival of Stardom Schools vs educational integrity.',
@@ -377,6 +410,22 @@ Before their meeting concluded, an urgent knock broke the silence. The examinati
       wordCount: 1850,
       estimatedMinutes: 9,
       summary: 'Mr. Bepo returns home to his modest residence on the mainland where he discusses the administrative storm with his wife, Funke. The chapter illuminates the dignity of simple living and marital harmony.',
+      importantCharacters: [
+        { name: 'Mr. Bepo', role: 'Protagonist & Husband', description: 'Exhausted after long commute from Lekki across the toll corridor to Surulere, seeking moral clarity.' },
+        { name: 'Mrs. Funke Bepo', role: 'Wife & Confidante', description: 'Loving, emotionally grounding wife who provides reflective counsel and unwavering moral support.' }
+      ],
+      importantEvents: [
+        'Mr. Bepo endures the grueling evening commute across the Lekki-Ikoyi toll corridor back to Surulere.',
+        'Warm domestic reunion over dinner in the modest, content Bepo household.',
+        'Mr. Bepo confides in Funke regarding Mrs. Savage’s pressure and Chief Adeleke’s threats.',
+        'Funke delivers her iconic advice: "The storm will exhaust itself; the rock remains."',
+        'Mr. Bepo prepares the strict invigilation timetable for the promotional mock examinations.'
+      ],
+      themes: [
+        'Marital Harmony and the Value of Wise Spousal Counsel',
+        'Modest Contentment vs Ostentatious Superficiality',
+        'Spiritual Resilience in the Face of Institutional Injustice'
+      ],
       keyPoints: [
         'Mr. Bepo makes the exhausting evening journey back to the mainland across the Lekki-Ikoyi toll corridor.',
         'Domestic scene with Funke, showcasing warmth, frugality, and peace.',
@@ -484,6 +533,25 @@ Her words revitalized his spirit. Later that night, sitting at his small wooden 
       wordCount: 2280,
       estimatedMinutes: 12,
       summary: 'The major dramatic turning point of the novel: During the unified mock examinations, an illicit cheat-sheet ring funded by influential parents is uncovered in Stardom Schools hall.',
+      importantCharacters: [
+        { name: 'Mr. Ojo', role: 'Physics Master & Invigilator', description: 'Vigilant mainland teacher who intercepts the cheat-sheet thrown through the window.' },
+        { name: 'Femi Adeleke', role: 'Candidate under Examination', description: 'Caught with unauthorized answers and a smartwatch, arrogantly boasting of his father’s wealth.' },
+        { name: 'Mr. Bepo', role: 'Headmaster', description: 'Calmly confronts Femi, refusing to let bank balances substitute for physics examination scripts.' },
+        { name: 'Chief Adeleke', role: 'Elite Father', description: 'Storms the school grounds in an armored vehicle demanding instant dismissal of the charges.' }
+      ],
+      importantEvents: [
+        'Promotional physics examination commences in the grand hall under the banner "Integrity in Excellence".',
+        'A folded cheat-sheet is thrown through the open window toward Femi Adeleke’s desk.',
+        'Mr. Ojo catches Femi with the answers and a programmable smartwatch.',
+        'Femi erupts into entitled rage: "My father can buy this entire school ten times over!"',
+        'Mr. Bepo arrives, confiscates the materials, nullifies the paper, and orders Femi out of the hall.',
+        'Chief Adeleke arrives in an armored vehicle threatening retaliation against the school.'
+      ],
+      themes: [
+        'Examination Malpractice and Digital Subversion of Assessment',
+        'Youth Entitlement and the Delusion of Inherited Impunity',
+        'Courage of Junior Educators Standing for Institutional Honesty'
+      ],
       keyPoints: [
         'The tension in the examination hall during the physics and English papers.',
         'Vigilant teacher Mr. Ojo catches an external operative attempting to pass contraband materials to Femi Adeleke and another student.',
@@ -593,6 +661,24 @@ By noon, Chief Adeleke’s armored vehicle tore into the school parking lot, sen
       wordCount: 2400,
       estimatedMinutes: 13,
       summary: 'The emergency governing council meeting convened by Mrs. Savage to resolve Chief Adeleke’s demand for Mr. Bepo’s dismissal. The meeting becomes a battleground for educational principles.',
+      importantCharacters: [
+        { name: 'Chief Adeleke', role: 'Influential Patron & Father', description: 'Bellows threats across the boardroom table, demanding destruction of the malpractice dossier.' },
+        { name: 'Mr. Bepo', role: 'Headmaster', description: 'Courageously reframes the trial as a battle between truth and the tyranny of privilege.' },
+        { name: 'Mrs. Savage', role: 'Proprietress', description: 'Caught in severe dilemma between Chief Adeleke’s financial power and Mr. Bepo’s unbending facts.' },
+        { name: 'Alhaji Muritala', role: 'Founding Board Member & Elder', description: 'Respected elder who courageously breaks ranks with wealthy elites to back Mr. Bepo.' }
+      ],
+      importantEvents: [
+        'Emergency governing council meeting convened on the third floor amidst a coastal thunderstorm.',
+        'Chief Adeleke demands the destruction of the irregularity docket and Mr. Bepo’s immediate dismissal.',
+        'Mrs. Savage attempts to find a diplomatic compromise to appease the billionaire.',
+        'Mr. Bepo tables authenticated forensic evidence, warning that favoring wealth betrays honest students.',
+        'Alhaji Muritala speaks up, commanding Chief Adeleke to sit down and thank Mr. Bepo for saving his son.'
+      ],
+      themes: [
+        'Truth vs The Tyranny of Privilege in Contemporary Governance',
+        'Moral Courage Inspiring Collective Awakening',
+        'Elder Wisdom and Ethical Leadership Transcending Class Solidarity'
+      ],
       keyPoints: [
         'Chief Adeleke demands the destruction of the malpractice dossier and Mr. Bepo’s resignation.',
         'Mrs. Savage is tempted to negotiate a quiet settlement.',
@@ -700,6 +786,25 @@ A profound silence descended upon the room. The junior staff representative, Mr.
       wordCount: 2350,
       estimatedMinutes: 12,
       summary: 'The resolution of the novel: Stardom Schools achieves record-breaking authentic examination distinctions, Femi undergoes genuine moral reflection, and Mr. Bepo is celebrated for educational excellence.',
+      importantCharacters: [
+        { name: 'Mr. Bepo', role: 'Honored Headmaster', description: 'Awarded "The Soul of Stardom" plaque and given a thunderous standing ovation.' },
+        { name: 'Femi Adeleke', role: 'Reformed Student', description: 'Repeats his failed papers under strict supervision and earns legitimate distinctions with quiet humility.' },
+        { name: 'Mrs. Savage', role: 'Proprietress', description: 'Delivers a heartfelt tribute acknowledging that institutions are made noble by moral courage, not perimeter walls.' },
+        { name: 'Chief Adeleke', role: 'Humbled Patron', description: 'Applauds vigorously, having visited Mr. Bepo in Surulere to express gratitude for saving his son.' },
+        { name: 'Mrs. Funke Bepo', role: 'Wife', description: 'Watches with joyful tears as her husband’s principled endurance is publicly vindicated.' }
+      ],
+      importantEvents: [
+        'Official gazetting of WAEC results: Stardom Schools achieves record distinctions with zero withheld papers.',
+        'Femi Adeleke studies genuinely, retakes his exams under supervision, and passes with legitimate honor.',
+        'Annual Speech and Prize-Giving Day held in the newly renovated grand auditorium.',
+        'Mrs. Savage invites Mr. Bepo to the stage and leads a two-minute standing ovation.',
+        'Mr. Bepo delivers his famous closing address: "To teach is to plant a tree under whose shade you may never sit."'
+      ],
+      themes: [
+        'Vindication of Moral Character and Diligent Scholarship',
+        'Genuine Transformation through Loving Discipline',
+        'The True Purpose of Education as Generational Nation-Building'
+      ],
       keyPoints: [
         'The official release of the national examination results proving that authentic diligence triumphs.',
         'Chief Adeleke’s private visit of contrition to Mr. Bepo after witnessing his son’s genuine transformation.',

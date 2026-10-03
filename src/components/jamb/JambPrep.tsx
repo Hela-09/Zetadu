@@ -26,11 +26,12 @@ import { appNavigateBack } from '../../utils/navigationHistory';
 import { jambService, JambExamAttempt, BookmarkedJambQuestion } from '../../services/jambService';
 import { jambOfflineDb, DownloadedSubjectMeta, JambOfflinePackMeta } from '../../services/jambOfflineDb';
 import { useAuth } from '../../contexts/AuthContext';
-import Quiz, { QuizProps } from '../Quiz';
+import JambPracticeScreen, { JambPracticeConfig } from './JambPracticeScreen';
 import PrepareForOfflineModal from '../offline/PrepareForOfflineModal';
 import JambStudySection, { StudySubTab } from './JambStudySection';
 import JambPracticeSection from './JambPracticeSection';
 import JambCbtSection from './JambCbtSection';
+import JambNovelSection from './JambNovelSection';
 import { MyJambSubjectsSection } from './MyJambSubjectsSection';
 import { AllJambSubjectsSection } from './AllJambSubjectsSection';
 import { JambCourseCombinationSection } from './JambCourseCombinationSection';
@@ -47,7 +48,8 @@ export type MainTab =
   | 'course-combination' 
   | 'study' 
   | 'practice' 
-  | 'cbt';
+  | 'cbt'
+  | 'novel';
 
 export default function JambPrep({ onBack, setView, initialTab }: JambPrepProps) {
   const { user } = useAuth();
@@ -55,18 +57,25 @@ export default function JambPrep({ onBack, setView, initialTab }: JambPrepProps)
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Top-level Navigation: MY SUBJECTS | ALL SUBJECTS | COURSE COMBO | STUDY | PRACTICE | JAMB CBT
+  // Top-level Navigation: MY SUBJECTS | ALL SUBJECTS | COURSE COMBO | STUDY | PRACTICE | JAMB CBT | NOVEL
   const [mainTab, setMainTab] = useState<MainTab>(() => {
     if (initialTab) return initialTab;
-    if (tab && ['my-subjects', 'all-subjects', 'course-combination', 'study', 'practice', 'cbt'].includes(tab)) {
-      return tab as MainTab;
+    if (tab) {
+      if (tab === 'novel' || tab === 'novels') return 'novel';
+      if (['my-subjects', 'all-subjects', 'course-combination', 'study', 'practice', 'cbt', 'novel'].includes(tab)) {
+        return tab as MainTab;
+      }
     }
     return 'my-subjects';
   });
 
   useEffect(() => {
-    if (tab && ['my-subjects', 'all-subjects', 'course-combination', 'study', 'practice', 'cbt'].includes(tab)) {
-      setMainTab(tab as MainTab);
+    if (tab) {
+      if (tab === 'novel' || tab === 'novels') {
+        setMainTab('novel');
+      } else if (['my-subjects', 'all-subjects', 'course-combination', 'study', 'practice', 'cbt', 'novel'].includes(tab)) {
+        setMainTab(tab as MainTab);
+      }
     }
   }, [tab]);
 
@@ -79,9 +88,8 @@ export default function JambPrep({ onBack, setView, initialTab }: JambPrepProps)
   const [targetedStudySubTab, setTargetedStudySubTab] = useState<StudySubTab>('subjects');
   const [targetedCbtSubjects, setTargetedCbtSubjects] = useState<string[]>([]);
 
-  // Active Practice / Quiz Session State (delegated to unified Quiz engine)
-  const [activeQuizConfig, setActiveQuizConfig] = useState<QuizProps['initialConfig'] | null>(null);
-  const [activeQuizMode, setActiveQuizMode] = useState<QuizProps['initialMode']>('jamb-practice');
+  // Active JAMB Practice Screen State (completely independent of AI Practice)
+  const [activePracticeConfig, setActivePracticeConfig] = useState<JambPracticeConfig | null>(null);
 
   // History & Bookmarks State
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
@@ -303,8 +311,7 @@ export default function JambPrep({ onBack, setView, initialTab }: JambPrepProps)
 
   const handleResumeUnfinishedSession = () => {
     if (!activeSession) return;
-    setActiveQuizMode(activeSession.isJambCbt ? 'jamb-cbt' : 'jamb-practice');
-    setActiveQuizConfig({
+    setActivePracticeConfig({
       subject: activeSession.subject || 'JAMB Practice',
       subjectId: activeSession.subjectId,
       topic: activeSession.topic,
@@ -312,8 +319,8 @@ export default function JambPrep({ onBack, setView, initialTab }: JambPrepProps)
       amount: activeSession.questions?.length || 20,
       isUntimed: !!activeSession.isUntimed,
       timerDuration: activeSession.timerDuration || 20,
-      examType: 'JAMB',
-      resumeSession: activeSession
+      practiceMode: activeSession.isJambCbt ? 'cbt' : 'practice',
+      questions: activeSession.questions as any
     });
   };
 
@@ -341,9 +348,10 @@ export default function JambPrep({ onBack, setView, initialTab }: JambPrepProps)
     }
   };
 
-  // Launch handlers: directly configure the unified Quiz engine
+  // Launch handlers: directly configure the dedicated JambPracticeScreen
   const handleLaunchPractice = (config: {
     subject?: string;
+    subjectId?: string;
     topic?: string;
     year?: number | 'all';
     amount?: number;
@@ -351,17 +359,25 @@ export default function JambPrep({ onBack, setView, initialTab }: JambPrepProps)
     isUntimed?: boolean;
     timerDuration?: number;
     examType?: 'JAMB';
+    practiceMode?: 'practice' | 'cbt' | 'study';
   }) => {
-    setActiveQuizMode('jamb-practice');
-    setActiveQuizConfig({
-      subject: config.subject || 'English Language',
+    const matchedSubject = config.subjectId
+      ? JAMB_SUBJECTS.find(s => s.id === config.subjectId)
+      : JAMB_SUBJECTS.find(s => s.name.toLowerCase() === (config.subject || '').toLowerCase() || s.id.toLowerCase() === (config.subject || '').toLowerCase());
+
+    const resolvedSubjectId = matchedSubject ? matchedSubject.id : (config.subjectId || config.subject?.toLowerCase() || 'english');
+    const resolvedSubjectName = matchedSubject ? matchedSubject.name : (config.subject || 'English Language');
+
+    setActivePracticeConfig({
+      subject: resolvedSubjectName,
+      subjectId: resolvedSubjectId,
       topic: config.topic,
       year: config.year || 'all',
       amount: config.amount || 20,
       ordering: config.ordering || 'random',
       isUntimed: config.isUntimed ?? false,
-      timerDuration: config.timerDuration ?? 20,
-      examType: 'JAMB'
+      timerDuration: config.timerDuration ?? (config.isUntimed ? 0 : 20),
+      practiceMode: config.practiceMode || 'practice'
     });
   };
 
@@ -372,15 +388,14 @@ export default function JambPrep({ onBack, setView, initialTab }: JambPrepProps)
     isUntimed: boolean;
     examType: 'JAMB';
   }) => {
-    setActiveQuizMode('jamb-cbt');
-    setActiveQuizConfig({
+    setActivePracticeConfig({
       subject: 'JAMB UTME CBT Mock',
       subjects: config.subjects,
       amount: config.amount,
       timerDuration: config.timerDuration,
       isUntimed: config.isUntimed,
-      examType: 'JAMB',
-      ordering: 'sequential'
+      ordering: 'sequential',
+      practiceMode: 'cbt'
     });
   };
 
@@ -419,8 +434,7 @@ export default function JambPrep({ onBack, setView, initialTab }: JambPrepProps)
       }
     }
 
-    setActiveQuizMode('history-review');
-    setActiveQuizConfig({
+    setActivePracticeConfig({
       subject: attempt.subjectName || attempt.subject,
       subjectId: attempt.subject,
       year: attempt.year,
@@ -434,25 +448,25 @@ export default function JambPrep({ onBack, setView, initialTab }: JambPrepProps)
         timeUsedSeconds: attempt.timeSpentSeconds,
         subject: attempt.subject,
         subjectName: attempt.subjectName,
-        year: attempt.year,
-        isJambCbt: attempt.subject?.toLowerCase().includes('cbt') || attempt.subjectName?.toLowerCase().includes('cbt') || (questions.length > 40)
+        year: attempt.year
       }
     });
   };
 
   // -----------------------------------------------------------------
-  // ACTIVE QUIZ / CBT RUNNING: RENDER UNIFIED QUIZ ENGINE
+  // ACTIVE JAMB PRACTICE SCREEN: DEDICATED JAMB PRACTICE FLOW
   // -----------------------------------------------------------------
-  if (activeQuizConfig) {
+  if (activePracticeConfig) {
     return (
-      <Quiz
-        initialMode={activeQuizMode}
-        initialConfig={activeQuizConfig}
-        onBack={() => {
-          setActiveQuizConfig(null);
+      <JambPracticeScreen
+        config={activePracticeConfig}
+        onExit={() => {
+          setActivePracticeConfig(null);
           loadHistoryAndBookmarks();
         }}
-        setView={setView}
+        onRetake={(newConfig) => {
+          setActivePracticeConfig({ ...newConfig });
+        }}
       />
     );
   }
@@ -802,6 +816,20 @@ export default function JambPrep({ onBack, setView, initialTab }: JambPrepProps)
           <Sparkles size={16} className="text-amber-500" />
           <span>JAMB CBT</span>
         </button>
+
+        <button
+          id="jamb-main-tab-novel"
+          type="button"
+          onClick={() => handleTabChange('novel')}
+          className={`flex-1 min-w-[110px] py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+            mainTab === 'novel'
+              ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <BookOpen size={16} className="text-amber-500" />
+          <span>Novel</span>
+        </button>
       </div>
 
       {/* Primary Section Content */}
@@ -858,6 +886,15 @@ export default function JambPrep({ onBack, setView, initialTab }: JambPrepProps)
           onStartCbt={handleLaunchCbt}
           onNavigateToMySubjects={() => setMainTab('my-subjects')}
           onNavigateToCourseCombination={() => setMainTab('course-combination')}
+        />
+      )}
+
+      {mainTab === 'novel' && (
+        <JambNovelSection
+          onStartPractice={handleLaunchPractice}
+          bookmarksList={bookmarksList}
+          bookmarkedIds={bookmarkedIds}
+          onToggleBookmark={handleToggleBookmark}
         />
       )}
 

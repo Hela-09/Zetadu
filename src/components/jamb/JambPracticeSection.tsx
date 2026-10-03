@@ -18,6 +18,7 @@ interface JambPracticeSectionProps {
   initialSubjectId?: string;
   onStartPractice: (config: {
     subject: string;
+    subjectId?: string;
     topic?: string;
     year?: number | 'all';
     amount: number;
@@ -25,15 +26,16 @@ interface JambPracticeSectionProps {
     isUntimed: boolean;
     timerDuration: number;
     examType: 'JAMB';
+    practiceMode?: 'practice' | 'cbt' | 'study';
   }) => void;
 }
 
 export default function JambPracticeSection({ initialSubjectId, onStartPractice }: JambPracticeSectionProps) {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(initialSubjectId || 'mathematics');
   const [subjectCategory, setSubjectCategory] = useState<JambCategory>('All');
-  const [filterType, setFilterType] = useState<'all' | 'topic' | 'year'>('all');
   const [selectedTopic, setSelectedTopic] = useState<string>('All Topics');
   const [selectedYear, setSelectedYear] = useState<number | 'all'>('all');
+  const [practiceMode, setPracticeMode] = useState<'practice' | 'cbt' | 'study'>('practice');
 
   // Sync if initialSubjectId updates
   React.useEffect(() => {
@@ -54,18 +56,23 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
 
   const finalAmount = isCustomCount && Number(customQuestionCount) > 0 
     ? Math.min(100, Math.max(1, Number(customQuestionCount)))
-    : questionCount;
+    : (practiceMode === 'cbt' ? 40 : questionCount);
 
   const handleLaunch = () => {
+    const isUntimedMode = practiceMode === 'study' || isUntimed;
+    const dur = isUntimedMode ? 0 : (practiceMode === 'cbt' ? 45 : timerMinutes);
+
     onStartPractice({
       subject: currentSubjectMeta.name,
-      topic: filterType === 'topic' ? selectedTopic : undefined,
-      year: filterType === 'year' ? selectedYear : 'all',
+      subjectId: currentSubjectMeta.id,
+      topic: selectedTopic !== 'All Topics' ? selectedTopic : undefined,
+      year: selectedYear !== 'all' ? selectedYear : 'all',
       amount: finalAmount,
       ordering,
-      isUntimed,
-      timerDuration: isUntimed ? 0 : timerMinutes,
-      examType: 'JAMB'
+      isUntimed: isUntimedMode,
+      timerDuration: dur,
+      examType: 'JAMB',
+      practiceMode
     });
   };
 
@@ -81,7 +88,7 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
         </div>
         <h3 className="text-xl sm:text-2xl font-black">Customize Your Practice Session</h3>
         <p className="text-xs sm:text-sm text-blue-100 leading-relaxed">
-          Configure questions, timing, and topic focus. All sessions run through LearnDean's unified Practice Center engine with full answers and explanations.
+          Configure questions, timing, and topic focus. All questions are retrieved directly from the official JAMB question bank with full verified answers and syllabus derivations.
         </p>
       </div>
 
@@ -145,78 +152,118 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
           </div>
         </div>
 
-        {/* 2. Topic / Year Filter Scope */}
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
-            2. Scope Focus
-          </label>
-          <div className="grid grid-cols-3 gap-2 mb-3">
-            <button
-              type="button"
-              onClick={() => setFilterType('all')}
-              className={`py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer text-center ${
-                filterType === 'all'
-                  ? 'border-blue-600 bg-blue-600 text-white'
-                  : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-              }`}
+        {/* 2. Scope Focus: Year and Topic */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+              2. Past Paper Year
+            </label>
+            <select
+              value={selectedYear}
+              onChange={e => setSelectedYear(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold cursor-pointer"
             >
-              All Topics & Years
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterType('topic')}
-              className={`py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer text-center ${
-                filterType === 'topic'
-                  ? 'border-blue-600 bg-blue-600 text-white'
-                  : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-              }`}
-            >
-              By Topic
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterType('year')}
-              className={`py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer text-center ${
-                filterType === 'year'
-                  ? 'border-blue-600 bg-blue-600 text-white'
-                  : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-              }`}
-            >
-              By Exam Year
-            </button>
+              <option value="all">All Past Years (2018–2024 Mixed)</option>
+              {JAMB_YEARS.map(yr => (
+                <option key={yr} value={yr}>JAMB {yr} Past Paper</option>
+              ))}
+            </select>
           </div>
 
-          {filterType === 'topic' && (
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+              3. Syllabus Topic
+            </label>
             <select
               value={selectedTopic}
               onChange={e => setSelectedTopic(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold cursor-pointer"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold cursor-pointer"
             >
               <option value="All Topics">All Topics in {currentSubjectMeta.name}</option>
               {topicsList.map((t, idx) => (
                 <option key={t.id || idx} value={t.name}>{t.name}</option>
               ))}
             </select>
-          )}
-
-          {filterType === 'year' && (
-            <select
-              value={selectedYear}
-              onChange={e => setSelectedYear(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-bold cursor-pointer"
-            >
-              <option value="all">All Past Years (Mixed)</option>
-              {JAMB_YEARS.map(yr => (
-                <option key={yr} value={yr}>JAMB {yr} Past Paper</option>
-              ))}
-            </select>
-          )}
+          </div>
         </div>
 
-        {/* 3. Number of Questions */}
+        {/* 3. Practice Mode */}
         <div>
           <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
-            3. Number of Questions
+            4. Practice Mode
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setPracticeMode('practice');
+                setIsUntimed(false);
+              }}
+              className={`p-3 rounded-xl text-left border transition-all cursor-pointer ${
+                practiceMode === 'practice'
+                  ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100 ring-2 ring-blue-600/20'
+                  : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-bold text-xs">
+                <Clock size={14} className="text-blue-600 dark:text-blue-400" />
+                <span>Timed Practice</span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                Custom duration with standard CBT countdown
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setPracticeMode('study');
+                setIsUntimed(true);
+              }}
+              className={`p-3 rounded-xl text-left border transition-all cursor-pointer ${
+                practiceMode === 'study'
+                  ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100 ring-2 ring-blue-600/20'
+                  : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-bold text-xs">
+                <FileText size={14} className="text-emerald-600 dark:text-emerald-400" />
+                <span>Untimed Study</span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                Learn without time pressure with full derivations
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setPracticeMode('cbt');
+                setIsUntimed(false);
+                setQuestionCount(40);
+                setIsCustomCount(false);
+              }}
+              className={`p-3 rounded-xl text-left border transition-all cursor-pointer ${
+                practiceMode === 'cbt'
+                  ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100 ring-2 ring-blue-600/20'
+                  : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 font-bold text-xs">
+                <Sparkles size={14} className="text-amber-500" />
+                <span>Full UTME Mock</span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                Official 40-question, 45-minute timed exam mode
+              </p>
+            </button>
+          </div>
+        </div>
+
+        {/* 4. Number of Questions */}
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+            5. Number of Questions
           </label>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-1.5 sm:gap-2">
             {[5, 10, 20, 30, 40, 50].map(count => (
@@ -226,6 +273,7 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
                 onClick={() => {
                   setQuestionCount(count);
                   setIsCustomCount(false);
+                  if (practiceMode === 'cbt') setPracticeMode('practice');
                 }}
                 className={`py-2.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer text-center ${
                   !isCustomCount && questionCount === count
@@ -238,7 +286,10 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
             ))}
             <button
               type="button"
-              onClick={() => setIsCustomCount(true)}
+              onClick={() => {
+                setIsCustomCount(true);
+                if (practiceMode === 'cbt') setPracticeMode('practice');
+              }}
               className={`py-2.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer text-center ${
                 isCustomCount
                   ? 'border-blue-600 bg-blue-600 text-white shadow-xs'
@@ -265,12 +316,12 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
           )}
         </div>
 
-        {/* 4. Ordering & Timing */}
+        {/* 5. Ordering & Timing */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Question Ordering */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
-              4. Question Order
+              6. Question Order
             </label>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -300,44 +351,27 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
             </div>
           </div>
 
-          {/* Timing Mode */}
+          {/* Timing Mode (if not untimed study mode) */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
-              5. Timing
+              7. Session Duration
             </label>
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <button
-                type="button"
-                onClick={() => setIsUntimed(false)}
-                className={`py-2.5 px-3 rounded-xl text-xs font-bold border flex items-center justify-center gap-1.5 cursor-pointer ${
-                  !isUntimed
-                    ? 'border-blue-600 bg-blue-600 text-white'
-                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                }`}
-              >
-                <Clock size={14} />
-                <span>Timed</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsUntimed(true)}
-                className={`py-2.5 px-3 rounded-xl text-xs font-bold border flex items-center justify-center gap-1.5 cursor-pointer ${
-                  isUntimed
-                    ? 'border-blue-600 bg-blue-600 text-white'
-                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                }`}
-              >
-                <span>Untimed</span>
-              </button>
-            </div>
-
-            {!isUntimed && (
+            {practiceMode === 'study' ? (
+              <div className="py-2.5 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-500 font-medium">
+                Untimed (Take as much time as needed)
+              </div>
+            ) : practiceMode === 'cbt' ? (
+              <div className="py-2.5 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 font-bold flex items-center gap-1.5">
+                <Clock size={14} className="text-amber-500" />
+                <span>45 Minutes (Official UTME CBT Standard)</span>
+              </div>
+            ) : (
               <select
                 value={timerMinutes}
                 onChange={e => setTimerMinutes(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-900 dark:text-white cursor-pointer"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-900 dark:text-white cursor-pointer"
               >
-                <option value={10}>10 Minutes (Speed)</option>
+                <option value={10}>10 Minutes (Speed Drill)</option>
                 <option value={15}>15 Minutes</option>
                 <option value={20}>20 Minutes (Standard Drill)</option>
                 <option value={30}>30 Minutes</option>
@@ -359,7 +393,7 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
             onClick={handleLaunch}
             className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer hover:scale-[1.02]"
           >
-            <span>Start Practice in Practice Center</span>
+            <span>Start JAMB Practice</span>
             <ArrowRight size={18} />
           </button>
         </div>
