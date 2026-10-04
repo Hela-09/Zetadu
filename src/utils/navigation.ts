@@ -47,6 +47,7 @@ export const PATH_TO_VIEW: Record<string, ViewType> = {
   '/jamb': 'jamb',
   '/jamb-prep': 'jamb',
   '/jamb-cbt': 'jamb',
+  '/study': 'jamb',
   '/school-updates': 'home',
   '/school_updates': 'home',
 };

@@ -63,7 +63,7 @@ export function getContextualFallback(pathname: string): string {
 
   // Sub-routes with clear parent relationships
   if (clean.startsWith('/practice/')) return '/practice';
-  if (clean === '/practice') return '/learn';
+  if (clean === '/practice') return '/study';
 
   if (clean.startsWith('/subjects/')) return '/subjects';
   if (clean.startsWith('/library/')) return '/library';
@@ -72,8 +72,10 @@ export function getContextualFallback(pathname: string): string {
   if (clean.startsWith('/novels/')) return '/novels';
   if (clean === '/novels' || clean === '/learn/novels') return '/learn';
 
-  if (clean.startsWith('/jamb/')) return '/jamb';
-  if (clean === '/jamb' || clean === '/jamb-prep' || clean === '/jamb-cbt') return '/learn';
+  if (clean.startsWith('/study/')) return '/study';
+  if (clean.startsWith('/jamb/')) return '/study';
+  if (clean === '/jamb' || clean === '/jamb-prep' || clean === '/jamb-cbt') return '/study';
+  if (clean === '/study') return '/home';
 
   if (clean.startsWith('/profile/')) return '/profile';
   if (clean === '/settings') return '/profile';
@@ -104,18 +106,20 @@ export function getPreviousPath(): string | null {
 export const SECTION_ROOTS: Record<string, string> = {
   home: '/home',
   learn: '/learn',
+  study: '/study',
   upload: '/upload-notes',
   profile: '/profile',
 };
 
 /**
- * Determines which of the 4 root navbar sections a given URL path belongs to:
+ * Determines which of the 5 root navbar sections a given URL path belongs to:
  * 1. Home (/home)
- * 2. Learn (/learn, /practice, /jamb, /flashcards, etc.)
- * 3. Upload (/upload-notes)
- * 4. Profile (/profile, /settings)
+ * 2. Learn (/learn, /library, /subjects, /flashcards, etc.)
+ * 3. Study (/study, /jamb, /practice - Practice is inside Study)
+ * 4. Upload (/upload-notes)
+ * 5. Profile (/profile, /settings)
  */
-export function getSectionForPath(path: string): 'home' | 'learn' | 'upload' | 'profile' {
+export function getSectionForPath(path: string): 'home' | 'learn' | 'study' | 'upload' | 'profile' {
   const clean = path.split('?')[0].replace(/\/+$/, '') || '/';
 
   if (clean.startsWith('/upload-notes') || clean.startsWith('/upload')) {
@@ -126,9 +130,17 @@ export function getSectionForPath(path: string): 'home' | 'learn' | 'upload' | '
     return 'profile';
   }
 
+  // Study: includes /study, /jamb, and /practice ("Practice is NOT a navigation item. Keep Practice inside Study")
+  if (
+    clean.startsWith('/study') ||
+    clean.startsWith('/jamb') ||
+    clean.startsWith('/practice')
+  ) {
+    return 'study';
+  }
+
   if (
     clean === '/learn' ||
-    clean.startsWith('/practice') ||
     clean.startsWith('/ai-tutor') ||
     clean.startsWith('/tutor') ||
     clean.startsWith('/flashcards') ||
@@ -137,8 +149,7 @@ export function getSectionForPath(path: string): 'home' | 'learn' | 'upload' | '
     clean.startsWith('/library') ||
     clean.startsWith('/subjects') ||
     clean.startsWith('/novels') ||
-    clean.startsWith('/weak-topics') ||
-    clean.startsWith('/jamb')
+    clean.startsWith('/weak-topics')
   ) {
     return 'learn';
   }

@@ -40,6 +40,7 @@ function getEffectiveView(pathname: string): ViewType {
   if (pathname === '/learn') return 'learn';
   if (pathname === '/library' || pathname === '/subjects' || pathname.startsWith('/subjects/') || pathname.startsWith('/library/')) return 'subjects';
   if (pathname.startsWith('/novels') || pathname === '/learn/novels') return 'novels';
+  if (pathname.startsWith('/study')) return 'jamb';
   if (pathname.startsWith('/jamb')) return 'jamb';
   if (pathname.startsWith('/practice')) return 'practice';
   if (pathname.startsWith('/flashcards')) return 'flashcards';
@@ -328,6 +329,8 @@ export default function App() {
                     <Route path="/learn/novels" element={<Subjects setView={setCurrentView} initialSection="novels" />} />
                     <Route path="/practice" element={<Practice setView={setCurrentView} />} />
                     <Route path="/practice/:subjectId" element={<Practice setView={setCurrentView} />} />
+                    <Route path="/study" element={<JambPrep setView={setCurrentView} initialTab="study" />} />
+                    <Route path="/study/:tab" element={<JambPrep setView={setCurrentView} />} />
                     <Route path="/jamb" element={<JambPrep setView={setCurrentView} />} />
                     <Route path="/jamb/:tab" element={<JambPrep setView={setCurrentView} />} />
                     <Route path="/jamb-prep" element={<JambPrep setView={setCurrentView} />} />

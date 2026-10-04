@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ViewType } from '../types';
 import {
   Home,
   BookOpen,
-  FileUp,
+  GraduationCap,
+  Upload,
   User,
 } from 'lucide-react';
 import { navigateToRootSection, getSectionForPath } from '../utils/navigationHistory';
+import { useAuth } from '../contexts/AuthContext';
 
 interface BottomNavProps {
   currentView: ViewType;
@@ -17,15 +19,19 @@ interface BottomNavProps {
 export default function BottomNav({ currentView, setCurrentView }: BottomNavProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, userProfile } = useAuth();
+  const [avatarError, setAvatarError] = useState(false);
 
   const currentSection = getSectionForPath(location.pathname);
+  const avatarUrl = userProfile?.photoURL || user?.photoURL;
 
   // STRICT REQUIREMENT:
-  // CLEAN 4-ITEM MOBILE BOTTOM NAVIGATION:
-  // 1. Home    -> /home
-  // 2. Learn   -> /learn
-  // 3. Upload  -> /upload-notes
-  // 4. Profile -> /profile
+  // EXACTLY 5 MAIN NAVIGATION ITEMS:
+  // 1. 🏠 Home    — house icon + "Home"
+  // 2. 📚 Learn   — open book icon + "Learn"
+  // 3. 🎓 Study   — graduation cap/study icon + "Study"
+  // 4. 📤 Upload  — upload arrow icon + "Upload"
+  // 5. 👤 Profile — person icon (or profile picture) + "Profile"
   const navItems = [
     {
       id: 'home',
@@ -34,6 +40,7 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
       rootPath: '/home',
       isActive: currentSection === 'home',
       isUpload: false,
+      isProfile: false,
     },
     {
       id: 'learn',
@@ -42,14 +49,25 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
       rootPath: '/learn',
       isActive: currentSection === 'learn',
       isUpload: false,
+      isProfile: false,
+    },
+    {
+      id: 'study',
+      label: 'Study',
+      icon: GraduationCap,
+      rootPath: '/study',
+      isActive: currentSection === 'study',
+      isUpload: false,
+      isProfile: false,
     },
     {
       id: 'upload',
       label: 'Upload',
-      icon: FileUp,
+      icon: Upload,
       rootPath: '/upload-notes',
       isActive: currentSection === 'upload',
       isUpload: true,
+      isProfile: false,
     },
     {
       id: 'profile',
@@ -58,6 +76,7 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
       rootPath: '/profile',
       isActive: currentSection === 'profile',
       isUpload: false,
+      isProfile: true,
     },
   ];
 
@@ -68,11 +87,11 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
   return (
     <nav
       id="mobile-bottom-nav"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.3)] select-none"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.3)] select-none overflow-x-hidden"
       role="navigation"
       aria-label="Main mobile navigation"
     >
-      <div className="grid grid-cols-4 w-full max-w-md mx-auto px-1 sm:px-2">
+      <div className="grid grid-cols-5 w-full max-w-lg mx-auto px-1 sm:px-2">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = item.isActive;
@@ -86,9 +105,9 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
               aria-label={item.label}
               aria-current={isActive ? 'page' : undefined}
             >
-              {/* Active Pill Indicator */}
+              {/* Active Pill Indicator & Icon */}
               <div
-                className={`w-12 sm:w-14 h-7 rounded-full flex items-center justify-center transition-all duration-200 relative ${
+                className={`w-10 sm:w-11 h-7 rounded-full flex items-center justify-center transition-all duration-200 relative ${
                   isActive
                     ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 scale-100 font-bold'
                     : item.isUpload
@@ -96,12 +115,27 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
                     : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200'
                 }`}
               >
-                <Icon size={20} strokeWidth={isActive ? 2.5 : item.isUpload ? 2.3 : 1.9} />
+                {/* Profile Avatar when available */}
+                {item.isProfile && avatarUrl && !avatarError ? (
+                  <img
+                    src={avatarUrl}
+                    alt={item.label}
+                    className={`w-5 h-5 rounded-full object-cover transition-all ${
+                      isActive
+                        ? 'ring-2 ring-blue-600 dark:ring-blue-400'
+                        : 'ring-1 ring-slate-300 dark:ring-slate-600'
+                    }`}
+                    onError={() => setAvatarError(true)}
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <Icon size={19} strokeWidth={isActive ? 2.5 : item.isUpload ? 2.2 : 1.9} />
+                )}
 
                 {/* Subtle upload badge indicator */}
                 {item.isUpload && !isActive && (
                   <span
-                    className="absolute -top-1 -right-1 flex h-2 w-2"
+                    className="absolute -top-0.5 -right-0.5 flex h-2 w-2"
                     title="Upload study notes"
                   >
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
@@ -110,9 +144,9 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
                 )}
               </div>
 
-              {/* Text Label */}
+              {/* Text Label - Always visible! */}
               <span
-                className={`text-[10.5px] tracking-tight leading-tight mt-0.5 truncate max-w-full px-0.5 ${
+                className={`text-[10px] sm:text-[10.5px] tracking-tight leading-tight mt-0.5 truncate max-w-full px-0.5 text-center ${
                   isActive
                     ? 'font-black text-blue-700 dark:text-blue-300'
                     : item.isUpload
