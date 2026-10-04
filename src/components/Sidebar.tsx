@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { motion } from 'motion/react';
 import { ViewType } from '../types';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { navigateToRootSection, getSectionForPath } from '../utils/navigationHistory';
 import { useAuth } from '../contexts/AuthContext';
-import Logo from './Logo';
+import Logo, { LearnDeanEmblem } from './Logo';
 import {
   Home,
   BookOpen,
   GraduationCap,
-  Upload,
-  User,
+  FileUp,
   Search,
   Download,
+  Settings,
 } from 'lucide-react';
+import UserAvatar from './UserAvatar';
 
 interface SidebarProps {
   currentView: ViewType;
@@ -25,19 +27,12 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
   const location = useLocation();
   const { user, userProfile } = useAuth();
   const { isInstallable, triggerInstall } = usePWAInstall();
-  const [avatarError, setAvatarError] = useState(false);
 
   const currentSection = getSectionForPath(location.pathname);
-  const avatarUrl = userProfile?.photoURL || user?.photoURL;
 
-  // STRICT REQUIREMENT:
-  // EXACTLY 5 MAIN NAVIGATION ITEMS:
-  // 1. 🏠 Home    — house icon + "Home"
-  // 2. 📚 Learn   — open book icon + "Learn"
-  // 3. 🎓 Study   — graduation cap/study icon + "Study"
-  // 4. 📤 Upload  — upload arrow icon + "Upload"
-  // 5. 👤 Profile — person icon (or profile picture) + "Profile"
-  // TEXT LABELS MUST ALWAYS BE VISIBLE.
+  // EXACT SPECIFICATION FOR DESKTOP:
+  // 5 MAIN ITEMS: Home, Learn, AI Tutor, Upload, Study
+  // AI Tutor item uses the LearnDean logo instead of generic AI icon
   const navItems = [
     {
       id: 'home',
@@ -45,8 +40,7 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
       icon: Home,
       rootPath: '/home',
       isActive: currentSection === 'home',
-      isUpload: false,
-      isProfile: false,
+      isTutor: false,
     },
     {
       id: 'learn',
@@ -54,8 +48,23 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
       icon: BookOpen,
       rootPath: '/learn',
       isActive: currentSection === 'learn',
-      isUpload: false,
-      isProfile: false,
+      isTutor: false,
+    },
+    {
+      id: 'tutor',
+      label: 'AI Tutor',
+      icon: null, // Uses distinctive LearnDean AI logo
+      rootPath: '/ai-tutor',
+      isActive: currentSection === 'tutor',
+      isTutor: true,
+    },
+    {
+      id: 'upload',
+      label: 'Upload',
+      icon: FileUp,
+      rootPath: '/upload-notes',
+      isActive: currentSection === 'upload',
+      isTutor: false,
     },
     {
       id: 'study',
@@ -63,26 +72,7 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
       icon: GraduationCap,
       rootPath: '/study',
       isActive: currentSection === 'study',
-      isUpload: false,
-      isProfile: false,
-    },
-    {
-      id: 'upload',
-      label: 'Upload',
-      icon: Upload,
-      rootPath: '/upload-notes',
-      isActive: currentSection === 'upload',
-      isUpload: true,
-      isProfile: false,
-    },
-    {
-      id: 'profile',
-      label: 'Profile',
-      icon: User,
-      rootPath: '/profile',
-      isActive: currentSection === 'profile',
-      isUpload: false,
-      isProfile: true,
+      isTutor: false,
     },
   ];
 
@@ -135,7 +125,7 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
         </button>
       </div>
 
-      {/* Main Navigation Items (Icon + Clear Text Label Always Visible) */}
+      {/* Main Navigation Items (Icon beside label, consistent outlined style) */}
       <nav className="flex-1 px-3 py-1 space-y-1.5 overflow-y-auto overscroll-contain">
         <p className="px-2 pt-1 pb-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
           Navigation
@@ -144,6 +134,7 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = item.isActive;
+          const isTutor = item.isTutor;
 
           return (
             <button
@@ -153,58 +144,94 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all duration-150 relative group cursor-pointer ${
                 isActive
                   ? 'bg-blue-600 text-white font-bold shadow-sm shadow-blue-900/50'
-                  : item.isUpload
-                  ? 'text-blue-400 hover:bg-slate-800/90 font-medium'
                   : 'text-slate-300 hover:bg-slate-800/80 hover:text-white font-medium'
               }`}
               title={item.label}
               aria-label={item.label}
               aria-current={isActive ? 'page' : undefined}
             >
-              <div className="flex items-center space-x-3 truncate">
-                {/* Profile Picture when available or Icon */}
-                {item.isProfile && avatarUrl && !avatarError ? (
-                  <img
-                    src={avatarUrl}
-                    alt={item.label}
-                    className={`w-5 h-5 rounded-full object-cover shrink-0 transition-transform ${
+              <div className="flex items-center space-x-3.5 truncate">
+                {isTutor ? (
+                  /* LearnDean AI Logo Emblem for AI Tutor */
+                  <div
+                    className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-transform ${
                       isActive
-                        ? 'ring-2 ring-white scale-105'
-                        : 'ring-1 ring-slate-400 group-hover:scale-105'
+                        ? 'text-white scale-105'
+                        : 'text-blue-400 group-hover:scale-105'
                     }`}
-                    onError={() => setAvatarError(true)}
-                    referrerPolicy="no-referrer"
-                  />
+                  >
+                    <LearnDeanEmblem className="w-5.5 h-5.5" active={isActive} />
+                  </div>
                 ) : (
-                  <Icon
-                    size={20}
-                    className={`shrink-0 transition-transform ${
-                      isActive
-                        ? 'text-white'
-                        : item.isUpload
-                        ? 'text-blue-400 group-hover:scale-110'
-                        : 'text-slate-400 group-hover:text-slate-200'
-                    }`}
-                  />
+                  Icon && (
+                    <Icon
+                      size={22}
+                      strokeWidth={isActive ? 2.3 : 1.85}
+                      className={`shrink-0 transition-transform duration-150 ${
+                        isActive
+                          ? 'text-white scale-[1.04]'
+                          : 'text-slate-400 group-hover:text-slate-200'
+                      }`}
+                    />
+                  )
                 )}
 
                 {/* Text Label is ALWAYS visible! */}
                 <span className="text-sm font-semibold truncate">{item.label}</span>
               </div>
 
-              {/* Upload Badge */}
-              {item.isUpload && !isActive && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0">
-                  Upload
-                </span>
+              {/* Active Indicator Dot on Desktop */}
+              {isActive && (
+                <motion.div
+                  layoutId="sidebarActiveDot"
+                  className="w-1.5 h-1.5 rounded-full bg-white ml-auto shrink-0"
+                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                />
               )}
             </button>
           );
         })}
       </nav>
 
-      {/* Footer: PWA Install & Target */}
-      <div className="p-3 shrink-0 border-t border-slate-800/80 space-y-2.5">
+      {/* Footer: User Account / Profile & PWA Install */}
+      <div className="p-3 shrink-0 border-t border-slate-800/80 space-y-2">
+        {/* User Profile Quick Link */}
+        <button
+          type="button"
+          id="sidebar-profile-btn"
+          onClick={() => {
+            localStorage.removeItem('zetadu_profile_section');
+            window.dispatchEvent(new CustomEvent('open-profile-section', { detail: { section: null } }));
+            handleNavClick('/profile');
+          }}
+          className={`w-full flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer group ${
+            location.pathname.startsWith('/profile') || location.pathname.startsWith('/settings')
+              ? 'bg-slate-800 border-blue-500/50 text-white'
+              : 'bg-slate-800/50 hover:bg-slate-800 border-slate-700/40 text-slate-300'
+          }`}
+          title="Account & Profile Settings"
+          aria-label="Account Settings"
+        >
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <UserAvatar
+              photoURL={userProfile?.photoURL || user?.photoURL}
+              displayName={userProfile?.name || user?.displayName}
+              email={user?.email}
+              size="sm"
+              className="w-7 h-7 text-xs shrink-0"
+            />
+            <div className="text-left min-w-0 truncate">
+              <p className="text-xs font-bold text-white truncate leading-tight">
+                {userProfile?.name || user?.displayName || 'Student Profile'}
+              </p>
+              <p className="text-[10px] text-slate-400 truncate leading-tight">
+                {user?.email || 'Account Settings'}
+              </p>
+            </div>
+          </div>
+          <Settings size={15} className="text-slate-400 group-hover:text-blue-400 shrink-0 transition-colors" />
+        </button>
+
         {isInstallable && (
           <button
             type="button"
@@ -213,23 +240,10 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
             title="Install LearnDean App"
             aria-label="Install App"
           >
-            <Download size={16} />
+            <Download size={15} />
             <span>Install App</span>
           </button>
         )}
-
-        <div className="bg-slate-800/90 p-3 rounded-xl border border-slate-700/50">
-          <div className="flex items-center justify-between mb-1.5">
-            <h3 className="text-xs font-semibold text-white">Daily Target</h3>
-            <span className="text-[10px] text-blue-400 font-bold">2/3 Done</span>
-          </div>
-          <p className="text-[11px] text-slate-400 mb-2 leading-snug">
-            Upload study notes or drill questions to keep your streak.
-          </p>
-          <div className="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
-            <div className="h-full w-2/3 bg-blue-500 rounded-full"></div>
-          </div>
-        </div>
       </div>
     </aside>
   );

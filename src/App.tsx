@@ -14,7 +14,6 @@ import { useAuth } from './contexts/AuthContext';
 import { ThemeToggle } from './components/ThemeToggle';
 import { VIEW_TO_PATH } from './utils/navigation';
 import { recordRoute } from './utils/navigationHistory';
-import FloatingAIShortcut from './components/FloatingAIShortcut';
 
 const Login = lazy(() => import('./components/Login'));
 const PaymentGate = lazy(() => import('./components/PaymentGate'));
@@ -32,6 +31,7 @@ const StudyJourney = React.lazy(() => import('./components/StudyJourney'));
 const WeakTopics = React.lazy(() => import('./components/WeakTopics'));
 const UploadNotes = React.lazy(() => import('./components/UploadNotes'));
 const JambPrep = React.lazy(() => import('./components/jamb/JambPrep'));
+const StudyHub = React.lazy(() => import('./components/study/StudyHub'));
 const NovelsLibrary = React.lazy(() => import('./components/novels/NovelsLibrary'));
 const LearnHub = React.lazy(() => import('./components/LearnHub'));
 
@@ -191,7 +191,7 @@ export default function App() {
     <div className="min-h-[100dvh] font-sans bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
       <div className="flex h-[100dvh] overflow-hidden w-full relative">
         {/* Sidebar container */}
-        <div className={`hidden md:flex relative z-50 ${currentView === 'tutor' ? '!hidden' : ''}`}>
+        <div className="hidden md:flex relative z-50">
           <Sidebar currentView={currentView} setCurrentView={setCurrentView} />
         </div>
         
@@ -291,7 +291,7 @@ export default function App() {
                 </div>
               </button>
 
-              {/* Three-dot (⋮) More Menu at the Top-Right */}
+              {/* Hamburger (☰) Navigation Drawer Menu */}
               <HeaderMoreMenu
                 setCurrentView={setCurrentView}
                 onOpenHelp={() => setIsHelpOpen(true)}
@@ -329,8 +329,9 @@ export default function App() {
                     <Route path="/learn/novels" element={<Subjects setView={setCurrentView} initialSection="novels" />} />
                     <Route path="/practice" element={<Practice setView={setCurrentView} />} />
                     <Route path="/practice/:subjectId" element={<Practice setView={setCurrentView} />} />
-                    <Route path="/study" element={<JambPrep setView={setCurrentView} initialTab="study" />} />
-                    <Route path="/study/:tab" element={<JambPrep setView={setCurrentView} />} />
+                    <Route path="/study" element={<StudyHub setView={setCurrentView} />} />
+                    <Route path="/study/:examId" element={<StudyHub setView={setCurrentView} />} />
+                    <Route path="/study/:examId/:subjectId" element={<StudyHub setView={setCurrentView} />} />
                     <Route path="/jamb" element={<JambPrep setView={setCurrentView} />} />
                     <Route path="/jamb/:tab" element={<JambPrep setView={setCurrentView} />} />
                     <Route path="/jamb-prep" element={<JambPrep setView={setCurrentView} />} />
@@ -364,10 +365,8 @@ export default function App() {
           </div>
         </main>
         
-        {/* Floating movable AI Tutor shortcut across all pages */}
-        <FloatingAIShortcut onOpenTutor={() => setCurrentView('tutor')} />
-
-        {currentView !== 'tutor' && <BottomNav currentView={currentView} setCurrentView={setCurrentView} />}
+        {/* Bottom Navigation on Mobile */}
+        <BottomNav currentView={currentView} setCurrentView={setCurrentView} />
         
         {/* Global Search Modal - only loaded and mounted when search is activated */}
         {isSearchOpen && (

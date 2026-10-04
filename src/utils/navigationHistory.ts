@@ -106,31 +106,31 @@ export function getPreviousPath(): string | null {
 export const SECTION_ROOTS: Record<string, string> = {
   home: '/home',
   learn: '/learn',
-  study: '/study',
+  tutor: '/ai-tutor',
   upload: '/upload-notes',
-  profile: '/profile',
+  study: '/study',
 };
 
 /**
  * Determines which of the 5 root navbar sections a given URL path belongs to:
  * 1. Home (/home)
- * 2. Learn (/learn, /library, /subjects, /flashcards, etc.)
- * 3. Study (/study, /jamb, /practice - Practice is inside Study)
+ * 2. Learn (/learn, /library, /subjects, /novels, /flashcards, etc.)
+ * 3. AI Tutor (/ai-tutor, /tutor) [Center Logo]
  * 4. Upload (/upload-notes)
- * 5. Profile (/profile, /settings)
+ * 5. Study (/study, /jamb, /practice - Practice & JAMB inside Study)
  */
-export function getSectionForPath(path: string): 'home' | 'learn' | 'study' | 'upload' | 'profile' {
+export function getSectionForPath(path: string): 'home' | 'learn' | 'tutor' | 'upload' | 'study' | '' {
   const clean = path.split('?')[0].replace(/\/+$/, '') || '/';
 
   if (clean.startsWith('/upload-notes') || clean.startsWith('/upload')) {
     return 'upload';
   }
 
-  if (clean.startsWith('/profile') || clean.startsWith('/settings')) {
-    return 'profile';
+  if (clean.startsWith('/ai-tutor') || clean.startsWith('/tutor')) {
+    return 'tutor';
   }
 
-  // Study: includes /study, /jamb, and /practice ("Practice is NOT a navigation item. Keep Practice inside Study")
+  // Study: includes /study, /jamb, and /practice ("Practice is inside Study")
   if (
     clean.startsWith('/study') ||
     clean.startsWith('/jamb') ||
@@ -141,17 +141,19 @@ export function getSectionForPath(path: string): 'home' | 'learn' | 'study' | 'u
 
   if (
     clean === '/learn' ||
-    clean.startsWith('/ai-tutor') ||
-    clean.startsWith('/tutor') ||
-    clean.startsWith('/flashcards') ||
-    clean.startsWith('/study-journey') ||
-    clean.startsWith('/journey') ||
     clean.startsWith('/library') ||
     clean.startsWith('/subjects') ||
     clean.startsWith('/novels') ||
+    clean.startsWith('/flashcards') ||
+    clean.startsWith('/study-journey') ||
+    clean.startsWith('/journey') ||
     clean.startsWith('/weak-topics')
   ) {
     return 'learn';
+  }
+
+  if (clean.startsWith('/profile') || clean.startsWith('/settings')) {
+    return '';
   }
 
   return 'home';

@@ -11,6 +11,7 @@ import { fetchStudentTopicAnalysis, StudentTopicAnalysis, TopicResultSummary } f
 import DailyStudyPlanCard from './DailyStudyPlanCard';
 import { getDailyStudyPlan, markMistakesReviewed } from '../utils/dailyStudyPlan';
 import { DailyStudyPlan } from '../types';
+import { LearnDeanEmblem } from './Logo';
 import OfflineLearningHub from './offline/OfflineLearningHub';
 import PrepareForOfflineModal from './offline/PrepareForOfflineModal';
 import MasterySummaryBanner from './MasterySummaryBanner';
@@ -384,9 +385,9 @@ export default function Home({ setView }: HomeProps) {
 
       {/* Five Main Feature Layouts */}
       <div id="home-top-feature-layouts" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 w-full min-w-0">
-        <button id="quick-action-ai-tutor" onClick={() => setView('tutor')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-emerald-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
-          <div className="w-11 h-11 mb-2.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <MessageSquare size={24} />
+        <button id="quick-action-ai-tutor" onClick={() => setView('tutor')} className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-blue-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
+          <div className="w-11 h-11 mb-2.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <LearnDeanEmblem className="w-6 h-6" />
           </div>
           <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">AI Tutor</h3>
         </button>

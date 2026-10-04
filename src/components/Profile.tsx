@@ -483,15 +483,15 @@ export default function Profile({ setView, initialSection }: ProfileProps) {
                 <p className="text-xs text-slate-500 dark:text-slate-400">Adjusts curriculum standards</p>
               </div>
               <select 
-                value={userProfile?.country || 'International'} 
+                value={userProfile?.country || 'Nigeria'} 
                 onChange={(e) => handleProfileUpdate('country', e.target.value)}
-                className="bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-slate-800 dark:text-white outline-none"
+                className="bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-slate-800 dark:text-white outline-none font-medium cursor-pointer"
               >
-                <option value="International">International</option>
-                <option value="US">United States</option>
-                <option value="UK">United Kingdom</option>
-                <option value="Nigeria">Nigeria</option>
-                <option value="India">India</option>
+                <option value="Nigeria">🇳🇬 Nigeria (JAMB, WAEC, NECO)</option>
+                <option value="US">🇺🇸 United States (SAT, ACT, AP)</option>
+                <option value="UK">🇬🇧 United Kingdom (GCSE, A-Levels)</option>
+                <option value="India">🇮🇳 India (CBSE, JEE, NEET)</option>
+                <option value="International">🌐 International (IB, Cambridge)</option>
               </select>
             </div>
           </div>

@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { motion } from 'motion/react';
 import { ViewType } from '../types';
 import {
   Home,
   BookOpen,
   GraduationCap,
-  Upload,
-  User,
+  FileUp,
 } from 'lucide-react';
+import { LearnDeanEmblem } from './Logo';
 import { navigateToRootSection, getSectionForPath } from '../utils/navigationHistory';
-import { useAuth } from '../contexts/AuthContext';
 
 interface BottomNavProps {
   currentView: ViewType;
@@ -19,19 +19,13 @@ interface BottomNavProps {
 export default function BottomNav({ currentView, setCurrentView }: BottomNavProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, userProfile } = useAuth();
-  const [avatarError, setAvatarError] = useState(false);
 
   const currentSection = getSectionForPath(location.pathname);
-  const avatarUrl = userProfile?.photoURL || user?.photoURL;
 
-  // STRICT REQUIREMENT:
-  // EXACTLY 5 MAIN NAVIGATION ITEMS:
-  // 1. 🏠 Home    — house icon + "Home"
-  // 2. 📚 Learn   — open book icon + "Learn"
-  // 3. 🎓 Study   — graduation cap/study icon + "Study"
-  // 4. 📤 Upload  — upload arrow icon + "Upload"
-  // 5. 👤 Profile — person icon (or profile picture) + "Profile"
+  // EXACT SPECIFICATION:
+  // 5 MAIN ITEMS: Home | Learn | [LEARNDEAN AI LOGO] | Upload | Study
+  // Center AI logo is the distinctive LearnDean app logo, visually emphasized slightly more
+  // Part of the navigation bar itself (not floating/draggable)
   const navItems = [
     {
       id: 'home',
@@ -39,8 +33,7 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
       icon: Home,
       rootPath: '/home',
       isActive: currentSection === 'home',
-      isUpload: false,
-      isProfile: false,
+      isCenter: false,
     },
     {
       id: 'learn',
@@ -48,8 +41,23 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
       icon: BookOpen,
       rootPath: '/learn',
       isActive: currentSection === 'learn',
-      isUpload: false,
-      isProfile: false,
+      isCenter: false,
+    },
+    {
+      id: 'tutor',
+      label: 'AI Tutor',
+      icon: null, // Uses distinctive LearnDean AI Logo
+      rootPath: '/ai-tutor',
+      isActive: currentSection === 'tutor',
+      isCenter: true,
+    },
+    {
+      id: 'upload',
+      label: 'Upload',
+      icon: FileUp,
+      rootPath: '/upload-notes',
+      isActive: currentSection === 'upload',
+      isCenter: false,
     },
     {
       id: 'study',
@@ -57,26 +65,7 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
       icon: GraduationCap,
       rootPath: '/study',
       isActive: currentSection === 'study',
-      isUpload: false,
-      isProfile: false,
-    },
-    {
-      id: 'upload',
-      label: 'Upload',
-      icon: Upload,
-      rootPath: '/upload-notes',
-      isActive: currentSection === 'upload',
-      isUpload: true,
-      isProfile: false,
-    },
-    {
-      id: 'profile',
-      label: 'Profile',
-      icon: User,
-      rootPath: '/profile',
-      isActive: currentSection === 'profile',
-      isUpload: false,
-      isProfile: true,
+      isCenter: false,
     },
   ];
 
@@ -91,71 +80,81 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
       role="navigation"
       aria-label="Main mobile navigation"
     >
-      <div className="grid grid-cols-5 w-full max-w-lg mx-auto px-1 sm:px-2">
+      <div className="grid grid-cols-5 w-full max-w-lg mx-auto px-1 sm:px-2 items-center">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = item.isActive;
+          const isCenter = item.isCenter;
 
           return (
             <button
               key={item.id}
               id={`mobile-nav-${item.id}-btn`}
               onClick={() => handleNavClick(item)}
-              className="flex flex-col items-center justify-center h-13 py-0.5 min-w-0 transition-colors group cursor-pointer relative"
+              className="flex flex-col items-center justify-center py-0.5 min-w-0 transition-colors group cursor-pointer relative"
               aria-label={item.label}
               aria-current={isActive ? 'page' : undefined}
             >
-              {/* Active Pill Indicator & Icon */}
-              <div
-                className={`w-10 sm:w-11 h-7 rounded-full flex items-center justify-center transition-all duration-200 relative ${
-                  isActive
-                    ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 scale-100 font-bold'
-                    : item.isUpload
-                    ? 'text-blue-600 dark:text-blue-400 group-hover:text-blue-700 bg-blue-50/80 dark:bg-blue-950/40'
-                    : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200'
-                }`}
-              >
-                {/* Profile Avatar when available */}
-                {item.isProfile && avatarUrl && !avatarError ? (
-                  <img
-                    src={avatarUrl}
-                    alt={item.label}
-                    className={`w-5 h-5 rounded-full object-cover transition-all ${
-                      isActive
-                        ? 'ring-2 ring-blue-600 dark:ring-blue-400'
-                        : 'ring-1 ring-slate-300 dark:ring-slate-600'
+              {isCenter ? (
+                /* Center AI Tutor item with distinctive LearnDean AI logo */
+                <div
+                  className={`w-9.5 h-9.5 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+                    isActive
+                      ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/30 border border-blue-500/80 scale-[1.04]'
+                      : 'bg-gradient-to-br from-blue-50 to-indigo-50/70 dark:from-slate-800 dark:to-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/70 dark:border-blue-800/60 shadow-2xs group-hover:scale-105'
+                  }`}
+                >
+                  <LearnDeanEmblem
+                    className={`w-6 h-6 transition-transform ${
+                      isActive ? 'scale-105' : 'group-hover:scale-105'
                     }`}
-                    onError={() => setAvatarError(true)}
-                    referrerPolicy="no-referrer"
+                    active={isActive}
                   />
-                ) : (
-                  <Icon size={19} strokeWidth={isActive ? 2.5 : item.isUpload ? 2.2 : 1.9} />
-                )}
+                </div>
+              ) : (
+                /* Standard Navigation Icon */
+                <div className="relative flex items-center justify-center w-7 h-7">
+                  {Icon && (
+                    <Icon
+                      size={24}
+                      strokeWidth={isActive ? 2.3 : 1.85}
+                      className={`transition-all duration-200 ${
+                        isActive
+                          ? 'text-blue-600 dark:text-blue-400 scale-[1.03]'
+                          : 'text-slate-400 dark:text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200'
+                      }`}
+                    />
+                  )}
+                </div>
+              )}
 
-                {/* Subtle upload badge indicator */}
-                {item.isUpload && !isActive && (
-                  <span
-                    className="absolute -top-0.5 -right-0.5 flex h-2 w-2"
-                    title="Upload study notes"
-                  >
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-                  </span>
-                )}
-              </div>
-
-              {/* Text Label - Always visible! */}
+              {/* Text Label - Always visible */}
               <span
-                className={`text-[10px] sm:text-[10.5px] tracking-tight leading-tight mt-0.5 truncate max-w-full px-0.5 text-center ${
+                className={`text-[10px] sm:text-[11px] leading-tight tracking-tight truncate max-w-full px-0.5 text-center transition-colors duration-200 ${
+                  isCenter ? 'mt-0.5' : 'mt-1'
+                } ${
                   isActive
-                    ? 'font-black text-blue-700 dark:text-blue-300'
-                    : item.isUpload
                     ? 'font-bold text-blue-600 dark:text-blue-400'
-                    : 'font-medium text-slate-500 dark:text-slate-400'
+                    : isCenter
+                    ? 'font-semibold text-blue-600/80 dark:text-blue-400/80 group-hover:text-blue-600 dark:group-hover:text-blue-300'
+                    : 'font-medium text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200'
                 }`}
               >
                 {item.label}
               </span>
+
+              {/* Active Dot Indicator - Smoothly moves across tabs via Framer Motion layoutId */}
+              <div className="h-2 flex items-center justify-center mt-0.5">
+                {isActive ? (
+                  <motion.div
+                    layoutId="bottomNavActiveDot"
+                    className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400"
+                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                  />
+                ) : (
+                  <div className="w-1.5 h-1.5 opacity-0" />
+                )}
+              </div>
             </button>
           );
         })}
