@@ -14,6 +14,11 @@ import {
 } from 'firebase/firestore';
 import { generateQuestionFingerprint, validateQuestionPayload } from '../utils/jambFingerprint';
 import { JAMB_QUESTIONS, JAMB_SUBJECTS, JambQuestion, getRealAvailableQuestionsForSubject } from '../data/jambQuestions';
+import { 
+  isQuestionForSubject, 
+  canonicalSubjectKey, 
+  getCanonicalSubjectDisplayName 
+} from '../utils/jambSubjectMatcher';
 import { JAMB_NOVEL_QUESTIONS_BANK, getStoredQuestionsForNovel } from '../data/jambNovelQuestionsBank';
 import { NOVELS_COLLECTION } from '../data/novels';
 import { JAMB_SYLLABUS_DATA } from '../data/jambSyllabus';
@@ -168,18 +173,7 @@ class JambQuestionEngine {
 
     for (const raw of sourceMap.values()) {
       if (rawTarget) {
-        const rawSub = (raw.subject || '').toLowerCase().trim();
-        const rawSubName = (raw.subjectName || '').toLowerCase().trim();
-        const rawId = (raw.id || '').toLowerCase().trim();
-
-        let isSubMatch = false;
-        for (const v of validSubjectIds) {
-          if (rawSub === v || rawSubName === v || rawSub.includes(v) || v.includes(rawSub) || rawId.includes(v)) {
-            isSubMatch = true;
-            break;
-          }
-        }
-        if (!isSubMatch) continue;
+        if (!isQuestionForSubject(raw, rawTarget)) continue;
       }
 
       if (year && year !== 'all') {
@@ -813,11 +807,9 @@ class JambQuestionEngine {
     for (let sIdx = 0; sIdx < targetSubjects.length; sIdx++) {
       const currentSubjectRaw = targetSubjects[sIdx];
       const currentSubjectId = currentSubjectRaw.toLowerCase().replace(/\s+/g, '_');
-      const neededForSubject = sIdx === targetSubjects.length - 1
-        ? targetCount - finalSelectedQuestions.length
-        : perSubjectTarget;
+      const neededForSubject = perSubjectTarget;
 
-      if (neededForSubject <= 0) break;
+      if (neededForSubject <= 0) continue;
 
       // 1. Fetch downloaded offline questions from IndexedDB (works completely offline)
       let offlineCandidates: (JambQuestionDoc | JambNovelQuestionDoc)[] = [];
@@ -996,13 +988,15 @@ class JambQuestionEngine {
         if (q.fingerprint) usedFingerprints.add(q.fingerprint);
       });
 
+      // If random ordering, shuffle only WITHIN this subject
+      if (options.ordering === 'random') {
+        subjectSelected.sort(() => 0.5 - Math.random());
+      }
+
       finalSelectedQuestions.push(...subjectSelected);
     }
 
-    // Shuffle if random order requested
-    if (options.ordering === 'random') {
-      finalSelectedQuestions.sort(() => 0.5 - Math.random());
-    }
+    // Never shuffle across different subjects: keep each subject contiguous and separate!
 
     const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const now = Date.now();

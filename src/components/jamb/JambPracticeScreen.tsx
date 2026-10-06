@@ -514,13 +514,13 @@ export default function JambPracticeScreen({ config, onExit, onRetake }: JambPra
                     type="button"
                     disabled={isSubmitted}
                     onClick={() => handleSelectOption(optIdx)}
-                    className={`w-full p-3.5 sm:p-4 rounded-2xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer ${optionStyle}`}
+                    className={`w-full p-3 sm:p-4 rounded-2xl border text-left flex items-start sm:items-center justify-between gap-3 transition-all cursor-pointer min-w-0 ${optionStyle}`}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl font-bold flex items-center justify-center text-xs sm:text-sm shrink-0 transition-colors ${badgeStyle}`}>
+                    <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                      <span className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl font-bold flex items-center justify-center text-xs sm:text-sm shrink-0 transition-colors mt-0.5 sm:mt-0 ${badgeStyle}`}>
                         {optLetter}
                       </span>
-                      <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100">
+                      <span className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 break-words flex-1 min-w-0 leading-snug sm:leading-normal">
                         {optText}
                       </span>
                     </div>

@@ -301,7 +301,7 @@ export default function Home({ setView }: HomeProps) {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col gap-5 sm:gap-8 pb-28 sm:pb-32 min-w-0">
+    <div className="w-full max-w-7xl mx-auto flex flex-col gap-5 sm:gap-8 pb-6 sm:pb-8 min-w-0">
       {/* Online Notification Banner */}
       {onlineNotification && (
         <div className="p-3.5 rounded-xl bg-emerald-600 text-white text-xs sm:text-sm font-semibold flex items-center justify-between shadow-xs">
@@ -409,9 +409,9 @@ export default function Home({ setView }: HomeProps) {
           </div>
           <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Library</h3>
         </button>
-        <button id="quick-action-practice" onClick={() => setView('practice')} className="col-span-2 sm:col-span-1 lg:col-span-1 bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-rose-500 hover:shadow-lg transition-all flex flex-col items-center justify-center text-center group cursor-pointer">
-          <div className="w-11 h-11 mb-2.5 bg-rose-50 dark:bg-rose-900/30 text-rose-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-            <PenTool size={24} />
+        <button id="quick-action-practice" onClick={() => setView('practice')} className="col-span-2 sm:col-span-1 lg:col-span-1 bg-white dark:bg-slate-800 p-3.5 sm:p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700 hover:border-rose-500 hover:shadow-lg transition-all flex flex-row sm:flex-col items-center justify-center gap-2.5 sm:gap-0 text-center group cursor-pointer">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 sm:mb-2.5 bg-rose-50 dark:bg-rose-900/30 text-rose-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+            <PenTool size={22} />
           </div>
           <h3 className="font-bold text-slate-800 dark:text-white text-xs sm:text-sm">Practice</h3>
         </button>
@@ -683,9 +683,6 @@ export default function Home({ setView }: HomeProps) {
           </div>
         </div>
       </div>
-
-      {/* Mobile Clearance Spacer */}
-      <div className="md:hidden h-20 sm:h-24 w-full shrink-0 pointer-events-none" aria-hidden="true" />
 
       {/* Prepare for Offline Modal */}
       <PrepareForOfflineModal

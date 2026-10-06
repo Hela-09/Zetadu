@@ -160,7 +160,7 @@ export default function Sidebar({ currentView, setCurrentView }: SidebarProps) {
                         : 'text-blue-400 group-hover:scale-105'
                     }`}
                   >
-                    <LearnDeanEmblem className="w-5.5 h-5.5" active={isActive} />
+                    <LearnDeanEmblem className="w-5.5 h-5.5" active={isActive} monochrome={isActive} />
                   </div>
                 ) : (
                   Icon && (

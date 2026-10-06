@@ -687,7 +687,7 @@ export default function Profile({ setView, initialSection }: ProfileProps) {
                 AI Usage Tracker
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Monitor your personal Gemini AI resource consumption across Learndean
+                Monitor your personal Gemini AI resource consumption across LearnDean
               </p>
             </div>
           </div>
@@ -806,14 +806,14 @@ export default function Profile({ setView, initialSection }: ProfileProps) {
       window.location.href = "tel:08100272572";
     };
 
-    const handleEmail = (subject: string = "Learndean Support Request") => {
+    const handleEmail = (subject: string = "LearnDean Support Request") => {
       window.location.href = `mailto:emmanuelomojola07@gmail.com?subject=${encodeURIComponent(subject)}`;
     };
 
     const faqs = [
       { q: "How does the AI Tutor work?", a: "The AI Tutor acts as your personal learning assistant. It adapts to your learning level and answers questions step-by-step without simply giving away the final answer." },
       { q: "How is my progress saved?", a: "Your progress is automatically saved to the cloud whenever you complete a practice session or interact with the AI Tutor, allowing you to pick up where you left off." },
-      { q: "Can I use Learndean offline?", a: "Currently, Learndean requires an active internet connection to communicate with the AI Tutor and sync your progress securely." },
+      { q: "Can I use LearnDean offline?", a: "Yes! LearnDean offers complete offline packs for JAMB subjects and official prescribed novels, which you can download and use anywhere without internet." },
     ];
 
     return (
@@ -886,14 +886,14 @@ export default function Profile({ setView, initialSection }: ProfileProps) {
 
           {/* Action Buttons */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden">
-             <button onClick={() => handleEmail("Bug Report: Learndean")} className="w-full p-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors text-left">
+             <button onClick={() => handleEmail("Bug Report: LearnDean")} className="w-full p-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors text-left cursor-pointer">
               <div className="flex items-center gap-3">
                 <AlertCircle size={20} className="text-amber-500" />
                 <span className="font-medium text-slate-800 dark:text-white">Report a Bug</span>
               </div>
               <ChevronRight size={18} className="text-slate-400" />
             </button>
-            <button onClick={() => handleEmail("Feedback: Learndean")} className="w-full p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors text-left">
+            <button onClick={() => handleEmail("Feedback: LearnDean")} className="w-full p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors text-left cursor-pointer">
               <div className="flex items-center gap-3">
                 <Info size={20} className="text-emerald-500" />
                 <span className="font-medium text-slate-800 dark:text-white">Send Feedback</span>
@@ -1551,7 +1551,7 @@ export default function Profile({ setView, initialSection }: ProfileProps) {
           </div>
         </div>
         
-        <button onClick={() => handleAction('edit_profile')} className="relative z-10 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 border border-slate-200 dark:border-slate-600 shadow-sm">
+        <button onClick={() => handleAction('edit_profile')} className="relative z-10 w-full md:w-auto justify-center bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center gap-2 border border-slate-200 dark:border-slate-600 shadow-sm cursor-pointer shrink-0">
           <Edit3 size={16} />
           Edit Profile
         </button>
@@ -1651,7 +1651,7 @@ export default function Profile({ setView, initialSection }: ProfileProps) {
                 className="flex items-center gap-2 px-6 py-3 rounded-xl text-blue-600 dark:text-blue-400 font-semibold hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors w-full justify-center md:w-auto"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Install Learndean
+                Install LearnDean
               </button>
             )}
             <button 

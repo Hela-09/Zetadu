@@ -276,35 +276,64 @@ export const JambCourseCombinationSection: React.FC<JambCourseCombinationSection
               )}
             </div>
 
-            {/* MANDATORY 4-SUBJECT UTME REQUIREMENTS */}
+            {/* MANDATORY 4-SUBJECT UTME REQUIREMENTS & QUESTION BREAKDOWN */}
             <div className="space-y-3">
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                <Check className="w-4 h-4 text-emerald-500" />
-                Required JAMB UTME Subject Combination
-              </h4>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                  <Check className="w-4 h-4 text-emerald-500" />
+                  Required JAMB UTME Subject Combination (160 Questions Total)
+                </h4>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                  40 Questions Per Subject
+                </span>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 {/* 1. English */}
                 <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
-                  <span className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400">
-                    Compulsory
-                  </span>
-                  <div className="text-sm font-extrabold text-slate-900 dark:text-white mt-0.5">
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400">
+                    <span>Compulsory</span>
+                    <span className="bg-emerald-200/60 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded">40 Qs</span>
+                  </div>
+                  <div className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
                     English Language
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    English — 40 questions
                   </div>
                 </div>
 
                 {/* 2, 3, 4 Required Electives */}
                 {selectedCourse.requiredElectives.map((elective, idx) => (
                   <div key={idx} className="p-3.5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800">
-                    <span className="text-[10px] font-bold uppercase text-indigo-600 dark:text-indigo-400">
-                      Elective #{idx + 1}
-                    </span>
-                    <div className="text-sm font-extrabold text-slate-900 dark:text-white mt-0.5">
+                    <div className="flex items-center justify-between text-[10px] font-bold uppercase text-indigo-600 dark:text-indigo-400">
+                      <span>Elective #{idx + 1}</span>
+                      <span className="bg-indigo-200/60 dark:bg-indigo-900/60 px-1.5 py-0.5 rounded">40 Qs</span>
+                    </div>
+                    <div className="text-sm font-extrabold text-slate-900 dark:text-white mt-1">
                       {elective}
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                      {elective} — 40 questions
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Course Combo Practice Summary Breakdown */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="space-y-1">
+                  <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                    CBT Combination Question Structure:
+                  </span>
+                  <p className="text-slate-600 dark:text-slate-400 font-mono text-[11px]">
+                    English — 40 questions • {selectedCourse.requiredElectives[0]} — 40 questions • {selectedCourse.requiredElectives[1]} — 40 questions • {selectedCourse.requiredElectives[2]} — 40 questions
+                  </p>
+                </div>
+                <div className="shrink-0 font-extrabold text-indigo-600 dark:text-indigo-400 text-sm bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+                  Total — 160 questions
+                </div>
               </div>
             </div>
 

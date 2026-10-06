@@ -209,7 +209,7 @@ export default function PasswordSecurityView({ onBack }: PasswordSecurityViewPro
               Signed in with Google
             </h3>
             <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
-              Your Learndean account is authenticated directly through your Google account (
+              Your LearnDean account is authenticated directly through your Google account (
               <span className="font-semibold text-slate-900 dark:text-white">{user?.email}</span>
               ). Because you use Google OAuth, your password and sign-in credentials are secured directly by Google.
             </p>
@@ -218,7 +218,7 @@ export default function PasswordSecurityView({ onBack }: PasswordSecurityViewPro
               <div className="flex items-start gap-2">
                 <Shield size={16} className="text-blue-500 shrink-0 mt-0.5" />
                 <span>
-                  No local password is required to log in. Simply use the <strong>Sign In with Google</strong> button whenever you log into Learndean.
+                  No local password is required to log in. Simply use the <strong>Sign In with Google</strong> button whenever you log into LearnDean.
                 </span>
               </div>
             </div>

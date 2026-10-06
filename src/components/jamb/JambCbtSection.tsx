@@ -82,8 +82,8 @@ export default function JambCbtSection({
     return base.filter(s => s !== 'English Language').slice(0, 3);
   });
 
-  const [examLengthMode, setExamLengthMode] = useState<'20' | '40' | '60' | '80' | '100' | 'standard'>('80');
-  const [examDurationMinutes, setExamDurationMinutes] = useState<number>(60);
+  const [examLengthMode, setExamLengthMode] = useState<'20' | '40' | '60' | '80' | '100' | '160' | 'standard'>('160');
+  const [examDurationMinutes, setExamDurationMinutes] = useState<number>(120);
   const [isUntimed, setIsUntimed] = useState<boolean>(false);
   const [subjectSearch, setSubjectSearch] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<JambCategory>('All');
@@ -149,6 +149,7 @@ export default function JambCbtSection({
     examLengthMode === '60' ? 60 :
     examLengthMode === '80' ? 80 :
     examLengthMode === '100' ? 100 :
+    examLengthMode === '160' ? 160 :
     (60 + selectedElectives.length * 40); // 180 questions
 
   const handleLaunch = () => {
@@ -520,6 +521,27 @@ export default function JambCbtSection({
               <button
                 type="button"
                 onClick={() => {
+                  setExamLengthMode('160');
+                  setExamDurationMinutes(120);
+                }}
+                className={`w-full p-3 rounded-2xl border text-left cursor-pointer transition-colors ${
+                  examLengthMode === '160'
+                    ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/30 font-bold'
+                    : 'border-slate-200 dark:border-slate-800'
+                }`}
+              >
+                <div className="flex items-center justify-between text-xs">
+                  <span>Standard 4-Subject Combo (40 Qs Each)</span>
+                  <span className="text-blue-600 font-bold">160 Questions</span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-normal mt-0.5">
+                  40 questions per subject (4 x 40 = 160 questions total)
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
                   setExamLengthMode('standard');
                   setExamDurationMinutes(120);
                 }}
@@ -584,13 +606,33 @@ export default function JambCbtSection({
               </select>
             )}
 
-            <div className="mt-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 space-y-1">
-              <p className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                <Sparkles size={14} className="text-amber-500" />
-                UTME Mock Ready:
-              </p>
-              <p>• Total Questions: <strong>{questionCount}</strong> across <strong>{allSelectedSubjects.length} subjects</strong></p>
-              <p>• Max Score: <strong>400 Marks</strong></p>
+            <div className="mt-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 space-y-2">
+              <div className="flex items-center justify-between font-bold text-slate-900 dark:text-white">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-amber-500" />
+                  Course Combo Question Breakdown:
+                </span>
+                <span className="text-blue-600 dark:text-blue-400 font-extrabold">{questionCount} Total</span>
+              </div>
+              
+              <div className="space-y-1.5 pt-1">
+                {allSelectedSubjects.map((subName, sIdx) => {
+                  const sCount = examLengthMode === 'standard'
+                    ? (subName.toLowerCase().includes('english') ? 60 : 40)
+                    : Math.max(1, Math.floor(questionCount / allSelectedSubjects.length));
+                  return (
+                    <div key={sIdx} className="flex items-center justify-between bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs">
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">{subName}</span>
+                      <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{sCount} questions</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between font-extrabold text-xs text-slate-900 dark:text-white">
+                <span>Total Exam Questions</span>
+                <span className="text-emerald-600 dark:text-emerald-400">{questionCount} questions (400 Marks)</span>
+              </div>
             </div>
           </div>
         </div>

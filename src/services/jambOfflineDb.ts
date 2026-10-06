@@ -1,4 +1,5 @@
 import { JambQuestion, JAMB_QUESTIONS, JAMB_SUBJECTS, getRealAvailableQuestionsForSubject } from '../data/jambQuestions';
+import { isQuestionForSubject } from '../utils/jambSubjectMatcher';
 import { JAMB_SYLLABUS_DATA } from '../data/jambSyllabus';
 import { JambExamAttempt, BookmarkedJambQuestion } from './jambService';
 
@@ -912,29 +913,7 @@ class JambOfflineDatabase {
         const targetForSubject = baseCount + (idx < remainder ? 1 : 0);
         const normSub = sub.toLowerCase().trim();
         
-        // Resolve subject synonyms
-        const matchedMeta = JAMB_SUBJECTS.find(s => 
-          s.id.toLowerCase() === normSub || 
-          s.name.toLowerCase() === normSub || 
-          s.code.toLowerCase() === normSub
-        );
-        const validIds = new Set<string>([normSub]);
-        if (matchedMeta) {
-          validIds.add(matchedMeta.id.toLowerCase());
-          validIds.add(matchedMeta.name.toLowerCase());
-          validIds.add(matchedMeta.code.toLowerCase());
-        }
-
-        const isSubjectMatch = (q: JambQuestion) => {
-          const qSub = (q.subject || '').toLowerCase().trim();
-          const qName = (q.subjectName || '').toLowerCase().trim();
-          const qId = (q.id || '').toLowerCase().trim();
-          for (const v of validIds) {
-            if (qSub === v || qName === v || qSub.includes(v) || v.includes(qSub)) return true;
-            if (qId.includes(v)) return true;
-          }
-          return false;
-        };
+        const isSubjectMatch = (q: JambQuestion) => isQuestionForSubject(q, sub);
 
         // Gather all candidates for this subject from DB and bundled questions
         const candidateMap = new Map<string, JambQuestion>();
@@ -1066,49 +1045,7 @@ class JambOfflineDatabase {
         combinedSelected.push(...subSelected);
       }
 
-      // If combinedSelected is still under target count, backfill from unused questions across all selected subjects
-      if (combinedSelected.length < count) {
-        for (const sub of subjects) {
-          if (combinedSelected.length >= count) break;
-          const normSub = sub.toLowerCase().trim();
-          
-          const availableExtras: JambQuestion[] = [];
-          allDbQuestions.forEach(q => {
-            if (
-              (q.subject.toLowerCase() === normSub || q.subjectName?.toLowerCase() === normSub || q.id.toLowerCase().includes(normSub)) &&
-              !sessionUsedIds.has(q.id) &&
-              !sessionUsedSignatures.has(normalizeQuestionText(q.question))
-            ) {
-              availableExtras.push(q);
-            }
-          });
-          JAMB_QUESTIONS.forEach(q => {
-            if (
-              (q.subject.toLowerCase() === normSub || q.subjectName.toLowerCase() === normSub || q.id.toLowerCase().includes(normSub)) &&
-              !sessionUsedIds.has(q.id) &&
-              !sessionUsedSignatures.has(normalizeQuestionText(q.question))
-            ) {
-              availableExtras.push(q);
-            }
-          });
-
-          if (order === 'random') {
-            availableExtras.sort(() => 0.5 - Math.random());
-          }
-
-          for (const q of availableExtras) {
-            if (combinedSelected.length >= count) break;
-            const sig = normalizeQuestionText(q.question);
-            if (!sessionUsedIds.has(q.id) && !sessionUsedSignatures.has(sig)) {
-              combinedSelected.push(q);
-              sessionUsedIds.add(q.id);
-              sessionUsedSignatures.add(sig);
-            }
-          }
-        }
-      }
-
-      const finalCount = Math.min(combinedSelected.length, count);
+      // No cross-subject backfill: strictly preserve subject isolation!
       const exactQuestions = combinedSelected.slice(0, count);
       const remainingShortfall = Math.max(0, count - exactQuestions.length);
 
@@ -1127,29 +1064,7 @@ class JambOfflineDatabase {
     // Single Subject Practice Mode
     const targetSubject = (subject || 'english').toLowerCase().trim();
 
-    // Resolve subject synonyms
-    const matchedMeta = JAMB_SUBJECTS.find(s => 
-      s.id.toLowerCase() === targetSubject || 
-      s.name.toLowerCase() === targetSubject || 
-      s.code.toLowerCase() === targetSubject
-    );
-    const validIds = new Set<string>([targetSubject]);
-    if (matchedMeta) {
-      validIds.add(matchedMeta.id.toLowerCase());
-      validIds.add(matchedMeta.name.toLowerCase());
-      validIds.add(matchedMeta.code.toLowerCase());
-    }
-
-    const isSubjectMatch = (q: JambQuestion) => {
-      const qSub = (q.subject || '').toLowerCase().trim();
-      const qName = (q.subjectName || '').toLowerCase().trim();
-      const qId = (q.id || '').toLowerCase().trim();
-      for (const v of validIds) {
-        if (qSub === v || qName === v || qSub.includes(v) || v.includes(qSub)) return true;
-        if (qId.includes(v)) return true;
-      }
-      return false;
-    };
+    const isSubjectMatch = (q: JambQuestion) => isQuestionForSubject(q, targetSubject);
 
     const candidateMap = new Map<string, JambQuestion>();
 

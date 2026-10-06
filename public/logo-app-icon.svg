@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
   <defs>
     <!-- Premium Deep Navy to Electric Blue with subtle purple accent -->
     <linearGradient id="ld-brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -27,9 +27,7 @@
       <stop offset="100%" stop-color="#0284C7"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="119" fill="url(#ld-app-bg)"/>
-  <g transform="scale(4.266666666666667)">
-    <path d="M 26 28 C 26 24.686 28.686 22 32 22 L 38 22 C 41.314 22 44 24.686 44 28 L 44 78 L 62 78 C 72.493 78 81 69.941 81 60 C 81 50.059 72.493 42 62 42 L 53 42 C 50.791 42 49 40.209 49 38 L 49 28 C 49 25.791 50.791 24 53 24 L 62 24 C 81.882 24 98 40.118 98 60 C 98 79.882 81.882 96 62 96 L 32 96 C 28.686 96 26 93.314 26 90 Z" fill="#FFFFFF"/>
-    <path d="M 62.5 51 Q 62.5 60 71.5 60 Q 62.5 60 62.5 69 Q 62.5 60 53.5 60 Q 62.5 60 62.5 51 Z" fill="#38BDF8"/>
-  </g>
+  <rect width="120" height="120" rx="28" fill="url(#ld-app-bg)"/>
+  <path d="M 26 28 C 26 24.686 28.686 22 32 22 L 38 22 C 41.314 22 44 24.686 44 28 L 44 78 L 62 78 C 72.493 78 81 69.941 81 60 C 81 50.059 72.493 42 62 42 L 53 42 C 50.791 42 49 40.209 49 38 L 49 28 C 49 25.791 50.791 24 53 24 L 62 24 C 81.882 24 98 40.118 98 60 C 98 79.882 81.882 96 62 96 L 32 96 C 28.686 96 26 93.314 26 90 Z" fill="#FFFFFF"/>
+  <path d="M 62.5 51 Q 62.5 60 71.5 60 Q 62.5 60 62.5 69 Q 62.5 60 53.5 60 Q 62.5 60 62.5 51 Z" fill="#38BDF8"/>
 </svg>

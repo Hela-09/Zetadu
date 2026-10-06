@@ -103,17 +103,17 @@ export default function WeakTopicActionModal({
           <button
             id="weak-topic-practice-btn"
             onClick={handlePractice}
-            className="w-full flex items-center justify-between p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20 text-left transition-all group cursor-pointer"
+            className="w-full flex items-center justify-between gap-3 p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20 text-left transition-all group cursor-pointer"
           >
-            <div className="flex items-center gap-3.5">
+            <div className="flex items-center gap-3.5 min-w-0 flex-1">
               <div className="w-11 h-11 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                 <PenTool size={20} />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <h4 className="font-bold text-slate-900 dark:text-white text-sm">
                   Practice
                 </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 break-words">
                   Answer targeted questions to drill concepts and boost accuracy
                 </p>
               </div>
@@ -125,17 +125,17 @@ export default function WeakTopicActionModal({
           <button
             id="weak-topic-flashcards-btn"
             onClick={handleFlashcards}
-            className="w-full flex items-center justify-between p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 text-left transition-all group cursor-pointer"
+            className="w-full flex items-center justify-between gap-3 p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 text-left transition-all group cursor-pointer"
           >
-            <div className="flex items-center gap-3.5">
+            <div className="flex items-center gap-3.5 min-w-0 flex-1">
               <div className="w-11 h-11 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                 <Layers size={20} />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <h4 className="font-bold text-slate-900 dark:text-white text-sm">
                   Study Flashcards
                 </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 break-words">
                   Review key definitions, formulas, and flashcard memory drills
                 </p>
               </div>
@@ -147,17 +147,17 @@ export default function WeakTopicActionModal({
           <button
             id="weak-topic-tutor-btn"
             onClick={handleAskTutor}
-            className="w-full flex items-center justify-between p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 text-left transition-all group cursor-pointer"
+            className="w-full flex items-center justify-between gap-3 p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 text-left transition-all group cursor-pointer"
           >
-            <div className="flex items-center gap-3.5">
+            <div className="flex items-center gap-3.5 min-w-0 flex-1">
               <div className="w-11 h-11 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                 <MessageSquare size={20} />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <h4 className="font-bold text-slate-900 dark:text-white text-sm">
                   Ask AI Tutor
                 </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 break-words">
                   Get step-by-step explanations and clear up confusing topics
                 </p>
               </div>

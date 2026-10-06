@@ -10,9 +10,10 @@ import {
   FileText,
   Sparkles
 } from 'lucide-react';
-import { JAMB_SUBJECTS, JAMB_YEARS } from '../../data/jambQuestions';
+import { JAMB_SUBJECTS, JAMB_YEARS, getRealAvailableQuestionsForSubject } from '../../data/jambQuestions';
 import { JAMB_CATEGORIES, JambCategory } from '../../data/jambSubjects';
 import { JAMB_SYLLABUS_DATA } from '../../data/jambSyllabus';
+import { AlertCircle } from 'lucide-react';
 
 interface JambPracticeSectionProps {
   initialSubjectId?: string;
@@ -53,6 +54,7 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
   const currentSubjectMeta = JAMB_SUBJECTS.find(s => s.id === selectedSubjectId) || JAMB_SUBJECTS[0];
   const syllabus = JAMB_SYLLABUS_DATA[selectedSubjectId];
   const topicsList = syllabus?.topics || [];
+  const availableInBank = getRealAvailableQuestionsForSubject(selectedSubjectId).length;
 
   const finalAmount = isCustomCount && Number(customQuestionCount) > 0 
     ? Math.min(100, Math.max(1, Number(customQuestionCount)))
@@ -135,9 +137,14 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
                       : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-800/60'
                   }`}
                 >
-                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase w-fit mb-1.5 border ${subj.badgeBg}`}>
-                    {subj.code}
-                  </span>
+                  <div className="flex items-center justify-between gap-1 w-full mb-1.5">
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase w-fit border ${subj.badgeBg}`}>
+                      {subj.code}
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-400">
+                      {getRealAvailableQuestionsForSubject(subj.id).length} Qs
+                    </span>
+                  </div>
                   <span className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">
                     {subj.name}
                   </span>
@@ -380,6 +387,22 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
             )}
           </div>
         </div>
+
+        {/* Availability Notice if user requests more than is available in bank */}
+        {finalAmount > availableInBank && (
+          <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 space-y-1.5 animate-fadeIn">
+            <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
+              <AlertCircle size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>Question Bank Notice</span>
+            </div>
+            <p>
+              You selected <strong>{finalAmount} questions</strong>, but <strong>{currentSubjectMeta.name}</strong> currently has <strong>{availableInBank} authentic questions</strong> available. {finalAmount} questions are not currently available.
+            </p>
+            <p className="text-[11px] text-amber-700/80 dark:text-amber-300/80">
+              LearnDean strictly isolates questions and never substitutes questions from other subjects. If you start, practice will begin with all {availableInBank} authentic {currentSubjectMeta.name} questions.
+            </p>
+          </div>
+        )}
 
         {/* Launch Button */}
         <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">

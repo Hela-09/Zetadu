@@ -648,37 +648,6 @@ export default function Quiz({
         return;
       }
 
-      // If loaded questions is fewer than requested and online (for non-JAMB generic modes)
-      if (loadedQ.length < reqCount && typeof navigator !== 'undefined' && navigator.onLine) {
-        try {
-          const subjectsToReplenish = initialConfig.subjects && initialConfig.subjects.length > 0 
-            ? initialConfig.subjects 
-            : [initialConfig.subjectId || initialConfig.subject || 'English Language'];
-          const missing = reqCount - loadedQ.length;
-          const perSub = Math.max(1, Math.ceil(missing / subjectsToReplenish.length));
-
-          for (const s of subjectsToReplenish) {
-            if (loadedQ.length >= reqCount) break;
-            const subMissing = Math.min(perSub, reqCount - loadedQ.length);
-            await jambService.generateAndDownloadMoreQuestions(s, 'General', subMissing);
-          }
-
-          const refreshed = await jambService.getPracticeQuestions({
-            subjects: initialConfig.subjects,
-            subject: initialConfig.subjectId || initialConfig.subject,
-            topic: initialConfig.topic,
-            year: initialConfig.year,
-            count: reqCount,
-            order: initialConfig.ordering || 'random'
-          });
-          loadedQ = refreshed.questions;
-          poolLow = refreshed.isPoolLow;
-          unanswered = refreshed.unansweredCount;
-        } catch (e) {
-          console.warn("Online auto-replenish error:", e);
-        }
-      }
-
       if (isCancelled) return;
 
       setIsPoolLow(poolLow || loadedQ.length < reqCount);
@@ -1843,7 +1812,7 @@ export default function Quiz({
             <p className="text-xs font-bold tracking-wider text-blue-600 dark:text-blue-400 uppercase mb-1">
               Setup Practice
             </p>
-            <h2 className="text-xl sm:text-3xl font-extrabold text-slate-900 dark:text-white truncate">Learndean Practice Session</h2>
+            <h2 className="text-xl sm:text-3xl font-extrabold text-slate-900 dark:text-white truncate">LearnDean Practice Session</h2>
           </div>
           <div className="w-9 shrink-0" />
         </div>
@@ -1996,53 +1965,33 @@ export default function Quiz({
           </div>
 
           <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mb-2">
-            Exam Question Pool Notice
+            Question Bank Availability Notice
           </h3>
           <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">
-            You requested <span className="font-bold text-slate-900 dark:text-white">{poolShortfallState.requested} questions</span>, but only <span className="font-bold text-amber-600 dark:text-amber-400">{poolShortfallState.available} unique questions</span> are currently downloaded offline for this subject combination.
+            You requested <span className="font-bold text-slate-900 dark:text-white">{poolShortfallState.requested} questions</span>, but only <span className="font-bold text-blue-600 dark:text-blue-400">{poolShortfallState.available} authentic questions</span> are currently available in the question bank for this selection ({poolShortfallState.subjects.join(', ')}). {poolShortfallState.requested} questions are not currently available.
           </p>
 
           <div className="bg-slate-50 dark:bg-slate-900/60 rounded-2xl p-4 mb-6 text-left border border-slate-200 dark:border-slate-800 space-y-2 text-xs text-slate-600 dark:text-slate-400">
             <div className="flex justify-between font-medium">
-              <span>Target Question Count:</span>
+              <span>Requested Question Count:</span>
               <span className="font-bold text-slate-900 dark:text-white">{poolShortfallState.requested} questions</span>
             </div>
             <div className="flex justify-between font-medium">
-              <span>Downloaded Offline Pool:</span>
+              <span>Authentic Available in Bank:</span>
               <span className="font-bold text-emerald-600 dark:text-emerald-400">{poolShortfallState.available} questions</span>
             </div>
             <div className="flex justify-between font-medium border-t border-slate-200 dark:border-slate-800 pt-2">
-              <span>Shortfall to Generate:</span>
-              <span className="font-bold text-rose-600 dark:text-rose-400">{poolShortfallState.shortfall} questions</span>
+              <span>Notice:</span>
+              <span className="font-bold text-amber-600 dark:text-amber-400">Never replaced with questions from other subjects</span>
             </div>
           </div>
 
           <div className="space-y-3">
-            <button
-              type="button"
-              disabled={isGeneratingShortfall}
-              onClick={handleGenerateShortfall}
-              className="w-full py-4 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-2xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm text-sm sm:text-base"
-            >
-              {isGeneratingShortfall ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" />
-                  <span>Generating {poolShortfallState.shortfall} Questions Online...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles size={18} />
-                  <span>Generate Missing {poolShortfallState.shortfall} Questions with AI</span>
-                </>
-              )}
-            </button>
-
             {poolShortfallState.available > 0 && (
               <button
                 type="button"
-                disabled={isGeneratingShortfall}
                 onClick={handleStartWithAvailable}
-                className="w-full py-3.5 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-bold rounded-2xl transition-colors text-sm cursor-pointer"
+                className="w-full py-4 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-colors shadow-sm text-sm sm:text-base cursor-pointer"
               >
                 Start Practice with Available ({poolShortfallState.available} Questions)
               </button>
@@ -2050,7 +1999,6 @@ export default function Quiz({
 
             <button
               type="button"
-              disabled={isGeneratingShortfall}
               onClick={() => {
                 setPoolShortfallState(null);
                 if (onBack) onBack();
@@ -2058,7 +2006,7 @@ export default function Quiz({
               }}
               className="w-full py-3 px-4 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 font-semibold text-xs transition-colors cursor-pointer"
             >
-              Cancel & Adjust Combination / Count
+              Cancel & Adjust Selection
             </button>
           </div>
         </motion.div>
@@ -2914,7 +2862,7 @@ export default function Quiz({
                         </div>
                         
                         {/* Option Text */}
-                        <span className="font-semibold text-base sm:text-lg leading-snug break-words">
+                        <span className="font-semibold text-base sm:text-lg leading-snug break-words flex-1 min-w-0">
                           {cleanedText}
                         </span>
                       </div>

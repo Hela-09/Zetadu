@@ -159,7 +159,7 @@ export default function Subjects({ setView, initialSection }: { setView?: (view:
 
   if (activeSubject) {
     return (
-      <div className="w-full max-w-5xl mx-auto pb-28 sm:pb-32 flex flex-col">
+      <div className="w-full max-w-5xl mx-auto pb-6 sm:pb-8 flex flex-col">
         <button 
           onClick={handleBackToLibrary} 
           className="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center gap-1 mb-6 transition-colors bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 w-fit shadow-sm hover:shadow-md cursor-pointer"
@@ -265,15 +265,12 @@ export default function Subjects({ setView, initialSection }: { setView?: (view:
             </div>
           </button>
         </div>
-
-        {/* Mobile Clearance Spacer */}
-        <div className="md:hidden h-20 sm:h-24 w-full shrink-0 pointer-events-none" aria-hidden="true" />
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto pb-28 sm:pb-32 flex flex-col">
+    <div className="w-full max-w-7xl mx-auto pb-6 sm:pb-8 flex flex-col">
       {/* Learn Section Switcher Tabs */}
       <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl w-full sm:w-fit mb-6 sm:mb-8 border border-slate-200 dark:border-slate-700/60 shadow-xs max-w-full">
         <button
@@ -420,9 +417,6 @@ export default function Subjects({ setView, initialSection }: { setView?: (view:
       </div>
         </>
       )}
-
-      {/* Mobile Clearance Spacer */}
-      <div className="md:hidden h-20 sm:h-24 w-full shrink-0 pointer-events-none" aria-hidden="true" />
     </div>
   );
 }

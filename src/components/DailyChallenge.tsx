@@ -449,13 +449,13 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
                     : 'border-slate-200 dark:border-slate-700 hover:border-orange-300 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
               >
-                <div className="flex items-center gap-4">
-                  <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 font-bold transition-colors ${
+                <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 font-bold transition-colors mt-0.5 sm:mt-0 ${
                     answers[currentQIndex] === idx ? 'border-orange-500 bg-orange-500 text-white' : 'border-slate-300 text-slate-500'
                   }`}>
                     {String.fromCharCode(65 + idx)}
                   </div>
-                  <span className="break-words">{opt}</span>
+                  <span className="break-words min-w-0 flex-1 leading-snug">{opt}</span>
                 </div>
               </button>
             ))}

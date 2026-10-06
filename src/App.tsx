@@ -155,8 +155,14 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" aria-label="Loading..."></div>
+      <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center p-4 select-none">
+        <div className="mb-4">
+          <Logo variant="icon" className="w-16 h-16 shrink-0 shadow-lg shadow-blue-500/10" />
+        </div>
+        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm font-medium">
+          <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" aria-label="Loading..."></div>
+          <span>Loading LearnDean...</span>
+        </div>
       </div>
     );
   }
@@ -164,8 +170,14 @@ export default function App() {
   if (!user) {
     return (
       <Suspense fallback={
-        <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" aria-label="Loading..."></div>
+        <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center p-4 select-none">
+          <div className="mb-4">
+            <Logo variant="icon" className="w-16 h-16 shrink-0 shadow-lg shadow-blue-500/10" />
+          </div>
+          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm font-medium">
+            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" aria-label="Loading..."></div>
+            <span>Loading LearnDean...</span>
+          </div>
         </div>
       }>
         <Login />
@@ -178,8 +190,14 @@ export default function App() {
   if (user && userProfile && !isSuperAdmin && !userProfile.isSuperAdmin && userProfile.role !== 'super_admin' && !isSubscriptionActive) {
     return (
       <Suspense fallback={
-        <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" aria-label="Loading..."></div>
+        <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center p-4 select-none">
+          <div className="mb-4">
+            <Logo variant="icon" className="w-16 h-16 shrink-0 shadow-lg shadow-blue-500/10" />
+          </div>
+          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm font-medium">
+            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" aria-label="Loading..."></div>
+            <span>Loading...</span>
+          </div>
         </div>
       }>
         <PaymentGate />
@@ -201,8 +219,8 @@ export default function App() {
           </div>
         )}
 
-        <main className={`flex-1 flex flex-col min-h-0 relative ${currentView === 'tutor' ? 'p-0 overflow-hidden' : 'p-3 sm:p-4 md:p-8 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-8 overflow-y-auto'}`}>
-          <header className={`flex justify-between items-center shrink-0 gap-2 sm:gap-3 md:gap-4 flex-wrap relative z-30 ${currentView === 'tutor' ? 'hidden' : 'mb-4 md:mb-7'}`}>
+        <main className={`flex-1 flex flex-col min-h-0 relative overflow-x-hidden ${currentView === 'tutor' ? 'p-0 overflow-hidden' : 'p-3 sm:p-5 md:p-8 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-8 overflow-y-auto'}`}>
+          <header className={`flex justify-between items-center shrink-0 gap-2 sm:gap-3 md:gap-4 flex-nowrap relative z-30 ${currentView === 'tutor' ? 'hidden' : 'mb-3 sm:mb-4 md:mb-6'}`}>
             {/* LearnDean Logo & Name on the Left */}
             <div 
               id="header-brand-logo"
@@ -350,15 +368,6 @@ export default function App() {
                     <Route path="/admin" element={<Admin />} />
                     <Route path="*" element={<Navigate to="/home" replace />} />
                   </Routes>
-
-                  {/* Guaranteed Mobile Bottom Spacer for clearance above BottomNav */}
-                  {currentView !== 'tutor' && (
-                    <div 
-                      id="mobile-bottom-nav-spacer" 
-                      className="md:hidden w-full h-24 sm:h-28 shrink-0 pointer-events-none" 
-                      aria-hidden="true" 
-                    />
-                  )}
                 </motion.div>
               </AnimatePresence>
             </Suspense>

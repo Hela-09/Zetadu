@@ -96,18 +96,19 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
               aria-current={isActive ? 'page' : undefined}
             >
               {isCenter ? (
-                /* Center AI Tutor item with distinctive LearnDean AI logo */
+                /* Center AI Tutor item with distinctive LearnDean LD monogram app icon */
                 <div
-                  className={`w-9.5 h-9.5 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+                  className={`w-9.5 h-9.5 rounded-2xl flex items-center justify-center transition-all duration-200 overflow-hidden ${
                     isActive
-                      ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/30 border border-blue-500/80 scale-[1.04]'
-                      : 'bg-gradient-to-br from-blue-50 to-indigo-50/70 dark:from-slate-800 dark:to-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/70 dark:border-blue-800/60 shadow-2xs group-hover:scale-105'
+                      ? 'shadow-md shadow-blue-500/30 ring-2 ring-blue-500 scale-[1.05]'
+                      : 'shadow-xs border border-blue-200/50 dark:border-blue-800/40 group-hover:scale-105'
                   }`}
                 >
                   <LearnDeanEmblem
-                    className={`w-6 h-6 transition-transform ${
+                    className={`w-full h-full transition-transform ${
                       isActive ? 'scale-105' : 'group-hover:scale-105'
                     }`}
+                    background="app-icon"
                     active={isActive}
                   />
                 </div>

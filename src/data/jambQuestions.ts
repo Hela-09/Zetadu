@@ -1,4 +1,10 @@
 import { OFFICIAL_JAMB_SUBJECTS, JambSubject } from './jambSubjects';
+import { 
+  filterQuestionsBySubjectStrict, 
+  isQuestionForSubject, 
+  canonicalSubjectKey, 
+  getCanonicalSubjectDisplayName 
+} from '../utils/jambSubjectMatcher';
 import { MATH_QUESTIONS } from './jamb/mathQuestions';
 import { ENGLISH_QUESTIONS } from './jamb/englishQuestions';
 import { PHYSICS_QUESTIONS } from './jamb/physicsQuestions';
@@ -1105,40 +1111,11 @@ export const JAMB_QUESTIONS: JambQuestion[] = Array.from(questionMap.values());
 
 /**
  * Returns the exact list of genuine available questions for a specific approved JAMB subject.
- * Accurately matches against subjectId, subjectName, or code prefixes.
+ * Strictly guarantees that questions from other subjects are NEVER included.
  */
 export function getRealAvailableQuestionsForSubject(subjectIdOrName: string): JambQuestion[] {
   if (!subjectIdOrName) return [];
-  const norm = subjectIdOrName.toLowerCase().trim();
-  return JAMB_QUESTIONS.filter(q => {
-    const qSub = (q.subject || '').toLowerCase().trim();
-    const qName = (q.subjectName || '').toLowerCase().trim();
-    const qId = (q.id || '').toLowerCase().trim();
-    return (
-      qSub === norm ||
-      qName === norm ||
-      qId.startsWith(`jamb-${norm}-`) ||
-      (norm === 'english' && (qSub.includes('english') || qName.includes('english'))) ||
-      (norm === 'mathematics' && (qSub.includes('math') || qName.includes('math'))) ||
-      (norm === 'physics' && (qSub.includes('phy') || qName.includes('phy'))) ||
-      (norm === 'chemistry' && (qSub.includes('chem') || qName.includes('chem'))) ||
-      (norm === 'biology' && (qSub.includes('bio') || qName.includes('bio'))) ||
-      (norm === 'economics' && (qSub.includes('eco') || qName.includes('eco'))) ||
-      (norm === 'government' && (qSub.includes('gov') || qName.includes('gov'))) ||
-      (norm === 'literature' && (qSub.includes('lit') || qName.includes('lit'))) ||
-      (norm === 'commerce' && (qSub.includes('com') || qName.includes('com'))) ||
-      (norm === 'geography' && (qSub.includes('geo') || qName.includes('geo'))) ||
-      (norm === 'agriculture' && (qSub.includes('agric') || qName.includes('agric'))) ||
-      (norm === 'computer' && (qSub.includes('computer') || qName.includes('computer'))) ||
-      (norm === 'accounts' && (qSub.includes('account') || qName.includes('account'))) ||
-      (norm === 'civic' && (qSub.includes('civic') || qName.includes('civic'))) ||
-      (norm === 'crs' && (qSub.includes('christ') || qSub.includes('crs') || qName.includes('christ'))) ||
-      (norm === 'irs' && (qSub.includes('islam') || qSub.includes('irs') || qName.includes('islam'))) ||
-      (norm === 'art' && (qSub.includes('art') || qName.includes('art'))) ||
-      (norm === 'phe' && (qSub.includes('phe') || qSub.includes('physical') || qName.includes('physical'))) ||
-      (norm === 'home_economics' && (qSub.includes('home') || qName.includes('home')))
-    );
-  });
+  return filterQuestionsBySubjectStrict(JAMB_QUESTIONS, subjectIdOrName);
 }
 
 export function getJambQuestionsByFilter(
@@ -1146,33 +1123,25 @@ export function getJambQuestionsByFilter(
   year?: number | 'all',
   count: number = 20
 ): JambQuestion[] {
-  const normSub = subject.toLowerCase().trim();
-  let subjectQuestions = JAMB_QUESTIONS.filter(q => 
-    q.subject.toLowerCase() === normSub || 
-    q.subjectName.toLowerCase() === normSub ||
-    q.id.toLowerCase().includes(normSub)
-  );
+  const subjectQuestions = filterQuestionsBySubjectStrict(JAMB_QUESTIONS, subject);
   
   let filtered = [...subjectQuestions];
   if (year && year !== 'all') {
     const yearFiltered = subjectQuestions.filter(q => q.year === year);
-    if (yearFiltered.length >= count) {
+    if (yearFiltered.length > 0) {
       filtered = yearFiltered;
-    } else if (yearFiltered.length > 0) {
-      // Prioritize questions from the requested year, then backfill with other years from the same subject
-      const otherYears = subjectQuestions.filter(q => q.year !== year);
-      filtered = [...yearFiltered, ...otherYears];
     }
   }
 
-  // Shuffle questions randomly without any duplicates
+  // Shuffle questions randomly without any duplicates from the same subject
   const shuffled = [...filtered].sort(() => 0.5 - Math.random());
   return shuffled.slice(0, count);
 }
 
 /**
  * UNIFIED PRACTICE QUERY FUNCTION
- * Normalizes questions into the exact format consumed by Quiz.tsx (the Practice Center engine).
+ * Normalizes questions into the exact format consumed by Quiz.tsx & JambPracticeScreen.
+ * Strictly guarantees complete subject isolation: questions are NEVER substituted between subjects.
  */
 export interface PracticeQueryOptions {
   subject?: string;
@@ -1198,13 +1167,8 @@ export function getUnifiedQuestionsForPractice(options: PracticeQueryOptions) {
 
     subjects.forEach((subId, idx) => {
       const targetForSubject = baseCount + (idx < remainder ? 1 : 0);
-      const normSubId = subId.toLowerCase().trim();
-      
-      const allSubQuestions = JAMB_QUESTIONS.filter(q => 
-        q.subject.toLowerCase() === normSubId || 
-        q.subjectName.toLowerCase() === normSubId ||
-        q.id.toLowerCase().includes(normSubId)
-      );
+      // Strictly filter questions belonging ONLY to this specific subject
+      const allSubQuestions = filterQuestionsBySubjectStrict(JAMB_QUESTIONS, subId);
 
       // Primary filter: requested year if specified
       let primaryPool: JambQuestion[] = [];
@@ -1223,8 +1187,8 @@ export function getUnifiedQuestionsForPractice(options: PracticeQueryOptions) {
         primaryPool.sort(() => 0.5 - Math.random());
         secondaryPool.sort(() => 0.5 - Math.random());
       } else {
-        primaryPool.sort((a, b) => a.questionNumber - b.questionNumber);
-        secondaryPool.sort((a, b) => a.questionNumber - b.questionNumber);
+        primaryPool.sort((a, b) => (a.questionNumber || 0) - (b.questionNumber || 0));
+        secondaryPool.sort((a, b) => (a.questionNumber || 0) - (b.questionNumber || 0));
       }
 
       const selectedForSubject: JambQuestion[] = [];
@@ -1239,37 +1203,12 @@ export function getUnifiedQuestionsForPractice(options: PracticeQueryOptions) {
         globalUsedIds.add(q.id);
       }
 
+      // Append questions for this subject. NOTICE: Never backfill from other subjects!
       resultList.push(...selectedForSubject);
     });
-
-    // Backfill from unused questions in any of the selected subjects to satisfy count exactly
-    if (resultList.length < count) {
-      for (const subId of subjects) {
-        if (resultList.length >= count) break;
-        const normSubId = subId.toLowerCase().trim();
-        const extras = JAMB_QUESTIONS.filter(q => 
-          (q.subject.toLowerCase() === normSubId || 
-           q.subjectName.toLowerCase() === normSubId ||
-           q.id.toLowerCase().includes(normSubId)) &&
-          !globalUsedIds.has(q.id)
-        );
-        for (const eq of extras) {
-          if (resultList.length >= count) break;
-          resultList.push(eq);
-          globalUsedIds.add(eq.id);
-        }
-      }
-    }
   } else if (subject) {
-    const normSubject = subject.toLowerCase().trim();
-    let allSubQuestions = getRealAvailableQuestionsForSubject(normSubject);
-    if (allSubQuestions.length === 0) {
-      allSubQuestions = JAMB_QUESTIONS.filter(q => 
-        q.subject.toLowerCase() === normSubject || 
-        q.subjectName.toLowerCase() === normSubject ||
-        q.id.toLowerCase().includes(normSubject)
-      );
-    }
+    // Single subject mode: strictly isolate to the requested subject only
+    const allSubQuestions = filterQuestionsBySubjectStrict(JAMB_QUESTIONS, subject);
 
     const normalizeTopic = (t?: string) => (t || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
     const hasTopic = topic && topic !== 'All Topics' && topic !== 'General';
@@ -1335,7 +1274,7 @@ export function getUnifiedQuestionsForPractice(options: PracticeQueryOptions) {
       }
     }
 
-    // If still under count, backfill from any unused question in the subject
+    // If still under count, only pull unused questions from the SAME subject
     if (resultList.length < count) {
       for (const q of allSubQuestions) {
         if (resultList.length >= count) break;
@@ -1346,7 +1285,7 @@ export function getUnifiedQuestionsForPractice(options: PracticeQueryOptions) {
       }
     }
   } else {
-    // General all subjects mix
+    // General all subjects mix (only if no specific subject was chosen)
     let pool = [...JAMB_QUESTIONS];
     if (order === 'random') pool.sort(() => 0.5 - Math.random());
     for (const q of pool) {
@@ -1360,20 +1299,26 @@ export function getUnifiedQuestionsForPractice(options: PracticeQueryOptions) {
 
   const finalQuestions = resultList.slice(0, count);
 
-  // Convert to Quiz.tsx Question format
-  return finalQuestions.map((q, idx) => ({
-    id: q.id,
-    question: q.passage ? `${q.passage}\n\n${q.question}` : q.question,
-    options: q.options,
-    correctAnswerIndex: q.correctAnswer,
-    correctAnswer: q.correctAnswer,
-    explanation: q.explanation,
-    difficulty: 'Medium',
-    topic: q.topic,
-    subject: q.subjectName || q.subject,
-    subjectId: q.subject,
-    year: q.year,
-    questionNumber: q.questionNumber || (idx + 1)
-  }));
+  // Convert to canonical Question format with accurate subject metadata
+  return finalQuestions.map((q, idx) => {
+    const canonicalKey = canonicalSubjectKey(q.subject || q.subjectName);
+    const displayName = getCanonicalSubjectDisplayName(canonicalKey);
+
+    return {
+      id: q.id,
+      question: q.passage ? `${q.passage}\n\n${q.question}` : q.question,
+      options: q.options,
+      correctAnswerIndex: q.correctAnswer,
+      correctAnswer: q.correctAnswer,
+      explanation: q.explanation,
+      difficulty: 'Medium',
+      topic: q.topic || 'General',
+      subject: displayName,
+      subjectName: displayName,
+      subjectId: canonicalKey || q.subject,
+      year: q.year,
+      questionNumber: q.questionNumber || (idx + 1)
+    };
+  });
 }
 

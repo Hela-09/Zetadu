@@ -1993,7 +1993,7 @@ export default function StudyHub({ setView }: StudyHubProps) {
                             <span className="w-5 h-5 rounded-full flex items-center justify-center border text-[10px] shrink-0 font-bold">
                               {String.fromCharCode(65 + oIdx)}
                             </span>
-                            <span>{opt}</span>
+                            <span className="break-words min-w-0 flex-1 leading-snug">{opt}</span>
                           </div>
                         );
                       })}

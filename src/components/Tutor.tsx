@@ -608,7 +608,7 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
               <span>Back</span>
             </button>
           )}
-          <h2 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white hidden sm:block">Learndean Tutor</h2>
+          <h2 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white hidden sm:block">LearnDean Tutor</h2>
         </div>
         
         <div className="flex items-center gap-2">
@@ -870,13 +870,13 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
               </div>
             )}
 
-            <div className="relative w-full flex flex-row items-end gap-1 md:gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[18px] md:rounded-[20px] p-[10px_12px] md:p-[12px_16px] min-h-[68px] md:min-h-[78px] focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500 transition-colors shadow-sm mb-[16px]">
-              <div className="flex gap-1 shrink-0 text-slate-400 items-center justify-center">
+            <div className="relative w-full flex flex-row items-end gap-1 md:gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[18px] md:rounded-[20px] p-[8px_10px] sm:p-[10px_12px] md:p-[12px_16px] min-h-[56px] sm:min-h-[68px] md:min-h-[78px] focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500 transition-colors shadow-sm mb-[16px]">
+              <div className="flex gap-0.5 sm:gap-1 shrink-0 text-slate-400 items-center justify-center">
                 <input type="file" multiple accept="image/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.csv" className="hidden" ref={fileInputRef} onChange={(e) => { handleFileSelection(e.target.files); e.target.value = ''; }} />
-                <button onClick={() => fileInputRef.current?.click()} className="w-[44px] h-[44px] flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors hover:text-blue-500" title="Attach file">
+                <button onClick={() => fileInputRef.current?.click()} className="w-[36px] h-[36px] sm:w-[44px] sm:h-[44px] flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors hover:text-blue-500 cursor-pointer" title="Attach file">
                   <Paperclip size={18} />
                 </button>
-                <button onClick={handleDriveClick} className="w-[44px] h-[44px] flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors hover:text-blue-500" title="Attach from Google Drive">
+                <button onClick={handleDriveClick} className="w-[36px] h-[36px] sm:w-[44px] sm:h-[44px] flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors hover:text-blue-500 cursor-pointer" title="Attach from Google Drive">
                   <HardDrive size={18} />
                 </button>
               </div>
@@ -891,14 +891,14 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
                 }}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask your AI tutor..."
-                className="flex-1 min-w-0 w-full bg-transparent border-none py-[12px] px-2 text-[16px] md:text-[17px] leading-[24px] resize-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder:text-slate-500 self-center max-h-[160px] overflow-y-auto no-scrollbar"
+                className="flex-1 min-w-0 w-full bg-transparent border-none py-[10px] sm:py-[12px] px-1.5 sm:px-2 text-[15px] sm:text-[16px] md:text-[17px] leading-[22px] sm:leading-[24px] resize-none focus:outline-none focus:ring-0 text-slate-900 dark:text-white placeholder:text-slate-500 self-center max-h-[160px] overflow-y-auto no-scrollbar"
                 rows={1}
                 style={{ minHeight: '24px' }}
               />
               <button
                 onClick={handleSend}
                 disabled={(!input.trim() && selectedFiles.length === 0) || isLoading || isUploading}
-                className="shrink-0 w-[48px] h-[48px] flex items-center justify-center rounded-[14px] bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors shadow-md"
+                className="shrink-0 w-[40px] h-[40px] sm:w-[48px] sm:h-[48px] flex items-center justify-center rounded-[14px] bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors shadow-md cursor-pointer"
               >
                 <Send size={18} className={(input.trim() || selectedFiles.length > 0) && !isLoading && !isUploading ? '' : 'opacity-50'} />
               </button>

@@ -281,7 +281,7 @@ export default function FlashcardStudyScreen({
         </div>
 
         <div className="w-full max-w-2xl mx-auto text-center py-4 text-xs text-slate-400">
-          EduCore Learndean Spaced Repetition Engine
+          EduCore LearnDean Spaced Repetition Engine
         </div>
       </div>
     );
@@ -387,7 +387,7 @@ export default function FlashcardStudyScreen({
         <div className="w-full max-w-xl perspective-1000">
           <div 
             onClick={handleCardClick}
-            className={`card-flip-container relative w-full h-[360px] sm:h-[420px] cursor-pointer ${
+            className={`card-flip-container relative w-full h-[min(380px,50dvh)] sm:h-[420px] min-h-[300px] cursor-pointer ${
               isFlipped ? 'flipped' : ''
             }`}
             role="button"
@@ -395,7 +395,7 @@ export default function FlashcardStudyScreen({
             aria-label={isFlipped ? "Flashcard back showing answer. Tap to flip back." : "Flashcard front showing question. Tap to reveal answer."}
           >
             {/* FRONT FACE */}
-            <div className="card-face card-face-front absolute inset-0 w-full h-full rounded-3xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 shadow-md hover:shadow-lg transition-shadow p-6 sm:p-10 flex flex-col justify-between text-center overflow-hidden">
+            <div className="card-face card-face-front absolute inset-0 w-full h-full rounded-3xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 shadow-md hover:shadow-lg transition-shadow p-5 sm:p-8 md:p-10 flex flex-col justify-between text-center overflow-hidden">
               <div className="flex items-center justify-between w-full">
                 <span className="px-3 py-1 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded-full text-xs font-bold uppercase tracking-wider">
                   Question
@@ -408,21 +408,21 @@ export default function FlashcardStudyScreen({
               </div>
 
               {/* Main Question / Concept */}
-              <div className="flex-1 flex flex-col items-center justify-center px-2 py-4">
-                <p className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800 dark:text-white leading-relaxed tracking-tight break-words max-h-[220px] sm:max-h-[260px] overflow-y-auto pr-1">
+              <div className="flex-1 flex flex-col items-center justify-center px-2 py-3 min-h-0">
+                <p className="text-lg sm:text-2xl md:text-3xl font-bold text-slate-800 dark:text-white leading-relaxed tracking-tight break-words max-h-[190px] sm:max-h-[260px] overflow-y-auto pr-1">
                   {currentCard.front}
                 </p>
               </div>
 
               {/* Subtle flip prompt */}
-              <div className="flex items-center justify-center gap-1.5 text-xs font-medium text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-700/60">
+              <div className="flex items-center justify-center gap-1.5 text-xs font-medium text-slate-400 dark:text-slate-500 pt-2 border-t border-slate-100 dark:border-slate-700/60 shrink-0">
                 <RotateCw size={14} className="animate-pulse text-blue-500" />
                 <span>Tap card to reveal answer</span>
               </div>
             </div>
 
             {/* BACK FACE */}
-            <div className="card-face card-face-back absolute inset-0 w-full h-full rounded-3xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 shadow-md hover:shadow-lg transition-shadow p-6 sm:p-10 flex flex-col justify-between text-left overflow-hidden">
+            <div className="card-face card-face-back absolute inset-0 w-full h-full rounded-3xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 shadow-md hover:shadow-lg transition-shadow p-5 sm:p-8 md:p-10 flex flex-col justify-between text-left overflow-hidden">
               <div className="flex items-center justify-between w-full shrink-0 mb-2">
                 <span className="px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-full text-xs font-bold uppercase tracking-wider">
                   Correct Answer
