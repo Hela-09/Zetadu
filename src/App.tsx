@@ -73,6 +73,7 @@ export default function App() {
     signOut,
     showGoogleBackupPrompt,
     setShowGoogleBackupPrompt,
+    needsPasswordCreation,
   } = useAuth();
   const [adminChecked, setAdminChecked] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -167,7 +168,7 @@ export default function App() {
     );
   }
 
-  if (!user) {
+  if (!user || needsPasswordCreation) {
     return (
       <Suspense fallback={
         <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center p-4 select-none">
@@ -180,7 +181,7 @@ export default function App() {
           </div>
         </div>
       }>
-        <Login />
+        <Login forceCreatePassword={needsPasswordCreation} />
       </Suspense>
     );
   }

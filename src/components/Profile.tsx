@@ -222,7 +222,9 @@ export default function Profile({ setView, initialSection }: ProfileProps) {
   // --- Subviews ---
 
   const EditProfileView = () => {
-    const [name, setName] = useState(userProfile?.name || user?.displayName || '');
+    const [name, setName] = useState(userProfile?.firstName || (userProfile?.name ? userProfile.name.split(' ')[0] : '') || user?.displayName || '');
+    const [surname, setSurname] = useState(userProfile?.surname || (userProfile?.name && userProfile.name.split(' ').length > 1 ? userProfile.name.split(' ').slice(1).join(' ') : '') || '');
+    const [phoneNumber, setPhoneNumber] = useState(userProfile?.phoneNumber || user?.phoneNumber || '');
     const [username, setUsername] = useState(userProfile?.username || '');
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -261,10 +263,20 @@ export default function Profile({ setView, initialSection }: ProfileProps) {
           throw new Error('This username is already taken.');
         }
 
-        if (name !== user.displayName) {
-          await updateProfile(user, { displayName: name });
+        const trimmedName = name.trim();
+        const trimmedSurname = surname.trim();
+        const fullName = `${trimmedName} ${trimmedSurname}`.trim() || trimmedName;
+
+        if (fullName && fullName !== user.displayName) {
+          await updateProfile(user, { displayName: fullName });
         }
-        await setDoc(doc(db, 'users', user.uid), { name, username: cleanUsername }, { merge: true });
+        await setDoc(doc(db, 'users', user.uid), {
+          name: fullName,
+          firstName: trimmedName,
+          surname: trimmedSurname,
+          phoneNumber: phoneNumber.trim(),
+          username: cleanUsername
+        }, { merge: true });
         
         if (refreshProfile) await refreshProfile();
         
@@ -341,9 +353,19 @@ export default function Profile({ setView, initialSection }: ProfileProps) {
                 />
               </div>
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">First Name</label>
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Surname</label>
+                <input type="text" value={surname} onChange={(e) => setSurname(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
+              </div>
+            </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Full Name</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Phone Number</label>
+              <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="e.g. +234 801 234 5678" className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email Address</label>

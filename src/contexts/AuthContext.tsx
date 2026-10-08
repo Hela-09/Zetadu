@@ -7,6 +7,7 @@ import {
   onAuthStateChanged,
   getIdToken,
   updateProfile,
+  updatePassword,
   getAdditionalUserInfo,
   linkWithCredential,
   EmailAuthProvider,
@@ -19,6 +20,12 @@ export interface UserSettings {
   fontSize: "small" | "medium" | "large";
   defaultPracticeDifficulty: "Easy" | "Medium" | "Hard" | "Mixed";
   aiTutorTone: "Friendly" | "Direct" | "Socratic";
+}
+
+export interface PendingSignupData {
+  name: string;
+  surname: string;
+  phoneNumber: string;
 }
 
 interface AuthContextType {
@@ -40,10 +47,22 @@ interface AuthContextType {
   setError: (err: string | null) => void;
   showGoogleBackupPrompt: boolean;
   setShowGoogleBackupPrompt: (show: boolean) => void;
-  linkPasswordAccount: (password: string) => Promise<{ success: boolean; error?: string }>;
+  linkPasswordAccount: (
+    password: string,
+    profileDetails?: {
+      name?: string;
+      surname?: string;
+      phoneNumber?: string;
+      email?: string;
+    }
+  ) => Promise<{ success: boolean; error?: string }>;
   hasPasswordProvider: boolean;
   hasGoogleProvider: boolean;
   isGoogleUserWithoutPassword: boolean;
+  needsPasswordCreation: boolean;
+  setNeedsPasswordCreation: (val: boolean) => void;
+  pendingSignupData: PendingSignupData | null;
+  setPendingSignupData: (data: PendingSignupData | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -64,6 +83,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [error, setError] = useState<string | null>(null);
   const [oauthToken, setOauthToken] = useState<string | null>(null);
   const [showGoogleBackupPrompt, setShowGoogleBackupPrompt] = useState(false);
+  const [needsPasswordCreation, setNeedsPasswordCreation] = useState(false);
+  const [pendingSignupData, setPendingSignupData] = useState<PendingSignupData | null>(null);
 
   const hasPasswordProvider = user?.providerData?.some((p) => p.providerId === 'password') ?? false;
   const hasGoogleProvider = user?.providerData?.some((p) => p.providerId === 'google.com') ?? false;
@@ -192,11 +213,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ? currentUser.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '') + Math.floor(Math.random() * 1000) 
             : 'user_' + currentUser.uid.substring(0, 6);
 
+          const nameParts = (currentUser.displayName || '').trim().split(/\s+/);
+          const derivedFirstName = nameParts[0] || '';
+          const derivedSurname = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+
           const newUserProfile = {
             uid: currentUser.uid,
             email: currentUser.email || '',
             displayName: currentUser.displayName || '',
             name: currentUser.displayName || '',
+            firstName: derivedFirstName,
+            surname: derivedSurname,
+            phoneNumber: currentUser.phoneNumber || '',
             username: generatedUsername,
             photoURL: currentUser.photoURL || '',
             educationLevel: 'Secondary',
@@ -224,11 +252,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (readErr: any) {
         console.warn("[Auth] Firestore profile read fallback (quota/network):", readErr?.message);
         if (!currentLocalProfile) {
+          const nameParts = (currentUser.displayName || '').trim().split(/\s+/);
           const fallbackProfile = {
             uid: currentUser.uid,
             email: currentUser.email || '',
             displayName: currentUser.displayName || '',
             name: currentUser.displayName || '',
+            firstName: nameParts[0] || '',
+            surname: nameParts.length > 1 ? nameParts.slice(1).join(' ') : '',
+            phoneNumber: currentUser.phoneNumber || '',
             username: currentUser.email ? currentUser.email.split('@')[0] : 'user',
             photoURL: currentUser.photoURL || '',
             educationLevel: 'Secondary',
@@ -344,6 +376,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       try {
         if (currentUser) {
+          const hasPassword = currentUser.providerData?.some((p) => p.providerId === 'password') ?? false;
+          const hasGoogle = currentUser.providerData?.some((p) => p.providerId === 'google.com') ?? false;
+
+          if (hasGoogle && !hasPassword) {
+            setNeedsPasswordCreation(true);
+          } else {
+            setNeedsPasswordCreation(false);
+          }
+
           await setupUserProfile(currentUser);
           if (isSubscribed) {
             setUser(currentUser);
@@ -352,6 +393,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           // No active user
           if (isSubscribed) {
+            setNeedsPasswordCreation(false);
             if (profileUnsubRef.current) {
               profileUnsubRef.current();
               profileUnsubRef.current = null;
@@ -536,18 +578,98 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearError = () => setError(null);
 
-  const linkPasswordAccount = async (password: string): Promise<{ success: boolean; error?: string }> => {
+  const linkPasswordAccount = async (
+    password: string,
+    profileDetails?: {
+      name?: string;
+      surname?: string;
+      phoneNumber?: string;
+      email?: string;
+    }
+  ): Promise<{ success: boolean; error?: string }> => {
     if (!auth || !auth.currentUser || !auth.currentUser.email) {
       return { success: false, error: 'No active user session found.' };
     }
 
     try {
-      const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
-      const userCredential = await linkWithCredential(auth.currentUser, credential);
-      if (userCredential && userCredential.user) {
-        setUser(userCredential.user);
-        await setupUserProfile(userCredential.user);
+      const activeUser = auth.currentUser;
+      const credential = EmailAuthProvider.credential(activeUser.email, password);
+      let userCredential: any;
+
+      const hasPasswordAlready = activeUser.providerData.some((p) => p.providerId === 'password');
+      if (hasPasswordAlready) {
+        try {
+          await updatePassword(activeUser, password);
+        } catch (upErr: any) {
+          console.warn('[Auth] updatePassword warning:', upErr);
+        }
+      } else {
+        try {
+          userCredential = await linkWithCredential(activeUser, credential);
+        } catch (linkErr: any) {
+          if (linkErr.code === 'auth/provider-already-linked') {
+            await updatePassword(activeUser, password);
+          } else {
+            throw linkErr;
+          }
+        }
       }
+
+      const updatedUser = userCredential?.user || auth.currentUser;
+
+      // Update displayName on Firebase Auth user if name/surname provided
+      const trimmedName = (profileDetails?.name || '').trim();
+      const trimmedSurname = (profileDetails?.surname || '').trim();
+      const trimmedPhone = (profileDetails?.phoneNumber || '').trim();
+      const trimmedEmail = (profileDetails?.email || updatedUser.email || '').trim().toLowerCase();
+
+      let fullName = updatedUser.displayName || '';
+      if (trimmedName || trimmedSurname) {
+        fullName = `${trimmedName} ${trimmedSurname}`.trim();
+        if (fullName) {
+          try {
+            await updateProfile(updatedUser, { displayName: fullName });
+          } catch (pErr) {
+            console.warn('[Auth] updateProfile displayName warning:', pErr);
+          }
+        }
+      }
+
+      // Save name, surname, phone number and email to Firestore user profile
+      const updates: any = {
+        updatedAt: new Date().toISOString()
+      };
+      if (trimmedName) updates.firstName = trimmedName;
+      if (trimmedSurname) updates.surname = trimmedSurname;
+      if (trimmedPhone) updates.phoneNumber = trimmedPhone;
+      if (trimmedEmail) updates.email = trimmedEmail;
+      if (fullName) {
+        updates.name = fullName;
+        updates.displayName = fullName;
+      }
+
+      const userRef = doc(db, 'users', updatedUser.uid);
+      if (db && !isFirestoreQuotaExhausted()) {
+        try {
+          await setDoc(userRef, updates, { merge: true });
+        } catch (dbErr) {
+          console.warn('[Auth] Failed to update profile details on linking:', dbErr);
+        }
+      }
+
+      // Update in-memory userProfile and localStorage
+      setUserProfile((prev: any) => {
+        const merged = { ...(prev || {}), ...updates };
+        try {
+          localStorage.setItem(`zetadu_profile_${updatedUser.uid}`, JSON.stringify(merged));
+        } catch (_) {}
+        return merged;
+      });
+
+      setUser(updatedUser);
+      setNeedsPasswordCreation(false);
+      setPendingSignupData(null);
+
       return { success: true };
     } catch (err: any) {
       console.error('Firebase Account Linking Error:', err?.code, err?.message);
@@ -591,15 +713,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Check if user already has a password provider linked
         const hasPassword = result.user.providerData.some((p) => p.providerId === 'password');
-        const skippedKey = `learndean_skipped_backup_prompt_${result.user.uid}`;
-        const hasSkipped = sessionStorage.getItem(skippedKey) === 'true';
-
-        // When a user signs up with Google, do NOT force them to create a password.
-        // Prompt them after successful Google signup:
-        // "Add a backup sign-in method?"
-        // "Create a password so you can sign in without Google on another device."
-        if (isNewUser && !hasPassword && !hasSkipped) {
-          setShowGoogleBackupPrompt(true);
+        
+        // If the user does not have a password linked, take them to Create Password
+        if (!hasPassword) {
+          setNeedsPasswordCreation(true);
+        } else {
+          setNeedsPasswordCreation(false);
         }
       }
     } catch (err: any) {
@@ -639,6 +758,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setUserProfile(null);
       setIsSuperAdmin(false);
+      setNeedsPasswordCreation(false);
+      setPendingSignupData(null);
 
       await firebaseSignOut(auth);
     } catch (error) {
@@ -676,6 +797,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         hasPasswordProvider,
         hasGoogleProvider,
         isGoogleUserWithoutPassword,
+        needsPasswordCreation,
+        setNeedsPasswordCreation,
+        pendingSignupData,
+        setPendingSignupData,
       }}
     >
       {children}
