@@ -451,7 +451,7 @@ export default function HeaderMoreMenu({ setCurrentView, onOpenHelp }: HeaderMor
               {/* Drawer Header */}
               <div className="p-4 sm:p-5 pb-3 border-b border-slate-200/90 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50/80 dark:bg-slate-900/90 backdrop-blur-md">
                 <div className="flex items-center space-x-3 min-w-0">
-                  <Logo variant="icon" className="w-8 h-8 shrink-0" />
+                  <Logo variant="icon" className="w-8 h-8 min-w-8 min-h-8 shrink-0" />
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
                       <h2 className="text-base font-extrabold text-slate-900 dark:text-white leading-tight truncate">

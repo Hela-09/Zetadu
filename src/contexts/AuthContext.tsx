@@ -20,6 +20,7 @@ export interface UserSettings {
   fontSize: "small" | "medium" | "large";
   defaultPracticeDifficulty: "Easy" | "Medium" | "Hard" | "Mixed";
   aiTutorTone: "Friendly" | "Direct" | "Socratic";
+  logoStyle?: "bird" | "ld";
 }
 
 export interface PendingSignupData {
@@ -71,7 +72,8 @@ export const useAuth = () => useContext(AuthContext);
 const defaultSettings: UserSettings = {
   fontSize: 'medium',
   defaultPracticeDifficulty: 'Medium',
-  aiTutorTone: 'Friendly'
+  aiTutorTone: 'Friendly',
+  logoStyle: 'bird'
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

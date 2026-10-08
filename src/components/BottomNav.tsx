@@ -98,14 +98,14 @@ export default function BottomNav({ currentView, setCurrentView }: BottomNavProp
               {isCenter ? (
                 /* Center AI Tutor item with distinctive LearnDean LD monogram app icon */
                 <div
-                  className={`w-9.5 h-9.5 rounded-2xl flex items-center justify-center transition-all duration-200 overflow-hidden ${
+                  className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-200 overflow-hidden shrink-0 ${
                     isActive
                       ? 'shadow-md shadow-blue-500/30 ring-2 ring-blue-500 scale-[1.05]'
                       : 'shadow-xs border border-blue-200/50 dark:border-blue-800/40 group-hover:scale-105'
                   }`}
                 >
                   <LearnDeanEmblem
-                    className={`w-full h-full transition-transform ${
+                    className={`w-full h-full block transition-transform ${
                       isActive ? 'scale-105' : 'group-hover:scale-105'
                     }`}
                     background="app-icon"

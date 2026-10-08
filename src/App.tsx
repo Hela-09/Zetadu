@@ -226,12 +226,12 @@ export default function App() {
             <div 
               id="header-brand-logo"
               onClick={() => setCurrentView('home')}
-              className="flex items-center gap-2 sm:gap-2.5 cursor-pointer group shrink-0"
+              className="flex items-center gap-2 sm:gap-2.5 cursor-pointer group shrink-0 select-none"
               role="button"
               tabIndex={0}
               aria-label="LearnDean Home"
             >
-              <Logo variant="icon" className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 group-hover:scale-105 transition-transform" />
+              <Logo variant="icon" className="w-8 h-8 min-w-8 min-h-8 sm:w-9 sm:h-9 sm:min-w-9 sm:min-h-9 shrink-0 group-hover:scale-105 transition-transform" />
               <div className="flex flex-col">
                 <div className="flex items-center gap-1.5">
                   <span className="text-base sm:text-lg md:text-xl font-black tracking-tight text-slate-900 dark:text-white leading-none">

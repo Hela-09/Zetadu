@@ -1,15 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" width="320" height="80">
   <defs>
-    <linearGradient id="ld-brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#071A3D"/>
-      <stop offset="35%" stop-color="#0B3C8A"/>
-      <stop offset="70%" stop-color="#1769E0"/>
-      <stop offset="100%" stop-color="#6366F1"/>
-    </linearGradient>
     <linearGradient id="ld-app-bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#071A3D"/>
-      <stop offset="55%" stop-color="#0D47A1"/>
+      <stop offset="50%" stop-color="#0B3C8A"/>
       <stop offset="100%" stop-color="#1769E0"/>
+    </linearGradient>
+    <linearGradient id="ld-l-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#071A3D"/>
+      <stop offset="100%" stop-color="#2563EB"/>
+    </linearGradient>
+    <linearGradient id="ld-d-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284C7"/>
+      <stop offset="100%" stop-color="#4F46E5"/>
+    </linearGradient>
+    <linearGradient id="ld-spark-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE047"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
     </linearGradient>
   </defs>
 
@@ -19,14 +25,15 @@
   <g transform="translate(12, 12)">
     <rect width="56" height="56" rx="14" fill="url(#ld-app-bg)"/>
     <g transform="scale(0.466)">
-      <path d="M 26 28 C 26 24.686 28.686 22 32 22 L 38 22 C 41.314 22 44 24.686 44 28 L 44 78 L 62 78 C 72.493 78 81 69.941 81 60 C 81 50.059 72.493 42 62 42 L 53 42 C 50.791 42 49 40.209 49 38 L 49 28 C 49 25.791 50.791 24 53 24 L 62 24 C 81.882 24 98 40.118 98 60 C 98 79.882 81.882 96 62 96 L 32 96 C 28.686 96 26 93.314 26 90 Z" fill="#FFFFFF"/>
-      <path d="M 62.5 51 Q 62.5 60 71.5 60 Q 62.5 60 62.5 69 Q 62.5 60 53.5 60 Q 62.5 60 62.5 51 Z" fill="#38BDF8"/>
+      <path d="M 26 26 C 26 22.686 28.686 20 32 20 L 34 20 C 37.314 20 40 22.686 40 26 L 40 76 C 40 79.314 42.686 82 46 82 L 86 82 C 89.314 82 92 84.686 92 88 C 92 91.314 89.314 94 86 94 L 44 94 C 34.059 94 26 85.941 26 76 Z" fill="url(#ld-l-grad)"/>
+      <path d="M 76 26 C 76 22.686 78.686 20 82 20 L 84 20 C 87.314 20 90 22.686 90 26 L 90 88 C 90 91.314 87.314 94 84 94 C 80.686 94 78 91.314 78 88 L 78 79 C 73.8 83.2 67.2 85.5 59.5 85.5 C 46.521 85.5 36 74.979 36 62 C 36 49.021 46.521 38.5 59.5 38.5 C 67.2 38.5 73.8 40.8 78 45 L 78 26 Z M 78 62 L 78 53.5 C 74.5 50.2 69 48 60 48 C 52.268 48 46 54.268 46 62 C 46 69.732 52.268 76 60 76 C 69 76 74.5 73.8 78 70.5 Z" fill="url(#ld-d-grad)"/>
+      <path d="M 60 52 Q 60 62 70 62 Q 60 62 60 72 Q 60 62 50 62 Q 60 62 60 52 Z" fill="url(#ld-spark-gold)"/>
     </g>
   </g>
 
   <!-- LearnDean Typography -->
   <text x="80" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="26" letter-spacing="-0.5">
-    <tspan fill="#071A3D">Learn</tspan><tspan fill="#1769E0">Dean</tspan>
+    <tspan fill="#0F172A">Learn</tspan><tspan fill="#2563EB">Dean</tspan>
   </text>
 
   <!-- PRO Badge -->

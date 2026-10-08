@@ -1,35 +1,146 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="512" height="512">
   <defs>
-    <!-- Premium Deep Navy to Electric Blue with subtle purple accent -->
-    <linearGradient id="ld-brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#071A3D"/>
-      <stop offset="35%" stop-color="#0B3C8A"/>
-      <stop offset="70%" stop-color="#1769E0"/>
-      <stop offset="100%" stop-color="#6366F1"/>
+    <!-- Background Ocean Sapphire to Electric Cobalt -->
+    <linearGradient id="bird-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#051636"/>
+      <stop offset="40%" stop-color="#0A367E"/>
+      <stop offset="80%" stop-color="#1463D5"/>
+      <stop offset="100%" stop-color="#2563EB"/>
     </linearGradient>
 
-    <!-- White-to-Ice gradient for dark mode -->
-    <linearGradient id="ld-white-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <!-- Dark Surface Wings: Radiant Ice White to Cyan -->
+    <linearGradient id="bird-wing-dark" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="100%" stop-color="#EAF4FF"/>
-    </linearGradient>
-
-    <!-- App Icon Deep Blue Gradient Background: #071A3D -> #1769E0 -->
-    <linearGradient id="ld-app-bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#071A3D"/>
-      <stop offset="55%" stop-color="#0D47A1"/>
-      <stop offset="100%" stop-color="#1769E0"/>
-    </linearGradient>
-
-    <!-- AI Spark Accent Gradient -->
-    <linearGradient id="ld-spark-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="35%" stop-color="#BAE6FD"/>
+      <stop offset="75%" stop-color="#38BDF8"/>
       <stop offset="100%" stop-color="#0284C7"/>
     </linearGradient>
+
+    <!-- Light Surface Wings: Deep Navy to Royal Azure -->
+    <linearGradient id="bird-wing-light" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#071A3D"/>
+      <stop offset="45%" stop-color="#1E40AF"/>
+      <stop offset="85%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#0284C7"/>
+    </linearGradient>
+
+    <!-- Inner Wing Highlights -->
+    <linearGradient id="bird-inner-dark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F0F9FF"/>
+      <stop offset="100%" stop-color="#7DD3FC"/>
+    </linearGradient>
+    <linearGradient id="bird-inner-light" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E3A8A"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+
+    <!-- Head and Torso -->
+    <linearGradient id="bird-head-dark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#BAE6FD"/>
+    </linearGradient>
+    <linearGradient id="bird-head-light" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+
+    <!-- Golden Intellect Accent (Talons, Ribbon, Spark) -->
+    <linearGradient id="bird-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FDE047"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+
+    <!-- Book Pages -->
+    <linearGradient id="book-pages-dark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="85%" stop-color="#F1F5F9"/>
+      <stop offset="100%" stop-color="#E2E8F0"/>
+    </linearGradient>
+    <linearGradient id="book-pages-light" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="85%" stop-color="#F8FAFC"/>
+      <stop offset="100%" stop-color="#E2E8F0"/>
+    </linearGradient>
+
+    <filter id="bird-shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#020817" flood-opacity="0.32"/>
+    </filter>
   </defs>
-  <rect width="512" height="512" rx="119" fill="url(#ld-app-bg)"/>
-  <g transform="scale(4.266666666666667)">
-    <path d="M 26 28 C 26 24.686 28.686 22 32 22 L 38 22 C 41.314 22 44 24.686 44 28 L 44 78 L 62 78 C 72.493 78 81 69.941 81 60 C 81 50.059 72.493 42 62 42 L 53 42 C 50.791 42 49 40.209 49 38 L 49 28 C 49 25.791 50.791 24 53 24 L 62 24 C 81.882 24 98 40.118 98 60 C 98 79.882 81.882 96 62 96 L 32 96 C 28.686 96 26 93.314 26 90 Z" fill="#FFFFFF"/>
-    <path d="M 62.5 51 Q 62.5 60 71.5 60 Q 62.5 60 62.5 69 Q 62.5 60 53.5 60 Q 62.5 60 62.5 51 Z" fill="#38BDF8"/>
+
+  <rect width="120" height="120" rx="28" fill="url(#bird-bg)"/>
+
+  <g filter="url(#bird-shadow)">
+    <!-- Tail Feathers -->
+    <path 
+      d="M 56 61 L 52 71 L 57 69 L 60 74 L 63 69 L 68 71 L 64 61 Z" 
+      fill="url(#bird-inner-dark)"
+    />
+
+    <!-- Left Wing (Outstretched Soaring Feathers) -->
+    <path 
+      d="M 52 46 C 46 36 34 24 13 18 C 12 23 17 29 23 34 C 25 35 27 35 28 34 C 23 39 23 45 28 49 C 30 50 32 50 33 49 C 29 53 31 59 38 61 C 44 62 48 55 52 46 Z" 
+      fill="url(#bird-wing-dark)"
+    />
+    <path 
+      d="M 50 46 C 42 36 32 30 22 25 C 27 30 33 37 42 43 C 46 45 49 46 50 46 Z" 
+      fill="url(#bird-inner-dark)" 
+      opacity="0.85"
+    />
+
+    <!-- Right Wing (Outstretched Soaring Feathers) -->
+    <path 
+      d="M 68 46 C 74 36 86 24 107 18 C 108 23 103 29 97 34 C 95 35 93 35 92 34 C 97 39 97 45 92 49 C 90 50 88 50 87 49 C 91 53 89 59 82 61 C 76 62 72 55 68 46 Z" 
+      fill="url(#bird-wing-dark)"
+    />
+    <path 
+      d="M 70 46 C 78 36 88 30 98 25 C 93 30 87 37 78 43 C 74 45 71 46 70 46 Z" 
+      fill="url(#bird-inner-dark)" 
+      opacity="0.85"
+    />
+
+    <!-- Bird Head, Beak & Streamlined Torso -->
+    <path 
+      d="M 56 46 C 55 40 56 32 57 28 C 57.5 24 58.5 20 60 16 L 60 12 L 62 18 C 63.5 22 64 30 64 46 C 64 54 62 60 60 63 C 58 60 56 54 56 46 Z" 
+      fill="url(#bird-head-dark)"
+    />
+
+    <!-- Eye of Wisdom (Golden Vision Spark) -->
+    <circle cx="58.5" cy="22" r="1.3" fill="url(#bird-gold)"/>
+
+    <!-- Open Book Underpage / Binding Layer -->
+    <path 
+      d="M 26 84 C 42 80 52 82 60 87 C 68 82 78 80 94 84 L 94 87 C 78 83 68 85 60 90 C 52 85 42 83 26 87 Z" 
+      fill="#0F172A" 
+      opacity="0.9"
+    />
+
+    <!-- Open Book Left Page Spread -->
+    <path 
+      d="M 60 70 C 52 66 40 66 26 70 C 25 71 25 82 26 84 C 42 80 52 82 60 87 Z" 
+      fill="url(#book-pages-dark)"
+      stroke="#E2E8F0"
+      stroke-width="0.8"
+    />
+
+    <!-- Open Book Right Page Spread -->
+    <path 
+      d="M 60 70 C 68 66 80 66 94 70 C 95 71 95 82 94 84 C 78 80 68 82 60 87 Z" 
+      fill="url(#book-pages-dark)"
+      stroke="#E2E8F0"
+      stroke-width="0.8"
+    />
+
+    <!-- Book Page Wisdom Scripts -->
+    <path d="M 33 74 C 41 71 48 72 54 74.5" stroke="#94A3B8" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M 34 78 C 41 75 48 76 54 78.5" stroke="#94A3B8" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M 66 74.5 C 72 72 79 71 87 74" stroke="#94A3B8" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M 66 78.5 C 72 76 79 75 86 78" stroke="#94A3B8" stroke-width="1.2" stroke-linecap="round"/>
+
+    <!-- Bird Talons Grasping Book Top Rim -->
+    <path d="M 52 64 C 51 67 52 70 55 70 C 56 70 56 67 55 64 Z" fill="url(#bird-gold)"/>
+    <path d="M 68 64 C 69 67 68 70 65 70 C 64 70 64 67 65 64 Z" fill="url(#bird-gold)"/>
+
+    <!-- Golden Bookmark Ribbon Hanging from Book Spine -->
+    <path d="M 58.5 87 L 58.5 97 L 60 95 L 61.5 97 L 61.5 87 Z" fill="url(#bird-gold)"/>
   </g>
 </svg>
