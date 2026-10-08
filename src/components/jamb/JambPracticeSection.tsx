@@ -272,8 +272,8 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
           <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
             5. Number of Questions
           </label>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-1.5 sm:gap-2">
-            {[5, 10, 20, 30, 40, 50].map(count => (
+          <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-1.5 sm:gap-2">
+            {[5, 10, 20, 30, 40, 50, 75].map(count => (
               <button
                 key={count}
                 type="button"
@@ -407,7 +407,10 @@ export default function JambPracticeSection({ initialSubjectId, onStartPractice 
         {/* Launch Button */}
         <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-xs text-slate-500">
-            <span>Ready to practice <strong>{finalAmount} questions</strong> for <strong>{currentSubjectMeta.name}</strong></span>
+            <span>
+              Ready to practice <strong>{finalAmount > availableInBank ? availableInBank : finalAmount} authentic questions</strong> for <strong>{currentSubjectMeta.name}</strong>
+              {finalAmount > availableInBank && <span className="text-amber-600 dark:text-amber-400 font-semibold ml-1">({finalAmount} requested; {finalAmount} not currently available)</span>}
+            </span>
           </div>
 
           <button

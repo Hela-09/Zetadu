@@ -37,14 +37,21 @@ export interface StudentTopicAnalysis {
   hasResults: boolean;
 }
 
+import { canonicalSubjectKey } from './jambSubjectMatcher';
+
 export function getSubjectIdFromName(subjectName: string): string {
   if (!subjectName) return 'mathematics';
+  const canonical = canonicalSubjectKey(subjectName);
+  if (canonical === 'home_economics') return 'home-economics';
+  if (canonical) return canonical.replace(/_/g, '-');
+
   const clean = subjectName.trim().toLowerCase();
   const matched = ALL_SUBJECTS.find(
     (s) => s.name.toLowerCase() === clean || s.id.toLowerCase() === clean
   );
   if (matched) return matched.id;
 
+  if (clean.includes('home') && clean.includes('econ')) return 'home-economics';
   if (clean.includes('math')) return 'mathematics';
   if (clean.includes('english')) return 'english';
   if (clean.includes('physic')) return 'physics';

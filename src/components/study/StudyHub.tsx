@@ -38,7 +38,8 @@ import {
   Filter,
   CheckCircle,
   Plus,
-  Minus
+  Minus,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
@@ -54,7 +55,7 @@ import {
   GlobalPracticeQuestion,
   findCountryEducation
 } from '../../data/globalEducationCurricula';
-import { buildPracticeQuestionsForSubjects, SubjectQuestionRequest } from '../../utils/studyPracticeEngine';
+import { buildPracticeQuestionsForSubjects, checkSubjectsAvailability, SubjectQuestionRequest } from '../../utils/studyPracticeEngine';
 import Quiz, { QuizProps } from '../Quiz';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -355,10 +356,19 @@ export default function StudyHub({ setView }: StudyHubProps) {
       }
     ];
 
+    const availability = checkSubjectsAvailability(requests, selectedExam?.subjects || [sub]);
+    const subReport = availability[0];
+
     const questions = buildPracticeQuestionsForSubjects(requests, selectedExam?.subjects || [sub]);
     if (questions.length === 0) {
-      showToast('No questions currently available for this subject.');
+      showToast(`No authentic questions currently available for ${sub.name}.`);
       return;
+    }
+
+    if (questions.length < count) {
+      showToast(
+        `${questions.length} authentic questions available for ${sub.name}. ${count} questions are not currently available in the question bank. Starting with all ${questions.length} questions.`
+      );
     }
 
     setActiveQuizConfig({
@@ -368,7 +378,7 @@ export default function StudyHub({ setView }: StudyHubProps) {
       amount: questions.length,
       questions: questions,
       isUntimed: untimed,
-      timerDuration: untimed ? 0 : Math.max(10, Math.round(count * 1.2)),
+      timerDuration: untimed ? 0 : Math.max(10, Math.round(questions.length * 1.2)),
       examType: selectedExam?.shortName?.includes('JAMB') ? 'JAMB' : 'General'
     });
     setIsSingleSubjectModalOpen(false);
@@ -390,11 +400,21 @@ export default function StudyHub({ setView }: StudyHubProps) {
       questionCount: subjectQuestionCounts[sub.id] || 20
     }));
 
+    const availability = checkSubjectsAvailability(requests, selectedExam.subjects);
+    const shortfalls = availability.filter(a => a.isShortfall);
+
     const questions = buildPracticeQuestionsForSubjects(requests, selectedExam.subjects);
 
     if (questions.length === 0) {
       showToast('Could not compile practice questions for the chosen subjects.');
       return;
+    }
+
+    if (shortfalls.length > 0) {
+      const summaryMsg = shortfalls
+        .map(s => `${s.subjectName} (${s.availableCount}/${s.requestedCount} Qs)`)
+        .join(', ');
+      showToast(`Note: Full question count not currently available for: ${summaryMsg}. Practicing with all authentic questions available.`);
     }
 
     const subjectNames = chosenSubjects.map(s => s.name);
@@ -676,7 +696,7 @@ export default function StudyHub({ setView }: StudyHubProps) {
                 Choose Number of Questions:
               </label>
               <div className="grid grid-cols-4 gap-2">
-                {[10, 15, 20, 30].map(cnt => (
+                {[10, 20, 40, 75].map(cnt => (
                   <button
                     key={cnt}
                     type="button"
@@ -694,24 +714,57 @@ export default function StudyHub({ setView }: StudyHubProps) {
               <div className="flex items-center justify-between pt-1">
                 <span className="text-xs text-slate-500">Custom Count:</span>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setSingleSubjectCount(c => Math.max(5, c - 5))}
-                    className="p-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200"
-                  >
-                    <Minus size={14} />
-                  </button>
-                  <span className="text-sm font-black text-slate-900 dark:text-white w-8 text-center">
-                    {singleSubjectCount}
-                  </span>
-                  <button
-                    onClick={() => setSingleSubjectCount(c => Math.min(50, c + 5))}
-                    className="p-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200"
-                  >
-                    <Plus size={14} />
-                  </button>
+                  <input
+                    type="number"
+                    min="5"
+                    max="100"
+                    value={singleSubjectCount}
+                    onChange={e => setSingleSubjectCount(Math.min(100, Math.max(1, Number(e.target.value) || 20)))}
+                    aria-label="Custom number of questions"
+                    className="w-20 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-center text-slate-900 dark:text-white"
+                  />
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setSingleSubjectCount(c => Math.max(5, c - 5))}
+                      className="p-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200"
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <button
+                      onClick={() => setSingleSubjectCount(c => Math.min(100, c + 5))}
+                      className="p-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
+
+            {/* Availability Notice if selected count exceeds available in bank */}
+            {(() => {
+              const req = [{ subjectName: selectedSubject.name, subjectId: selectedSubject.id, questionCount: 999 }];
+              const rep = checkSubjectsAvailability(req, selectedExam?.subjects || [selectedSubject]);
+              const availableInBank = rep[0]?.availableCount || 0;
+
+              if (singleSubjectCount > availableInBank) {
+                return (
+                  <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 space-y-1 animate-fadeIn">
+                    <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
+                      <AlertCircle size={15} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                      <span>Question Bank Notice</span>
+                    </div>
+                    <p>
+                      You selected <strong>{singleSubjectCount} questions</strong>, but <strong>{selectedSubject.name}</strong> currently has <strong>{availableInBank} authentic questions</strong> available. {singleSubjectCount} questions are not currently available.
+                    </p>
+                    <p className="text-[11px] text-amber-700/80 dark:text-amber-300/80">
+                      LearnDean strictly isolates questions and never substitutes questions from other subjects. Practice will begin with all {availableInBank} authentic questions.
+                    </p>
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             {/* Mode Option: Untimed vs Timed */}
             <div className="space-y-2">
@@ -760,7 +813,14 @@ export default function StudyHub({ setView }: StudyHubProps) {
                 className="flex-2 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
               >
                 <Play size={14} />
-                <span>Start Practice ({singleSubjectCount} Qs)</span>
+                <span>
+                  Start Practice ({(() => {
+                    const req = [{ subjectName: selectedSubject.name, subjectId: selectedSubject.id, questionCount: 999 }];
+                    const rep = checkSubjectsAvailability(req, selectedExam?.subjects || [selectedSubject]);
+                    const availableInBank = rep[0]?.availableCount || 0;
+                    return Math.min(singleSubjectCount, availableInBank > 0 ? availableInBank : singleSubjectCount);
+                  })()} Qs)
+                </span>
               </button>
             </div>
           </div>
