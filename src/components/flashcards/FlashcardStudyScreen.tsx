@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, Bookmark, Shuffle, ArrowLeft, ArrowRight, RotateCw, CheckCircle2, 
-  HelpCircle, Sparkles, ChevronRight, AlertCircle, RefreshCw
+  HelpCircle, Sparkles, ChevronRight, AlertCircle, RefreshCw, Square
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Flashcard } from '../../types';
@@ -358,11 +358,12 @@ export default function FlashcardStudyScreen({
 
             <button
               onClick={() => setShowExitModal(true)}
-              className="p-2.5 rounded-full text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
-              title="Exit Study Session"
-              aria-label="Exit study session"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900 transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Stop study session"
+              aria-label="Stop study session"
             >
-              <X size={22} />
+              <Square size={13} className="fill-current" />
+              <span>Stop / Exit</span>
             </button>
           </div>
         </div>
@@ -594,10 +595,10 @@ export default function FlashcardStudyScreen({
                 <AlertCircle size={28} />
               </div>
               <h3 className="text-xl font-bold text-slate-800 dark:text-white">
-                End Study Session?
+                Stop Study Session?
               </h3>
               <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                Your progress on completed cards has already been saved. Would you like to exit to the decks page?
+                Your progress on completed cards is safely preserved in spaced repetition memory. Would you like to stop and return to decks?
               </p>
               <div className="flex gap-3 pt-2">
                 <button
@@ -611,9 +612,10 @@ export default function FlashcardStudyScreen({
                     setShowExitModal(false);
                     onExit();
                   }}
-                  className="flex-1 py-3 px-4 rounded-xl font-semibold text-white bg-rose-600 hover:bg-rose-700 transition-colors"
+                  className="flex-1 py-3 px-4 rounded-xl font-semibold text-white bg-rose-600 hover:bg-rose-700 transition-colors flex items-center justify-center gap-1.5"
                 >
-                  Exit Session
+                  <Square size={14} className="fill-current" />
+                  <span>Stop & Exit</span>
                 </button>
               </div>
             </motion.div>

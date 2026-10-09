@@ -21,7 +21,8 @@ import {
   Menu,
   GraduationCap,
   Layers,
-  FileText
+  FileText,
+  Square
 } from 'lucide-react';
 import { JAMB_SUBJECTS, JambQuestion, getUnifiedQuestionsForPractice } from '../../data/jambQuestions';
 import { 

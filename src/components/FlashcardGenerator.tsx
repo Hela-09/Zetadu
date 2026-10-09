@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
-import { ArrowLeft, Sparkles, BookOpen, ChevronLeft, ChevronRight, Loader2, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Sparkles, BookOpen, ChevronLeft, ChevronRight, Loader2, RotateCcw, Square, Info } from 'lucide-react';
 
 interface Flashcard {
   front: string;
@@ -13,19 +13,35 @@ export default function Flashcards({ onBack }: { onBack: () => void }) {
   const [inputText, setInputText] = useState('');
   const [count, setCount] = useState(10);
   const [loading, setLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleStopGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLoading(false);
+    setStatusMessage("Flashcard creation stopped by user. Your notes are preserved.");
+  };
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
     
     setLoading(true);
+    setStatusMessage(null);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const token = await getToken();
       const response = await fetch('/api/generate-flashcards', {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -47,11 +63,16 @@ export default function Flashcards({ onBack }: { onBack: () => void }) {
         setCurrentIndex(0);
         setIsFlipped(false);
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.name === 'AbortError' || controller.signal.aborted) {
+        setStatusMessage("Flashcard creation stopped by user. Your notes are preserved.");
+        return;
+      }
       console.error("Error generating flashcards:", error);
       alert("There was an error generating flashcards. Please try again.");
     } finally {
       setLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -194,23 +215,44 @@ export default function Flashcards({ onBack }: { onBack: () => void }) {
             </select>
           </div>
 
-          <button 
-            type="submit" 
-            disabled={loading || !inputText.trim()}
-            className="w-full py-4 mt-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl transition-all shadow-md hover:shadow-lg disabled:opacity-70 flex items-center justify-center gap-3 text-lg"
-          >
-            {loading ? (
-              <>
+          {statusMessage && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl flex items-center justify-between text-xs sm:text-sm font-semibold text-amber-800 dark:text-amber-200">
+              <div className="flex items-center gap-2">
+                <Info size={18} className="text-amber-600 shrink-0" />
+                <span>{statusMessage}</span>
+              </div>
+              <button type="button" onClick={() => setStatusMessage(null)} className="text-slate-400 hover:text-slate-600">
+                <RotateCcw size={14} />
+              </button>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="flex gap-3 mt-4">
+              <div className="flex-1 py-4 bg-purple-600/70 text-white font-bold rounded-2xl flex items-center justify-center gap-3 text-lg select-none">
                 <Loader2 size={24} className="animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <Sparkles size={24} />
-                Generate Flashcards
-              </>
-            )}
-          </button>
+                <span>Generating Flashcards...</span>
+              </div>
+              <button 
+                type="button" 
+                onClick={handleStopGeneration}
+                className="px-6 py-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-base cursor-pointer shrink-0"
+                title="Stop flashcard creation"
+              >
+                <Square size={18} className="fill-current" />
+                <span>Stop / Cancel</span>
+              </button>
+            </div>
+          ) : (
+            <button 
+              type="submit" 
+              disabled={!inputText.trim()}
+              className="w-full py-4 mt-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl transition-all shadow-md hover:shadow-lg disabled:opacity-70 flex items-center justify-center gap-3 text-lg cursor-pointer"
+            >
+              <Sparkles size={24} />
+              <span>Generate Flashcards</span>
+            </button>
+          )}
         </form>
       </div>
     </div>

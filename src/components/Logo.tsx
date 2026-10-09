@@ -490,19 +490,7 @@ export function LearnDeanEmblem({
     // In case used outside AuthProvider context
   }
 
-  const effectiveStyle: LogoStyle = logoStyle || authStyle || 'bird';
-
-  if (effectiveStyle === 'ld') {
-    return (
-      <LearnDeanLDEmblem
-        className={className}
-        active={active}
-        monochrome={monochrome}
-        background={background}
-      />
-    );
-  }
-
+  // The official LearnDean logo everywhere is the flying bird carrying the open book of wisdom
   return (
     <LearnDeanBirdEmblem
       className={className}

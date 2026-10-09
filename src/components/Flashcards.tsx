@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   collection, query, where, getDocs, doc, setDoc, addDoc, updateDoc, deleteDoc, increment, writeBatch 
@@ -6,7 +6,7 @@ import {
 import { db } from '../lib/firebase';
 import { 
   Layers, Plus, Sparkles, Bookmark, ArrowLeft, 
-  RotateCcw, CheckCircle, AlertCircle, Play, Edit3, Trash2, Check
+  RotateCcw, CheckCircle, AlertCircle, Play, Edit3, Trash2, Check, Square, Info
 } from 'lucide-react';
 import { Flashcard, FlashcardDeck } from '../types';
 import FlashcardStudyScreen from './flashcards/FlashcardStudyScreen';
@@ -148,6 +148,18 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
   });
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [generationStatus, setGenerationStatus] = useState<string | null>(null);
+  const abortGenControllerRef = useRef<AbortController | null>(null);
+
+  const handleStopGeneration = () => {
+    if (abortGenControllerRef.current) {
+      abortGenControllerRef.current.abort();
+      abortGenControllerRef.current = null;
+    }
+    setGenerating(false);
+    setGenerationError(null);
+    setGenerationStatus("AI generation stopped by user. Your topic details have been safely preserved.");
+  };
   
   // Post-generate state
   const [generatedDeck, setGeneratedDeck] = useState<FlashcardDeck | null>(null);
@@ -572,11 +584,15 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
 
     setGenerating(true);
     setGenerationError(null);
+    setGenerationStatus(null);
+    const controller = new AbortController();
+    abortGenControllerRef.current = controller;
 
     try {
       const token = await getToken();
       const response = await fetch('/api/generate-flashcards', {
         method: 'POST',
+        signal: controller.signal,
         headers: { 
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
@@ -664,10 +680,15 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
       // Move immediately to post-generation display screen
       setMode('post_generate');
     } catch (e: any) {
+      if (e?.name === 'AbortError' || controller.signal.aborted) {
+        setGenerationStatus("AI generation stopped by user. Your topic details have been safely preserved.");
+        return;
+      }
       console.error("Flashcard generation & save error:", e);
       setGenerationError(e.message || "Failed to generate valid flashcards. Please try again.");
     } finally {
       setGenerating(false);
+      abortGenControllerRef.current = null;
     }
   };
 
@@ -798,6 +819,18 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
           </div>
         </div>
 
+        {generationStatus && (
+          <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 rounded-2xl flex items-center justify-between border border-amber-200 dark:border-amber-900/50">
+            <div className="flex items-center gap-3">
+              <Info size={20} className="shrink-0 text-amber-600 dark:text-amber-400" />
+              <p className="font-semibold text-sm">{generationStatus}</p>
+            </div>
+            <button type="button" onClick={() => setGenerationStatus(null)} className="text-slate-400 hover:text-slate-600">
+              <RotateCcw size={14} />
+            </button>
+          </div>
+        )}
+
         {generationError && (
           <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-2xl flex items-center gap-3 border border-red-200 dark:border-red-900/50">
             <AlertCircle size={20} className="shrink-0" />
@@ -878,29 +911,35 @@ export default function Flashcards({ setView }: { setView?: (v: any) => void }) 
           <div className="pt-4 flex gap-3">
             <button
               type="button"
-              disabled={generating}
-              onClick={exitToDashboard}
-              className="px-6 py-3.5 rounded-xl font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 cursor-pointer"
+              onClick={generating ? handleStopGeneration : exitToDashboard}
+              className={`px-6 py-3.5 rounded-xl font-bold transition-colors cursor-pointer flex items-center gap-2 ${
+                generating
+                  ? 'bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
             >
-              Cancel
+              {generating && <Square size={16} className="fill-current" />}
+              <span>{generating ? 'Stop / Cancel' : 'Cancel'}</span>
             </button>
-            <button 
-              type="submit" 
-              disabled={generating}
-              className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-sm hover:shadow-md disabled:opacity-75 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-base"
-            >
-              {generating ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Generating & Saving Cards...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles size={18} />
-                  <span>Generate Flashcards</span>
-                </>
-              )}
-            </button>
+            {generating ? (
+              <button 
+                type="button" 
+                onClick={handleStopGeneration}
+                className="flex-1 py-3.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 text-base cursor-pointer"
+                title="Stop generation"
+              >
+                <Square size={18} className="fill-current" />
+                <span>Stop Generation</span>
+              </button>
+            ) : (
+              <button 
+                type="submit" 
+                className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 text-base cursor-pointer"
+              >
+                <Sparkles size={18} />
+                <span>Generate Flashcards</span>
+              </button>
+            )}
           </div>
         </form>
       </div>

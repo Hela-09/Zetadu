@@ -26,9 +26,11 @@ import {
   Search,
   Shield,
   Sparkles,
+  Download,
 } from 'lucide-react';
 import { ViewType } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 import { navigateToRootSection } from '../utils/navigationHistory';
 import Logo, { LearnDeanEmblem } from './Logo';
 import UserAvatar from './UserAvatar';
@@ -66,6 +68,7 @@ export default function HeaderMoreMenu({ setCurrentView, onOpenHelp }: HeaderMor
   const navigate = useNavigate();
   const location = useLocation();
   const { user, userProfile, isSuperAdmin, signOut } = useAuth();
+  const { isInstallable, triggerInstall } = usePWAInstall();
 
   // Close drawer on Escape key or outside click
   useEffect(() => {
@@ -529,6 +532,30 @@ export default function HeaderMoreMenu({ setCurrentView, onOpenHelp }: HeaderMor
 
               {/* Scrollable Categories List */}
               <div className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 space-y-4 [scrollbar-gutter:stable]">
+                {/* Install PWA App Banner with Official LearnDean App Icon */}
+                {isInstallable && (
+                  <div className="p-3 rounded-2xl bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white flex items-center justify-between gap-3 shadow-md border border-blue-500/30">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Logo variant="icon" className="w-9 h-9 rounded-xl shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold truncate">Install LearnDean</p>
+                        <p className="text-[10px] text-blue-200 truncate">Faster loading &amp; home screen access</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsOpen(false);
+                        triggerInstall();
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shrink-0 transition-all shadow-sm cursor-pointer"
+                    >
+                      <Download size={13} />
+                      <span>Install</span>
+                    </button>
+                  </div>
+                )}
+
                 {filteredSections.length > 0 ? (
                   filteredSections.map((section, sIdx) => (
                     <div key={section.title} className="space-y-1.5">

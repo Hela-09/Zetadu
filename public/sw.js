@@ -1,9 +1,32 @@
-// Learndean PWA Service Worker
-const CACHE_NAME = 'learndean-cache-v1';
+// Learndean PWA Service Worker - Official Brand Update
+const CACHE_NAME = 'learndean-official-v3';
+
+const PRECACHE_ASSETS = [
+  '/',
+  '/manifest.json',
+  '/logo.svg',
+  '/favicon.ico',
+  '/favicon-32x32.png',
+  '/favicon-16x16.png',
+  '/favicon-48x48.png',
+  '/apple-touch-icon.png',
+  '/pwa-192x192.png',
+  '/pwa-512x512.png',
+  '/pwa-maskable-192x192.png',
+  '/pwa-maskable-512x512.png',
+  '/logo.png',
+  '/learndean_logo.png'
+];
 
 self.addEventListener('install', (event) => {
-  // Take control immediately on install without waiting
-  self.skipWaiting();
+  // Pre-cache vital shell assets and new official logo icons
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(PRECACHE_ASSETS).catch((err) => {
+        console.warn('[SW] Some precache assets failed:', err);
+      });
+    }).then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {

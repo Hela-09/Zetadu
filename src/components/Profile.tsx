@@ -424,47 +424,19 @@ export default function Profile({ setView, initialSection }: ProfileProps) {
             {/* Brand Logo & Emblem Style */}
             <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <p className="font-medium text-slate-800 dark:text-white">Brand Logo Emblem</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Choose your favorite LearnDean emblem design across all devices</p>
+                <p className="font-medium text-slate-800 dark:text-white">Official Brand Logo</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Official LearnDean emblem across all installed devices, mobile, and web</p>
               </div>
-              <div className="grid grid-cols-2 gap-2.5 sm:w-80">
-                {/* Option 1: Flying Bird with Book */}
-                <button
-                  type="button"
-                  onClick={() => updateSettings({ logoStyle: 'bird' })}
-                  className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition-all cursor-pointer ${
-                    (settings?.logoStyle || 'bird') === 'bird'
-                      ? 'border-blue-500 bg-blue-50/80 dark:bg-blue-900/30 ring-2 ring-blue-500/30'
-                      : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-700/50 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0">
+              <div className="flex items-center gap-2.5 sm:w-80">
+                <div className="flex items-center gap-3 p-2.5 rounded-xl border border-blue-500 bg-blue-50/80 dark:bg-blue-900/30 ring-2 ring-blue-500/30 w-full">
+                  <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 shadow-xs">
                     <LearnDeanBirdEmblem className="w-full h-full" background="app-icon" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight truncate">Flying Bird</p>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight truncate">Wisdom Book</p>
+                    <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight truncate">Official LearnDean Logo</p>
+                    <p className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold leading-tight truncate">Flying Bird • Wisdom Book of Knowledge</p>
                   </div>
-                </button>
-
-                {/* Option 2: L & d Monogram */}
-                <button
-                  type="button"
-                  onClick={() => updateSettings({ logoStyle: 'ld' })}
-                  className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition-all cursor-pointer ${
-                    settings?.logoStyle === 'ld'
-                      ? 'border-blue-500 bg-blue-50/80 dark:bg-blue-900/30 ring-2 ring-blue-500/30'
-                      : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-700/50 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0">
-                    <LearnDeanLDEmblem className="w-full h-full" background="app-icon" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight truncate">L & d Mark</p>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight truncate">Modern Crest</p>
-                  </div>
-                </button>
+                </div>
               </div>
             </div>
 

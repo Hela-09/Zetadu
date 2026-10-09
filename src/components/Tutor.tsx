@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, User, Sparkles, Loader2, Trash2, Paperclip, Bookmark, FileText, ChevronDown, MessageSquare, Plus, Clock, Search, X, PanelLeftClose, PanelLeftOpen, HardDrive } from 'lucide-react';
+import { Send, User, Sparkles, Loader2, Trash2, Paperclip, Bookmark, FileText, ChevronDown, MessageSquare, Plus, Clock, Search, X, PanelLeftClose, PanelLeftOpen, HardDrive, Square } from 'lucide-react';
 import { useGooglePicker } from '../hooks/useGooglePicker';
 import { ChatMessage, TutorConversation, ViewType } from '../types';
 import ReactMarkdown from 'react-markdown';
@@ -68,7 +68,18 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
   const [messages, setMessages] = useState<ChatMessage[]>([defaultInitialMessage]);
   const [input, setInput] = useState(initialTutorPrompt || '');
   const [isLoading, setIsLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleStopGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+    setIsGenerating(false);
+  };
   useEffect(() => {
     if (textareaRef.current) {
       if (input === '') {
@@ -354,7 +365,12 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
 
   const processChat = async (userMsg: ChatMessage, currentHistory: ChatMessage[]) => {
     setIsLoading(true);
+    setIsGenerating(true);
     setChatError(null);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    let fullResponse = '';
+
     try {
       const token = await getToken();
       
@@ -363,6 +379,7 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
 
       const response = await fetch('/api/chat', {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'text/event-stream',
@@ -432,12 +449,14 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let fullResponse = '';
 
       // Initialize the tutor message with empty text
       setMessages([...currentHistory, userMsg, { role: 'tutor', text: '' }]);
 
       while (true) {
+        if (controller.signal.aborted) {
+          break;
+        }
         const { value, done } = await reader.read();
         if (done) break;
         
@@ -479,6 +498,16 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
         }
       }
 
+      if (controller.signal.aborted) {
+        const preservedText = fullResponse.trim()
+          ? `${fullResponse}\n\n*(AI response stopped by user)*`
+          : "*(AI response stopped by user)*";
+        const finalMessages = [...currentHistory, userMsg, { role: 'tutor', text: preservedText } as ChatMessage];
+        setMessages(finalMessages);
+        await autoSaveConversation(finalMessages);
+        return;
+      }
+
       if (!fullResponse.trim()) {
         throw new Error("The AI session ended without returning content. Please check your GEMINI_API_KEY in Vercel and try again.");
       }
@@ -488,6 +517,15 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
       await autoSaveConversation(finalMessages);
       
     } catch (error: any) {
+      if (error?.name === 'AbortError' || controller.signal.aborted) {
+        const preservedText = fullResponse.trim()
+          ? `${fullResponse}\n\n*(AI response stopped by user)*`
+          : "*(AI response stopped by user)*";
+        const finalMessages = [...currentHistory, userMsg, { role: 'tutor', text: preservedText } as ChatMessage];
+        setMessages(finalMessages);
+        await autoSaveConversation(finalMessages);
+        return;
+      }
       console.error('Chat error:', error);
       const displayMessage = error?.message && error.message !== 'Failed to fetch'
         ? error.message
@@ -495,6 +533,8 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
       setChatError(displayMessage);
     } finally {
       setIsLoading(false);
+      setIsGenerating(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -790,8 +830,24 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
                   <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-emerald-500 text-white flex items-center justify-center">
                     <Sparkles size={16} />
                   </div>
-                  <div className="flex-1 py-2 flex items-center h-[56px] text-slate-800 dark:text-slate-200">
-                    <Loader2 className="w-5 h-5 text-blue-500 animate-spin" /> {isUploading && <span className="ml-2 text-sm text-slate-500">Uploading files...</span>}
+                  <div className="flex-1 py-2 flex items-center justify-between h-[56px] text-slate-800 dark:text-slate-200">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                        {isUploading ? "Uploading files..." : "AI Tutor is typing..."}
+                      </span>
+                    </div>
+                    {(isLoading || isGenerating) && (
+                      <button
+                        type="button"
+                        onClick={handleStopGeneration}
+                        className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Stop AI response"
+                      >
+                        <Square size={12} className="fill-current" />
+                        <span>Stop</span>
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -895,13 +951,26 @@ export default function Tutor({ setCurrentView }: TutorProps = {}) {
                 rows={1}
                 style={{ minHeight: '24px' }}
               />
-              <button
-                onClick={handleSend}
-                disabled={(!input.trim() && selectedFiles.length === 0) || isLoading || isUploading}
-                className="shrink-0 w-[40px] h-[40px] sm:w-[48px] sm:h-[48px] flex items-center justify-center rounded-[14px] bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors shadow-md cursor-pointer"
-              >
-                <Send size={18} className={(input.trim() || selectedFiles.length > 0) && !isLoading && !isUploading ? '' : 'opacity-50'} />
-              </button>
+              {isLoading || isGenerating ? (
+                <button
+                  type="button"
+                  onClick={handleStopGeneration}
+                  className="shrink-0 h-[40px] sm:h-[48px] px-3.5 sm:px-4 flex items-center justify-center gap-1.5 rounded-[14px] bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer animate-pulse"
+                  title="Stop generating AI response"
+                >
+                  <Square size={14} className="fill-current" />
+                  <span>Stop</span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleSend}
+                  disabled={(!input.trim() && selectedFiles.length === 0) || isUploading}
+                  className="shrink-0 w-[40px] h-[40px] sm:w-[48px] sm:h-[48px] flex items-center justify-center rounded-[14px] bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors shadow-md cursor-pointer"
+                  title="Send message"
+                >
+                  <Send size={18} className={(input.trim() || selectedFiles.length > 0) && !isUploading ? '' : 'opacity-50'} />
+                </button>
+              )}
             </div>
             <p className="text-center text-[14px] text-slate-400 mt-[10px] mb-[12px]">
               AI can make mistakes. Verify important information.
