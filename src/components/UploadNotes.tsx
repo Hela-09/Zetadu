@@ -7,7 +7,7 @@ import {
   Upload, FileText, Sparkles, BrainCircuit, Layers, PenTool, CheckCircle2,
   XCircle, ArrowLeft, Copy, Check, Volume2, VolumeX, RotateCcw, Trash2,
   Save, BookOpen, ChevronLeft, ChevronRight, AlertCircle, Loader2,
-  ExternalLink, File, Image as ImageIcon, Plus, Clock, Bookmark, X
+  ExternalLink, File, Image as ImageIcon, Plus, Clock, Bookmark, X, Square, Info
 } from 'lucide-react';
 import { ViewType, StudyNote, NoteFlashcard, NotePracticeQuestion, NoteAttachment } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -52,6 +52,18 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
   const [processingAction, setProcessingAction] = useState<ProcessingAction | null>(null);
   const [processingStatus, setProcessingStatus] = useState<string>('');
   const [aiError, setAiError] = useState<string | null>(null);
+  const [processingCanceledNotice, setProcessingCanceledNotice] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleStopProcessing = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setProcessingAction(null);
+    setProcessingStatus('');
+    setProcessingCanceledNotice('AI processing stopped immediately. Your notes, inputs, and drafts are fully preserved.');
+  };
 
   // Processed outputs
   const [summaryText, setSummaryText] = useState<string>('');
@@ -274,6 +286,7 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
     const selectedCount = requestedCount || (action === 'flashcards' ? 10 : 5);
 
     setAiError(null);
+    setProcessingCanceledNotice(null);
     setProcessingAction(action);
 
     if (action === 'summarize') setProcessingStatus('Synthesizing high-yield summary & key takeaways...');
@@ -281,10 +294,14 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
     else if (action === 'flashcards') setProcessingStatus(`Generating ${selectedCount} active recall study flashcards...`);
     else if (action === 'questions') setProcessingStatus(`Drafting ${selectedCount} exam-standard practice questions...`);
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const token = await getToken();
       const response = await fetch('/api/process-notes', {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -359,9 +376,14 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
         });
       }
     } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted) {
+        setProcessingCanceledNotice('AI processing stopped by user. Your notes, inputs, and drafts have been safely preserved.');
+        return;
+      }
       console.error(`AI processing error for ${action}:`, err);
       setAiError(err.message || 'Failed to process notes with AI. Please try again.');
     } finally {
+      abortControllerRef.current = null;
       setProcessingAction(null);
       setProcessingStatus('');
     }
@@ -630,17 +652,46 @@ export default function UploadNotes({ setView }: UploadNotesProps) {
 
       {/* AI Processing Banner Overlay */}
       {processingAction && (
-        <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white shadow-lg flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in duration-200">
+          <div className="flex items-center gap-3 min-w-0">
             <Loader2 size={24} className="animate-spin shrink-0 text-blue-200" />
-            <div>
-              <p className="font-bold text-sm sm:text-base">{processingStatus}</p>
+            <div className="min-w-0">
+              <p className="font-bold text-sm sm:text-base truncate">{processingStatus}</p>
               <p className="text-xs text-blue-100">Gemini AI is reading and extracting insights from your study notes...</p>
             </div>
           </div>
-          <span className="text-xs font-mono uppercase bg-white/20 px-3 py-1 rounded-full shrink-0">
-            {processingAction}
-          </span>
+          <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
+            <span className="text-[11px] font-mono uppercase bg-white/20 px-2.5 py-1 rounded-full">
+              {processingAction}
+            </span>
+            <button
+              type="button"
+              onClick={handleStopProcessing}
+              className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0"
+              title="Stop AI processing and safely preserve inputs"
+            >
+              <Square size={13} className="fill-current" />
+              <span>Stop / Cancel</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* AI Processing Canceled Notification */}
+      {processingCanceledNotice && (
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 flex items-center justify-between gap-3 text-xs sm:text-sm font-semibold shadow-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <Info size={18} className="text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>{processingCanceledNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setProcessingCanceledNotice(null)}
+            className="p-1 rounded-lg text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 cursor-pointer shrink-0"
+            title="Dismiss notice"
+          >
+            <X size={16} />
+          </button>
         </div>
       )}
 

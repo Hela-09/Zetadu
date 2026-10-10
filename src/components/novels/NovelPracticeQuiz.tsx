@@ -21,7 +21,8 @@ import {
   Layers,
   ChevronRight,
   Sparkles,
-  WifiOff
+  WifiOff,
+  Square
 } from 'lucide-react';
 import {
   getNovelPracticeQuestions,
@@ -75,6 +76,7 @@ export default function NovelPracticeQuiz({
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
   const [timeSpentSeconds, setTimeSpentSeconds] = useState<number>(0);
   const [savedAttemptId, setSavedAttemptId] = useState<string | null>(null);
+  const [wasStoppedEarly, setWasStoppedEarly] = useState<boolean>(false);
 
   // History state
   const [pastAttempts, setPastAttempts] = useState<NovelPracticeAttempt[]>([]);
@@ -221,6 +223,12 @@ export default function NovelPracticeQuiz({
         ).catch(() => {});
       }
     }
+  };
+
+  // Stop practice early and safely preserve progress
+  const handleStopQuizEarly = async () => {
+    setWasStoppedEarly(true);
+    await handleFinishQuiz();
   };
 
   // Submit and save score
@@ -753,7 +761,7 @@ export default function NovelPracticeQuiz({
             </h3>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Countdown timer if timed */}
             {isTimed && screen === 'quiz' && (
               <div
@@ -766,6 +774,20 @@ export default function NovelPracticeQuiz({
                 <Clock size={13} />
                 <span>{formatTime(secondsRemaining)}</span>
               </div>
+            )}
+
+            {/* Stop Practice Button */}
+            {screen === 'quiz' && (
+              <button
+                type="button"
+                id="novel-stop-practice-btn"
+                onClick={handleStopQuizEarly}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900 text-xs font-bold transition-colors cursor-pointer shrink-0"
+                title="Stop quiz and safely preserve progress"
+              >
+                <Square size={12} className="fill-current" />
+                <span>Stop Practice</span>
+              </button>
             )}
 
             <button
@@ -800,16 +822,19 @@ export default function NovelPracticeQuiz({
           {/* Results Summary Card if in 'result' screen */}
           {screen === 'result' && (
             <div className="p-6 rounded-2xl bg-blue-50/50 dark:bg-blue-950/20 border-2 border-blue-200 dark:border-blue-800 text-center space-y-4 animate-fade-in">
-              <div className="w-16 h-16 mx-auto rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg">
-                <Trophy size={32} />
+              <div className={`w-16 h-16 mx-auto rounded-full text-white flex items-center justify-center shadow-lg ${
+                wasStoppedEarly ? 'bg-amber-500' : 'bg-blue-600'
+              }`}>
+                {wasStoppedEarly ? <Square size={28} className="fill-current" /> : <Trophy size={32} />}
               </div>
               <div>
                 <h4 className="text-xl font-black text-slate-900 dark:text-white">
-                  Assessment Completed!
+                  {wasStoppedEarly ? 'Practice Session Stopped Early' : 'Assessment Completed!'}
                 </h4>
                 <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
-                  You scored <strong className="text-blue-600 dark:text-blue-400">{correctCount}</strong> out of{' '}
-                  <strong>{activeQuestions.length}</strong> questions ({scorePercent}%)
+                  {wasStoppedEarly
+                    ? `Session stopped early. You answered ${totalAnswered} of ${activeQuestions.length} questions (${correctCount} correct). Completed progress has been safely saved.`
+                    : `You scored ${correctCount} out of ${activeQuestions.length} questions (${scorePercent}%)`}
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5">
                   Time taken: {formatTime(timeSpentSeconds)} • Saved to offline & cloud history

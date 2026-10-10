@@ -25,7 +25,8 @@ import {
   BookmarkPlus,
   Play,
   FileCheck,
-  Search
+  Search,
+  Square
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { ViewType, Flashcard, StudyJourneyState, StudyJourneyQuestion, StudyJourneyLearnData } from '../types';
@@ -68,6 +69,18 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
   const [savedJourneyCandidate, setSavedJourneyCandidate] = useState<StudyJourneyState | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const [generationCanceledNotice, setGenerationCanceledNotice] = useState<string | null>(null);
+
+  const handleStopGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsGenerating(false);
+    setGenerationCanceledNotice('Generation stopped by user.');
+    setTimeout(() => setGenerationCanceledNotice(null), 4000);
+  };
 
   // Step 2: Flashcards
   const [journeyFlashcards, setJourneyFlashcards] = useState<Flashcard[]>([]);
@@ -203,7 +216,10 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
     const finalTopic = isCustomTopic && customTopicInput.trim() ? customTopicInput.trim() : selectedTopic;
     const subjectObj = ALL_SUBJECTS.find((s) => s.id === selectedSubjectId) || ALL_SUBJECTS[0];
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setIsGenerating(true);
+    setGenerationCanceledNotice(null);
 
     try {
       // Step 1: Request or generate learn data
@@ -229,6 +245,7 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
       try {
         const res = await fetch('/api/learn-topic', {
           method: 'POST',
+          signal: controller.signal,
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -246,9 +263,14 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
             learnData = data.learnData;
           }
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.name === 'AbortError' || controller.signal.aborted) {
+          return;
+        }
         console.warn('Learn topic endpoint error, using curated guide:', err);
       }
+
+      if (controller.signal.aborted) return;
 
       const initialJourney: StudyJourneyState = {
         id: `journey_${Date.now()}`,
@@ -329,7 +351,10 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
   // -------------------------------------------------------------
   const handleContinueToFlashcards = async () => {
     if (!journey || !user) return;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setIsGenerating(true);
+    setGenerationCanceledNotice(null);
 
     try {
       const targetCardCount = journey.flashcardTargetCount || flashcardCount || 10;
@@ -354,6 +379,8 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
         console.warn('Error fetching existing flashcards:', err);
       }
 
+      if (controller.signal.aborted) return;
+
       // 2. If fewer than targetCardCount exist, generate structured cards for this topic
       if (cards.length < targetCardCount) {
         let token = '';
@@ -364,6 +391,7 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
         try {
           const genRes = await fetch('/api/generate-flashcards', {
             method: 'POST',
+            signal: controller.signal,
             headers: {
               'Content-Type': 'application/json',
               ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -405,10 +433,15 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
               }
             }
           }
-        } catch (e) {
+        } catch (e: any) {
+          if (e?.name === 'AbortError' || controller.signal.aborted) {
+            return;
+          }
           console.warn('AI card generation failed, using curated default cards:', e);
         }
       }
+
+      if (controller.signal.aborted) return;
 
       // 3. If still fewer than targetCardCount, supplement with high-yield syllabus cards
       if (cards.length < targetCardCount) {
@@ -458,7 +491,10 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
   // -------------------------------------------------------------
   const handleContinueToPractice = async () => {
     if (!journey || !user) return;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setIsGenerating(true);
+    setGenerationCanceledNotice(null);
 
     try {
       const targetPracticeCount = journey.practiceTargetCount || practiceCount || 10;
@@ -472,6 +508,7 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
       try {
         const res = await fetch('/api/generate-questions', {
           method: 'POST',
+          signal: controller.signal,
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -498,9 +535,14 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
             }));
           }
         }
-      } catch (e) {
+      } catch (e: any) {
+        if (e?.name === 'AbortError' || controller.signal.aborted) {
+          return;
+        }
         console.warn('Practice generation endpoint error:', e);
       }
+
+      if (controller.signal.aborted) return;
 
       // Ensure exactly targetPracticeCount questions are present
       if (questions.length < targetPracticeCount) {
@@ -528,6 +570,14 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const [wasStoppedEarly, setWasStoppedEarly] = useState(false);
+
+  // Stop Practice Session early and preserve progress
+  const handleStopPracticeEarly = async () => {
+    setWasStoppedEarly(true);
+    await handleSubmitPractice();
   };
 
   // Submit Practice Session & Transition to Step 4 (Review Mistakes)
@@ -598,7 +648,10 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
   // -------------------------------------------------------------
   const handleStartRetest = async () => {
     if (!journey || !user) return;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setIsGenerating(true);
+    setGenerationCanceledNotice(null);
 
     try {
       let token = '';
@@ -611,6 +664,7 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
       try {
         const res = await fetch('/api/generate-questions', {
           method: 'POST',
+          signal: controller.signal,
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -636,9 +690,14 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
             }));
           }
         }
-      } catch (e) {
+      } catch (e: any) {
+        if (e?.name === 'AbortError' || controller.signal.aborted) {
+          return;
+        }
         console.warn('Retest generation failed, using alternate questions:', e);
       }
+
+      if (controller.signal.aborted) return;
 
       if (newQuestions.length === 0) {
         newQuestions = [
@@ -711,6 +770,11 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  // Stop Retest Session early and preserve progress
+  const handleStopRetestEarly = async () => {
+    await handleSubmitRetest();
   };
 
   // Submit Retest & Move to Step 6: Results
@@ -1103,26 +1167,44 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
                 Scope: <span className="text-blue-600 dark:text-blue-400 font-bold">{flashcardCount} flashcards</span> •{' '}
                 <span className="text-emerald-600 dark:text-emerald-400 font-bold">{practiceCount} practice questions</span>
               </div>
+              {generationCanceledNotice && (
+                <div className="text-rose-600 dark:text-rose-400 font-semibold pt-1">
+                  {generationCanceledNotice}
+                </div>
+              )}
             </div>
 
-            <button
-              id="start-study-journey-btn"
-              onClick={handleStartJourney}
-              disabled={isGenerating || (isCustomTopic && !customTopicInput.trim())}
-              className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
-            >
-              {isGenerating ? (
-                <>
-                  <RefreshCw size={18} className="animate-spin" />
-                  <span>Preparing Your Journey...</span>
-                </>
-              ) : (
-                <>
-                  <span>Begin Study Journey</span>
-                  <ArrowRight size={18} />
-                </>
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              {isGenerating && (
+                <button
+                  type="button"
+                  id="cancel-study-journey-btn"
+                  onClick={handleStopGeneration}
+                  className="px-5 py-3.5 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                >
+                  <Square size={16} className="fill-current" />
+                  <span>Stop / Cancel</span>
+                </button>
               )}
-            </button>
+              <button
+                id="start-study-journey-btn"
+                onClick={handleStartJourney}
+                disabled={isGenerating || (isCustomTopic && !customTopicInput.trim())}
+                className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isGenerating ? (
+                  <>
+                    <RefreshCw size={18} className="animate-spin" />
+                    <span>Preparing Your Journey...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Begin Study Journey</span>
+                    <ArrowRight size={18} />
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1302,6 +1384,18 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
                 <span>Ask AI Tutor</span>
               </button>
 
+              {isGenerating && (
+                <button
+                  type="button"
+                  id="cancel-journey-flashcards-btn"
+                  onClick={handleStopGeneration}
+                  className="w-full sm:w-auto px-5 py-3.5 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                >
+                  <Square size={16} className="fill-current" />
+                  <span>Stop / Cancel</span>
+                </button>
+              )}
+
               <button
                 id="journey-continue-to-flashcards-btn"
                 onClick={handleContinueToFlashcards}
@@ -1386,12 +1480,24 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
                   </h3>
                 </div>
 
-                <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-700 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-300">
-                  <Clock size={16} />
-                  <span>
-                    {Math.floor(practiceTimeRemaining / 60)}:
-                    {(practiceTimeRemaining % 60).toString().padStart(2, '0')}
-                  </span>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
+                    <Clock size={15} />
+                    <span>
+                      {Math.floor(practiceTimeRemaining / 60)}:
+                      {(practiceTimeRemaining % 60).toString().padStart(2, '0')}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    id="journey-stop-practice-btn"
+                    onClick={handleStopPracticeEarly}
+                    className="flex items-center gap-1 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 font-bold text-xs cursor-pointer transition-colors shrink-0"
+                    title="Stop assessment and review completed progress"
+                  >
+                    <Square size={12} className="fill-current" />
+                    <span>Stop Practice</span>
+                  </button>
                 </div>
               </div>
 
@@ -1512,8 +1618,11 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
           <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 md:p-8 border border-slate-200 dark:border-slate-700 shadow-sm">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
               <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                  Step 4 — Review & Diagnostic
+                <span className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                  wasStoppedEarly ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-400'
+                }`}>
+                  {wasStoppedEarly && <Square size={11} className="fill-current text-amber-500" />}
+                  <span>{wasStoppedEarly ? 'Step 4 — Practice Assessment Stopped Early (Progress Safely Saved)' : 'Step 4 — Review & Diagnostic'}</span>
                 </span>
                 <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
                   Practice Assessment Results
@@ -1684,12 +1793,23 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
             </div>
 
             {/* Bottom Action: Continue to Retest */}
-            <div className="pt-6 mt-6 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end">
+            <div className="pt-6 mt-6 border-t border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row items-center justify-end gap-3">
+              {isGenerating && (
+                <button
+                  type="button"
+                  id="cancel-journey-retest-btn"
+                  onClick={handleStopGeneration}
+                  className="w-full sm:w-auto px-5 py-3.5 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                >
+                  <Square size={16} className="fill-current" />
+                  <span>Stop / Cancel</span>
+                </button>
+              )}
               <button
                 id="journey-continue-to-retest-btn"
                 onClick={handleStartRetest}
                 disabled={isGenerating}
-                className="px-8 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {isGenerating ? (
                   <>
@@ -1725,12 +1845,24 @@ export default function StudyJourney({ setView }: StudyJourneyProps) {
                   </h3>
                 </div>
 
-                <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-700 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-300">
-                  <Clock size={16} />
-                  <span>
-                    {Math.floor(retestTimeRemaining / 60)}:
-                    {(retestTimeRemaining % 60).toString().padStart(2, '0')}
-                  </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-700 px-4 py-2 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-300">
+                    <Clock size={16} />
+                    <span>
+                      {Math.floor(retestTimeRemaining / 60)}:
+                      {(retestTimeRemaining % 60).toString().padStart(2, '0')}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    id="journey-stop-retest-btn"
+                    onClick={handleStopRetestEarly}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 font-bold text-xs cursor-pointer transition-colors shrink-0"
+                    title="Stop retest and review completed progress"
+                  >
+                    <Square size={12} className="fill-current" />
+                    <span>Stop Retest</span>
+                  </button>
                 </div>
               </div>
 

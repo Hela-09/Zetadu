@@ -87,6 +87,7 @@ export default function CombineNotes({
   const [isCombining, setIsCombining] = useState(false);
   const [combineProgress, setCombineProgress] = useState(0);
   const [combineStatusText, setCombineStatusText] = useState('');
+  const combineCancelledRef = useRef(false);
 
   // Combined Result Study Set
   const [combinedResult, setCombinedResult] = useState<StudyNote | null>(null);
@@ -95,7 +96,25 @@ export default function CombineNotes({
   // AI Generation on Combined Result
   const [aiGenerating, setAiGenerating] = useState<'summary' | 'flashcards' | 'practice' | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [combineNotice, setCombineNotice] = useState<string | null>(null);
   const [deckSaveSuccess, setDeckSaveSuccess] = useState(false);
+  const aiAbortControllerRef = useRef<AbortController | null>(null);
+
+  const handleStopCombining = () => {
+    combineCancelledRef.current = true;
+    setIsCombining(false);
+    setCombineProgress(0);
+    setCombineNotice('Combining process stopped by user. Your source files and inputs are safely preserved.');
+  };
+
+  const handleStopAiGenerating = () => {
+    if (aiAbortControllerRef.current) {
+      aiAbortControllerRef.current.abort();
+      aiAbortControllerRef.current = null;
+    }
+    setAiGenerating(null);
+    setCombineNotice('AI generation stopped by user. Your combined study set is safely preserved.');
+  };
 
   // Practice Quiz State for Combined Set
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
@@ -372,16 +391,20 @@ export default function CombineNotes({
     const selectedFiles = allAvailableFiles.filter((f) => selectedIds.has(f.id));
     if (selectedFiles.length === 0) return;
 
+    combineCancelledRef.current = false;
+    setCombineNotice(null);
     setIsCombining(true);
     setCombineProgress(10);
     setCombineStatusText(`Extracting notes from ${selectedFiles.length} selected files...`);
 
     // Step 1: Progress simulation & text aggregation
-    await new Promise((r) => setTimeout(r, 400));
+    await new Promise((r) => setTimeout(r, 300));
+    if (combineCancelledRef.current) return;
     setCombineProgress(35);
     setCombineStatusText('Deduplicating shared concepts and standardizing topics...');
 
-    await new Promise((r) => setTimeout(r, 450));
+    await new Promise((r) => setTimeout(r, 350));
+    if (combineCancelledRef.current) return;
     setCombineProgress(65);
     setCombineStatusText('Compiling unified study sections, derivations & cross-topic notes...');
 
@@ -410,7 +433,8 @@ export default function CombineNotes({
       }
     });
 
-    await new Promise((r) => setTimeout(r, 400));
+    await new Promise((r) => setTimeout(r, 300));
+    if (combineCancelledRef.current) return;
     setCombineProgress(90);
     setCombineStatusText('Finalizing combined master study set...');
 
@@ -427,6 +451,8 @@ export default function CombineNotes({
       updatedAt: Date.now(),
     };
 
+    if (combineCancelledRef.current) return;
+
     // Save to user storage (keeping all original files completely unchanged)
     if (user?.uid) {
       await saveUserNote(user.uid, newCombinedNote);
@@ -434,7 +460,8 @@ export default function CombineNotes({
     }
 
     setCombineProgress(100);
-    await new Promise((r) => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 150));
+    if (combineCancelledRef.current) return;
 
     setIsCombining(false);
     setCombinedResult(newCombinedNote);
@@ -447,12 +474,17 @@ export default function CombineNotes({
 
     setAiGenerating(action === 'questions' ? 'practice' : action);
     setAiError(null);
+    setCombineNotice(null);
+
+    const controller = new AbortController();
+    aiAbortControllerRef.current = controller;
 
     try {
       const token = await getToken();
       const count = customCount || (action === 'flashcards' ? 12 : action === 'practice' || action === 'questions' ? 8 : 5);
       const response = await fetch('/api/process-notes', {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
@@ -496,8 +528,13 @@ export default function CombineNotes({
         onRefreshHistory();
       }
     } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted) {
+        setCombineNotice('AI generation stopped by user. Your combined study set is safely preserved.');
+        return;
+      }
       setAiError(err.message || 'AI processing encountered an error. Please try again.');
     } finally {
+      aiAbortControllerRef.current = null;
       setAiGenerating(null);
     }
   };
@@ -564,21 +601,32 @@ export default function CombineNotes({
       {/* COMBINING IN PROGRESS OVERLAY */}
       {isCombining && (
         <div className="p-6 rounded-3xl bg-white dark:bg-slate-800 border-2 border-indigo-500 shadow-xl space-y-4 animate-in fade-in duration-300">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Loader2 size={24} className="animate-spin text-indigo-600" />
-              <div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <Loader2 size={24} className="animate-spin text-indigo-600 shrink-0" />
+              <div className="min-w-0">
                 <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
                   Creating Combined Study Set...
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                   {combineStatusText}
                 </p>
               </div>
             </div>
-            <span className="text-sm font-black text-indigo-600 dark:text-indigo-400 font-mono">
-              {combineProgress}%
-            </span>
+            <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+              <span className="text-sm font-black text-indigo-600 dark:text-indigo-400 font-mono">
+                {combineProgress}%
+              </span>
+              <button
+                type="button"
+                onClick={handleStopCombining}
+                className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shrink-0"
+                title="Stop combining and preserve source files"
+              >
+                <Square size={13} className="fill-current" />
+                <span>Stop / Cancel</span>
+              </button>
+            </div>
           </div>
 
           {/* Progress Bar */}
@@ -588,6 +636,24 @@ export default function CombineNotes({
               style={{ width: `${combineProgress}%` }}
             />
           </div>
+        </div>
+      )}
+
+      {/* COMBINE NOTICE BANNER */}
+      {combineNotice && (
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 flex items-center justify-between gap-3 text-xs sm:text-sm font-semibold shadow-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertCircle size={18} className="text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>{combineNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCombineNotice(null)}
+            className="p-1 rounded-lg text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 cursor-pointer shrink-0"
+            title="Dismiss notice"
+          >
+            <RotateCcw size={14} />
+          </button>
         </div>
       )}
 
@@ -707,6 +773,29 @@ export default function CombineNotes({
               <span className="text-[11px] text-slate-400 leading-tight">High-yield takeaways</span>
             </button>
           </div>
+
+          {/* AI In-Progress Bar with Stop Button */}
+          {aiGenerating && (
+            <div className="p-3.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 flex items-center justify-between gap-3 text-xs sm:text-sm font-semibold">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Loader2 size={18} className="animate-spin text-indigo-600 shrink-0" />
+                <span className="truncate">
+                  {aiGenerating === 'summary' && 'Synthesizing master summary from combined study set...'}
+                  {aiGenerating === 'flashcards' && 'Drafting active recall flashcards from combined set...'}
+                  {aiGenerating === 'practice' && 'Drafting exam practice questions from combined set...'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleStopAiGenerating}
+                className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                title="Stop AI generation and preserve study set"
+              >
+                <Square size={12} className="fill-current" />
+                <span>Stop / Cancel</span>
+              </button>
+            </div>
+          )}
 
           {/* AI Status or Error */}
           {aiError && (

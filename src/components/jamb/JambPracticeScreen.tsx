@@ -125,6 +125,8 @@ export default function JambPracticeScreen({ config, onExit, onRetake }: JambPra
   const [isCalculatorOpen, setIsCalculatorOpen] = useState<boolean>(false);
   const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
   const [showExitModal, setShowExitModal] = useState<boolean>(false);
+  const [showStopModal, setShowStopModal] = useState<boolean>(false);
+  const [wasStoppedEarly, setWasStoppedEarly] = useState<boolean>(false);
   const [showPaletteDrawer, setShowPaletteDrawer] = useState<boolean>(false);
   const [paletteSubjectTab, setPaletteSubjectTab] = useState<string>('all');
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
@@ -400,6 +402,55 @@ export default function JambPracticeScreen({ config, onExit, onRetake }: JambPra
     }
   };
 
+  // Stop Practice Session immediately and safely preserve completed progress
+  const handleStopPractice = () => {
+    setShowStopModal(false);
+    setShowExitModal(false);
+    setWasStoppedEarly(true);
+
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      try { window.speechSynthesis.cancel(); } catch (_) {}
+    }
+
+    let correctCount = 0;
+    questions.forEach((q, idx) => {
+      const userAns = answers[idx];
+      if (userAns !== undefined && userAns === q.correctAnswer) {
+        correctCount++;
+      }
+    });
+
+    const total = questions.length;
+    const answeredCount = Object.keys(answers).length;
+    const pct = total > 0 ? Math.round((correctCount / total) * 100) : 0;
+
+    setFinalScore(correctCount);
+    setFinalPercentage(pct);
+    setIsSubmitted(true);
+    setCurrentQIndex(0);
+
+    const answersMap: Record<string, number> = {};
+    Object.entries(answers).forEach(([k, v]) => {
+      answersMap[String(k)] = v;
+    });
+
+    // Save attempt to history with safe stopped status
+    jambService.saveAttempt({
+      subject: config.subjectId || config.subject,
+      subjectName: currentSubjectMeta.name,
+      year: config.year || 'all',
+      score: correctCount,
+      totalQuestions: total,
+      percentage: pct,
+      timeSpentSeconds: timeUsedSeconds,
+      answers: answersMap,
+      questions: questions as any
+    }).catch(err => console.warn('Could not save stopped practice attempt:', err));
+
+    setToastMessage(`Practice session stopped. Progress saved: ${answeredCount} of ${total} questions answered.`);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
   const handleRetakeSession = () => {
     if (onRetake) {
       onRetake(config);
@@ -543,6 +594,18 @@ export default function JambPracticeScreen({ config, onExit, onRetake }: JambPra
                   <span>{formatTime(timerRemaining)}</span>
                 </div>
               )}
+
+              {/* Stop Practice Button */}
+              <button
+                type="button"
+                id="jamb-stop-practice-btn"
+                onClick={() => setShowStopModal(true)}
+                className="px-3 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                title="Stop Practice and safely save completed progress"
+              >
+                <Square size={13} className="fill-current" />
+                <span>Stop Practice</span>
+              </button>
             </>
           )}
 
@@ -665,15 +728,21 @@ export default function JambPracticeScreen({ config, onExit, onRetake }: JambPra
           <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-900 text-white rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-xl space-y-6">
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="space-y-2 text-center md:text-left">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-bold border border-blue-400/20">
-                  <Award size={16} className="text-amber-400" />
-                  <span>JAMB Practice Examination Completed</span>
+                <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${
+                  wasStoppedEarly
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-400/30'
+                    : 'bg-blue-500/20 text-blue-300 border border-blue-400/20'
+                }`}>
+                  {wasStoppedEarly ? <Square size={13} className="fill-current text-amber-400" /> : <Award size={16} className="text-amber-400" />}
+                  <span>{wasStoppedEarly ? 'Practice Session Stopped Early (Progress Safely Preserved)' : 'JAMB Practice Examination Completed'}</span>
                 </div>
                 <h3 className="text-2xl sm:text-3xl font-black">
                   {subjectTabs.length > 1 ? 'Official JAMB CBT Results' : `${currentSubjectMeta.name} Results`}
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
-                  {subjectTabs.length > 1
+                  {wasStoppedEarly
+                    ? `Session stopped early. You answered ${totalAnswered} of ${questions.length} questions. Completed progress and explanations are safely recorded.`
+                    : subjectTabs.length > 1
                     ? `Completed across all ${subjectTabs.length} isolated subjects without cross-subject substitution.`
                     : `Completed ${questions.length} questions for ${currentSubjectMeta.name}.`}
                 </p>
@@ -1376,6 +1445,39 @@ export default function JambPracticeScreen({ config, onExit, onRetake }: JambPra
                 className="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-lg shadow-emerald-600/30 transition cursor-pointer"
               >
                 Yes, Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stop Practice Confirmation Modal */}
+      {showStopModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+              <Square size={22} className="fill-current" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Stop Practice Session?</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+              Your ongoing session will stop immediately. All answered questions ({totalAnswered} of {questions.length} answered) will be safely calculated, recorded, and preserved so you can review your score and explanations.
+            </p>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowStopModal(false)}
+                className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                Keep Practicing
+              </button>
+              <button
+                type="button"
+                id="confirm-stop-practice-btn"
+                onClick={handleStopPractice}
+                className="flex-1 py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-lg shadow-rose-600/30 transition cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Square size={14} className="fill-current" />
+                <span>Stop & Save Progress</span>
               </button>
             </div>
           </div>

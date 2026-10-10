@@ -31,7 +31,8 @@ import {
   WifiOff,
   Download,
   History,
-  Layers
+  Layers,
+  Square
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -230,6 +231,9 @@ export default function Quiz({
     if (cachedInternalSession?.timeUsedSeconds) return cachedInternalSession.timeUsedSeconds;
     return 0;
   });
+
+  const [wasStoppedEarly, setWasStoppedEarly] = useState<boolean>(false);
+  const downloadAbortRef = useRef<AbortController | null>(null);
 
   // Shortfall / Exact Question Count modal state
   const timerRemainingRef = useRef<number>(timerRemaining);
@@ -986,6 +990,47 @@ export default function Quiz({
     }
   };
 
+  const handleStopPracticeEarly = async () => {
+    setShowLeavePrompt(false);
+    setWasStoppedEarly(true);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    const finalScore = calculateScore();
+    const usedSeconds = isUntimed ? timeUsedSeconds : Math.max(0, (timerDuration * 60) - timerRemaining);
+    setScore(finalScore);
+    setTimeUsedSeconds(usedSeconds);
+    setIsSubmitted(true);
+    setViewMode('results');
+
+    // Save practice attempt to unified practiceHistoryService safely
+    const resolvedSub = subjectId || subject || 'general';
+    const resolvedSubName = subject || JAMB_SUBJECTS.find(s => s.id === resolvedSub)?.name || resolvedSub;
+
+    try {
+      await practiceHistoryService.saveSession({
+        uid: user?.uid,
+        subject: resolvedSub,
+        subjectName: resolvedSubName,
+        topic: topic || 'General',
+        difficulty: difficulty || 'Medium',
+        score: finalScore,
+        totalQuestions: questions.length,
+        percentage: questions.length > 0 ? Math.round((finalScore / questions.length) * 100) : 0,
+        timeUsedSeconds: usedSeconds,
+        answeredQuestions: questions.map((q, i) => cleanFirestoreData({
+          ...q,
+          userAnswerIndex: answers[i] !== undefined ? answers[i] : null
+        })),
+        answers: answers || {},
+        examType: initialConfig?.examType || (initialMode?.startsWith('jamb') ? 'JAMB' : 'General')
+      });
+    } catch (practiceHistErr) {
+      console.warn("Silent save stopped practice history error:", practiceHistErr);
+    }
+  };
+
   const handleLeavePractice = () => {
     isExitingRef.current = true;
     setShowLeavePrompt(false);
@@ -1038,11 +1083,22 @@ export default function Quiz({
     persistSessionToFirebase(resetData);
   };
 
+  const handleStopDownloading = () => {
+    if (downloadAbortRef.current) {
+      downloadAbortRef.current.abort();
+      downloadAbortRef.current = null;
+    }
+    setIsDownloadingMore(false);
+    setDownloadFeedback("Question download stopped by user.");
+  };
+
   const handleDownloadMoreQuestions = async () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       setDownloadFeedback("Connect to the internet to get more questions.");
       return;
     }
+    const controller = new AbortController();
+    downloadAbortRef.current = controller;
     setIsDownloadingMore(true);
     setDownloadFeedback(null);
     try {
@@ -1052,8 +1108,13 @@ export default function Quiz({
       setIsPoolLow(false);
       setUnansweredPoolCount(prev => prev + res.addedCount);
     } catch (e: any) {
+      if (e?.name === 'AbortError' || controller.signal.aborted) {
+        setDownloadFeedback("Question download stopped by user.");
+        return;
+      }
       setDownloadFeedback(e?.message || "Connect to the internet to get more questions.");
     } finally {
+      downloadAbortRef.current = null;
       setIsDownloadingMore(false);
     }
   };
@@ -2029,16 +2090,28 @@ export default function Quiz({
           className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-10 border border-slate-200 dark:border-slate-700 shadow-md text-center relative overflow-hidden w-full min-w-0"
         >
           {/* Top Badge */}
-          <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs sm:text-sm font-bold mb-4 sm:mb-6">
-            <Trophy size={18} className="text-blue-600 dark:text-blue-400" />
-            {isJambCbt ? 'JAMB Mock CBT Completed' : isMultiSubject ? 'Combined Multi-Subject Practice Completed' : 'Practice Session Completed'}
+          <div className={`inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold mb-4 sm:mb-6 ${
+            wasStoppedEarly
+              ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-800'
+              : 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+          }`}>
+            {wasStoppedEarly ? <Square size={16} className="fill-current text-amber-600" /> : <Trophy size={18} className="text-blue-600 dark:text-blue-400" />}
+            {wasStoppedEarly
+              ? 'Practice Session Stopped Early (Progress Safely Preserved)'
+              : isJambCbt
+              ? 'JAMB Mock CBT Completed'
+              : isMultiSubject
+              ? 'Combined Multi-Subject Practice Completed'
+              : 'Practice Session Completed'}
           </div>
 
           <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight mb-2">
             {isJambCbt ? 'JAMB UTME Mock Exam Results' : isMultiSubject ? 'Combined Multi-Subject Practice Results' : subject}
           </h2>
           <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-base font-medium mb-6 sm:mb-8">
-            {isJambCbt 
+            {wasStoppedEarly
+              ? `You stopped this practice session early after answering ${answeredCount} of ${questions.length} questions. Answered questions have been safely scored, recorded, and preserved for review.`
+              : isJambCbt 
               ? `${subjectTabs.length} Subjects • 400 Marks Total • Real CBT Marking`
               : isMultiSubject
                 ? `${subjectTabs.length} Subjects Selected • ${questions.length} Questions Total`
@@ -2423,7 +2496,7 @@ export default function Quiz({
 
   return (
     <div className="w-full max-w-6xl mx-auto pb-12 flex flex-col relative px-3 sm:px-4">
-      {/* Leave Prompt Modal */}
+      {/* Leave / Stop Prompt Modal */}
       {showLeavePrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <motion.div
@@ -2432,26 +2505,27 @@ export default function Quiz({
             className="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border border-slate-100 dark:border-slate-700"
           >
             <div className="w-14 h-14 bg-rose-100 dark:bg-rose-900/30 text-rose-600 rounded-2xl flex items-center justify-center mb-5 mx-auto">
-              <AlertCircle size={28} />
+              <Square size={24} className="fill-current" />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white text-center mb-2">Leave Session?</h3>
-            <p className="text-slate-500 text-sm text-center mb-6">
-              Your active progress will be discarded. Are you sure you want to exit?
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white text-center mb-2">Stop Practice Session?</h3>
+            <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm text-center mb-6 leading-relaxed">
+              Your ongoing session will stop immediately. All completed answers ({answeredCount} of {questions.length} answered) will be safely calculated, recorded, and preserved so you can review your score and explanations.
             </p>
-            <div className="flex gap-3">
+            <div className="flex gap-2.5">
               <button 
                 id="quiz-leave-cancel-btn"
                 onClick={() => setShowLeavePrompt(false)}
-                className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold rounded-xl transition-colors text-sm cursor-pointer"
+                className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold rounded-xl transition-colors text-xs sm:text-sm cursor-pointer"
               >
-                Continue Quiz
+                Keep Practicing
               </button>
               <button 
                 id="quiz-leave-confirm-btn"
-                onClick={handleLeavePractice}
-                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition-colors text-sm cursor-pointer"
+                onClick={handleStopPracticeEarly}
+                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition-colors text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-1.5"
               >
-                Exit
+                <Square size={13} className="fill-current" />
+                <span>Stop & Save</span>
               </button>
             </div>
           </motion.div>
@@ -2560,11 +2634,23 @@ export default function Quiz({
           </button>
 
           {viewMode === 'practice' ? (
-            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-2xl text-slate-700 dark:text-slate-300 font-mono font-bold text-sm shadow-2xs">
-              <Clock size={16} className={!isUntimed && timerRemaining <= 180 ? 'text-rose-500 animate-pulse' : 'text-blue-600'} />
-              <span className={!isUntimed && timerRemaining <= 180 ? 'text-rose-600 dark:text-rose-400' : ''}>
-                {isUntimed ? `Untimed • ${formatTime(timeUsedSeconds)}` : formatTime(timerRemaining)}
-              </span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 sm:px-4 py-2 rounded-2xl text-slate-700 dark:text-slate-300 font-mono font-bold text-xs sm:text-sm shadow-2xs">
+                <Clock size={16} className={!isUntimed && timerRemaining <= 180 ? 'text-rose-500 animate-pulse' : 'text-blue-600'} />
+                <span className={!isUntimed && timerRemaining <= 180 ? 'text-rose-600 dark:text-rose-400' : ''}>
+                  {isUntimed ? `Untimed • ${formatTime(timeUsedSeconds)}` : formatTime(timerRemaining)}
+                </span>
+              </div>
+              <button
+                id="quiz-stop-session-btn"
+                type="button"
+                onClick={() => setShowLeavePrompt(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900 text-xs sm:text-sm font-bold transition-colors cursor-pointer shadow-2xs shrink-0"
+                title="Stop Practice Session and safely preserve completed progress"
+              >
+                <Square size={13} className="fill-current" />
+                <span>Stop Practice</span>
+              </button>
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -2646,16 +2732,29 @@ export default function Quiz({
               <Sparkles size={16} className="shrink-0 text-blue-600 dark:text-blue-400" />
               <span>Offline question bank is running low for this subject.</span>
             </div>
-            <button
-              id="download-more-questions-btn"
-              type="button"
-              disabled={isDownloadingMore}
-              onClick={handleDownloadMoreQuestions}
-              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
-            >
-              {isDownloadingMore ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-              <span>Download More Questions (AI Powered)</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                id="download-more-questions-btn"
+                type="button"
+                disabled={isDownloadingMore}
+                onClick={handleDownloadMoreQuestions}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+              >
+                {isDownloadingMore ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                <span>{isDownloadingMore ? 'Downloading Questions...' : 'Download More Questions (AI Powered)'}</span>
+              </button>
+              {isDownloadingMore && (
+                <button
+                  type="button"
+                  onClick={handleStopDownloading}
+                  className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs shrink-0"
+                  title="Cancel question download"
+                >
+                  <Square size={12} className="fill-current" />
+                  <span>Cancel</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 

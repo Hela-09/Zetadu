@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { appNavigateBack } from '../utils/navigationHistory';
 import { motion } from 'motion/react';
-import { Zap, Clock, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Trophy, Loader2, X } from 'lucide-react';
+import { Zap, Clock, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Trophy, Loader2, X, Square, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { checkAndAwardAchievements, calculateStreakBonus } from '../lib/achievements';
 import { db } from '../lib/firebase';
@@ -37,6 +37,9 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
   
   const [score, setScore] = useState(0);
   const [xpAwarded, setXpAwarded] = useState(0);
+  const [wasStoppedEarly, setWasStoppedEarly] = useState(false);
+  const [stopNotice, setStopNotice] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   const challengeId = `${user?.uid}_${todayStr}`;
@@ -82,8 +85,21 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
     return () => clearInterval(interval);
   }, [questions, isSubmitted, timerRemaining]);
 
+  const handleStopGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsGenerating(false);
+    setStopNotice("Daily Challenge question generation stopped by user.");
+  };
+
   const startChallenge = async () => {
     setIsGenerating(true);
+    setStopNotice(null);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const token = await getToken();
       
@@ -103,6 +119,7 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
 
       const response = await fetch('/api/generate-questions', {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -127,12 +144,22 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
       } else {
         throw new Error("Invalid response format");
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted) {
+        setStopNotice("Daily Challenge question generation stopped by user.");
+        return;
+      }
       console.error(err);
       alert("Failed to start daily challenge. Please try again.");
     } finally {
+      abortControllerRef.current = null;
       setIsGenerating(false);
     }
+  };
+
+  const handleStopChallengeEarly = () => {
+    setWasStoppedEarly(true);
+    handleSubmit();
   };
 
   const getNormalizedCorrectIndex = (question: any): number => {
@@ -280,7 +307,7 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
           Test your knowledge with 10 random questions based on your preferred subjects. Earn XP and build your study streak!
         </p>
         
-        <div className="grid grid-cols-2 gap-4 mb-12 w-full max-w-md">
+        <div className="grid grid-cols-2 gap-4 mb-8 w-full max-w-md">
           <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700">
             <h3 className="text-sm font-bold text-slate-500 mb-1">Questions</h3>
             <p className="text-2xl font-black text-slate-900 dark:text-white">10</p>
@@ -291,17 +318,38 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
           </div>
         </div>
 
-        <button 
-          onClick={startChallenge}
-          disabled={isGenerating}
-          className="bg-orange-500 hover:bg-orange-600 text-white px-12 py-4 rounded-2xl font-black text-lg transition-all shadow-lg hover:shadow-orange-500/30 flex items-center gap-3 disabled:opacity-70"
-        >
-          {isGenerating ? (
-            <><Loader2 className="animate-spin" /> Generating Challenge...</>
-          ) : (
-            <><Zap className="fill-current" /> Start Challenge</>
-          )}
-        </button>
+        {stopNotice && (
+          <div className="mb-6 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs sm:text-sm font-semibold flex items-center gap-2 max-w-md w-full">
+            <AlertCircle size={18} className="text-amber-600 shrink-0" />
+            <span>{stopNotice}</span>
+          </div>
+        )}
+
+        {isGenerating ? (
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="bg-orange-500 text-white px-8 py-4 rounded-2xl font-black text-base flex items-center gap-3 select-none">
+              <Loader2 className="animate-spin" size={20} />
+              <span>Generating Challenge...</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleStopGeneration}
+              className="px-6 py-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-2xl transition-all shadow-md flex items-center gap-2 text-base cursor-pointer"
+              title="Stop generation"
+            >
+              <Square size={16} className="fill-current" />
+              <span>Stop / Cancel</span>
+            </button>
+          </div>
+        ) : (
+          <button 
+            onClick={startChallenge}
+            className="bg-orange-500 hover:bg-orange-600 text-white px-12 py-4 rounded-2xl font-black text-lg transition-all shadow-lg hover:shadow-orange-500/30 flex items-center gap-3 cursor-pointer"
+          >
+            <Zap className="fill-current" />
+            <span>Start Challenge</span>
+          </button>
+        )}
       </div>
     );
   }
@@ -313,7 +361,14 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
       <div className="w-full max-w-4xl mx-auto pb-12 flex flex-col items-center">
         <div className="bg-white dark:bg-slate-800 w-full rounded-3xl p-8 border-2 border-slate-100 dark:border-slate-700 text-center mb-8 shadow-xl">
           <Trophy size={64} className="mx-auto text-yellow-500 mb-4" />
-          <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white mb-2">Challenge Complete!</h2>
+          <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white mb-2">
+            {wasStoppedEarly ? 'Daily Challenge Stopped Early' : 'Challenge Complete!'}
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+            {wasStoppedEarly
+              ? `You stopped the challenge early. Progress on answered questions (${Object.keys(answers).length}/10) was safely preserved and scored.`
+              : 'Great work finishing today\'s challenge! Review your answers below.'}
+          </p>
           
           <div className="flex flex-wrap justify-center gap-6 mt-8">
             <div className="flex flex-col items-center">
@@ -409,9 +464,21 @@ export default function DailyChallenge({ setView }: { setView: (view: any) => vo
             <p className="text-xs font-bold text-slate-500">Question {currentQIndex + 1} of 10</p>
           </div>
         </div>
-        <div className={`flex items-center gap-2 font-bold px-3 py-1.5 rounded-lg ${timerRemaining < 60 ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
-          <Clock size={16} />
-          <span>{formatTime(timerRemaining)}</span>
+        <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-1.5 font-bold px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm ${timerRemaining < 60 ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+            <Clock size={15} />
+            <span>{formatTime(timerRemaining)}</span>
+          </div>
+          <button
+            type="button"
+            id="stop-daily-challenge-btn"
+            onClick={handleStopChallengeEarly}
+            className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-900 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 font-bold text-xs cursor-pointer transition-colors shrink-0"
+            title="Stop challenge and safely save completed score"
+          >
+            <Square size={11} className="fill-current" />
+            <span>Stop Challenge</span>
+          </button>
         </div>
       </div>
 
